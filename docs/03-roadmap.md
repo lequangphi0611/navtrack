@@ -29,9 +29,10 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 - Tự động trừ thuế khi ghi nhận giao dịch bán, hiển thị lãi/lỗ sau thuế
 - Xác nhận mức thuế suất cụ thể trước khi code (điểm còn mở)
 
-## Phase 6 — Biểu đồ
+## Phase 6 — Biểu đồ + hoàn thiện dashboard
 - Biểu đồ NAV theo thời gian (dựa trên snapshot đã lưu)
 - Biểu đồ phân bổ tài sản (% theo `AssetType` tại thời điểm hiện tại)
+- **Chế độ ẩn số tiền:** nút mắt bật/tắt nhanh trên dashboard + mặc định trong Settings (`User.hideAmountsByDefault`, lưu theo user). Chỉ che giá trị tiền tuyệt đối, giữ nguyên XIRR và các phần trăm.
 
 ## Backlog (chưa ưu tiên, cân nhắc sau khi dùng thử ổn định)
 - So sánh benchmark (VN-Index, lãi suất tiết kiệm)

@@ -44,6 +44,10 @@ Hai biểu đồ trả lời hai câu hỏi tôi hay hỏi nhất:
 - **Danh mục của tôi đang lớn lên hay co lại?** — đường giá trị tài sản theo thời gian.
 - **Tiền của tôi đang nằm ở đâu?** — tỷ trọng cổ phiếu / quỹ / trái phiếu / vàng.
 
+### 7. Ẩn số tiền khi cần riêng tư
+
+Một nút để che nhanh các con số tiền trên dashboard — hữu ích khi tôi mở app nơi đông người hay chụp màn hình. Điểm khéo: nó chỉ giấu *số tiền* (tôi có bao nhiêu), còn giữ lại *phần trăm* hiệu suất — nên tôi vẫn xem được mình đầu tư tốt hay không mà không để lộ mình có bao nhiêu tiền.
+
 ## Ai dùng
 
 Nhiều người, nhưng mỗi người một cõi riêng. Tôi, người nhà, hay bạn bè — ai cũng có tài khoản đăng nhập riêng và một danh mục hoàn toàn tách biệt; tôi không nhìn thấy tiền của người khác và ngược lại. Đây vẫn là công cụ dùng chung trong nhóm quen, **không phải sản phẩm để bán** — không thu phí, không gói cước, không bán cho người lạ.
