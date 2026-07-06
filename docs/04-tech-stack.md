@@ -55,8 +55,12 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 - Luôn gắn nhãn kết quả là **tỷ suất theo năm (annualized)**.
 - **Bắt buộc có test** đối chiếu với kết quả XIRR của Excel/Google Sheets trên dữ liệu thật.
 
-### Đăng nhập
-- Google OAuth qua Auth.js. Tài khoản do quản trị tạo/mời — **không mở đăng ký công khai** (phù hợp tính chất phi thương mại). Có thể giới hạn bằng danh sách email được phép.
+### Đăng nhập & kiểm soát "chỉ người được mời"
+- Google OAuth qua Auth.js. **Không mở đăng ký công khai** (phù hợp tính chất phi thương mại).
+- **Allowlist trong DB:** bảng `AllowedUser { email, invitedBy, createdAt, revokedAt }` (soft-delete để giữ audit). Chặn tại **`signIn` callback** — chỉ cho vào nếu email có trong allowlist, chưa `revokedAt`, và `email_verified`. Không allowlist theo `@gmail.com`, không tự chuẩn hóa dấu chấm Gmail.
+- **Database sessions** (Prisma adapter) thay vì JWT, để **thu hồi quyền tức thời**: set `revokedAt` + xóa `Session` row là mất quyền ngay, không phải chờ token hết hạn.
+- **Bootstrap:** một admin email seed sẵn để tạo allowlist ban đầu.
+- Mời/thu hồi không cần redeploy (thao tác trên DB). *(Quyết định GP2 sau khi cân nhắc so với ENV allowlist + JWT — xem lý do: revoke của JWT không tức thời.)*
 
 ### Ảnh/logo mã cổ phiếu
 - **Chỉ dùng avatar chữ (monogram):** vẽ ô bo tròn màu, chữ là mã cổ phiếu, màu suy ra từ hash của mã. Không cần trường `logoUrl` trong DB, không phụ thuộc nguồn logo ngoài.

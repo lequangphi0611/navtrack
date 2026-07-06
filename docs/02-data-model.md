@@ -41,6 +41,20 @@ model User {
   createdAt           DateTime  @default(now())
 }
 
+// Allowlist "chỉ người được mời" — gate ở signIn callback của Auth.js.
+// Soft-delete bằng revokedAt để giữ audit; xóa cứng sẽ mất lịch sử.
+model AllowedUser {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  invitedBy String?
+  createdAt DateTime  @default(now())
+  revokedAt DateTime? // null = còn quyền; có giá trị = đã thu hồi
+}
+
+// Dùng database sessions (Prisma adapter) thay JWT để thu hồi quyền tức thời.
+// Auth.js cần thêm các model chuẩn của adapter: Account, Session, VerificationToken
+// (theo schema mẫu của @auth/prisma-adapter).
+
 model Holding {
   id           String        @id @default(cuid())
   userId       String        // mỗi danh mục thuộc về đúng một người dùng

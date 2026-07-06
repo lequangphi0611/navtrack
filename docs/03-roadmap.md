@@ -4,10 +4,13 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 
 ## Phase 1 — Nền tảng + đăng nhập + nhập vị thế ban đầu
 - Scaffold Next.js + TypeScript + Prisma + PostgreSQL
-- Đăng nhập và tách dữ liệu theo người dùng (`User`), tài khoản do quản trị tạo/mời — không mở đăng ký công khai
-- Schema: `User`, `Holding`, `Cashflow`, `Snapshot` (chưa cần `Dividend`/`TaxRule` ở phase này)
+- Đăng nhập Google (Auth.js) và tách dữ liệu theo người dùng (`User`)
+- **Chỉ người được mời** (không mở đăng ký công khai): bảng allowlist `AllowedUser` (soft-delete, có audit), chặn tại `signIn` callback (kiểm `email_verified`); dùng **database sessions** để thu hồi quyền tức thời. Một admin seed để bootstrap.
+- Schema: `User`, `AllowedUser`, `Holding`, `Cashflow` + enum (`AssetType`, `CashflowType`). Chưa cần `Dividend`/`TaxRule`/`Snapshot` ở phase này.
 - **Nhập vị thế hiện tại làm mốc:** mỗi mã đang giữ → tạo `Holding` + một `Cashflow` kiểu BUY tại ngày mốc (số lượng × giá vốn bình quân). XIRR tính từ mốc này trở đi.
+- **Mã cổ phiếu gõ tự do** ở Phase 1 (chưa fetch giá nên mã chỉ là nhãn; autocomplete từ vnstock để sau).
 - CRUD cơ bản cho giao dịch mua/bán
+- Lưu ý: cuối Phase 1 **chưa có định giá thị trường / XIRR / biểu đồ** (cần vnstock ở Phase 2). Phase 1 chỉ nhập–lưu–xem số lượng + tổng vốn.
 
 > **Đã hoãn:** import CSV/Excel từ Google Sheets — dữ liệu cũ không tách chi tiết từng mã nên không dựng lại lịch sử được, tạm thời nhập tay. Xem Backlog.
 
@@ -18,6 +21,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 - Tích hợp `vnstock` cho giá tự động (cổ phiếu, quỹ mở); `NavOverride` cho vàng/trái phiếu nhập tay
 
 ## Phase 3 — Snapshot tự động
+- Thêm model `Snapshot` (hoãn từ Phase 1) + migration
 - Cron: đóng băng snapshot cuối tháng, cuối năm (`frozen = true`)
 - Snapshot thủ công khi có giao dịch hoặc bấm "chốt số liệu hôm nay"
 - Snapshot tổng danh mục (`holdingId = null`) để phục vụ biểu đồ NAV
