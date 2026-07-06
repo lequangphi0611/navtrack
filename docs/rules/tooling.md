@@ -3,8 +3,47 @@
 Công cụ và cấu hình kỹ thuật cho Navtrack.
 
 - Package manager **pnpm**; commit lockfile (`pnpm-lock.yaml`).
-- `tsconfig` bật `strict: true` **và `noUncheckedIndexedAccess: true`** (an toàn hơn khi truy cập mảng/record — hợp với app tài chính).
-- **ESLint** (next + typescript) lo đúng/sai; **Prettier** lo format — cấu hình để không chồng lấn.
+
+```
+❌ Bad: trộn npm/yarn, commit package-lock.json + pnpm-lock.yaml
+✅ Good: chỉ dùng pnpm, chỉ commit pnpm-lock.yaml
+```
+
+- `tsconfig` bật `strict: true` **và `noUncheckedIndexedAccess: true`** (an toàn hơn khi truy cập mảng/record — hợp app tài chính).
+
+```jsonc
+// ✅ Good — tsconfig.json (trích)
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": { "@/*": ["./src/*"] }
+  }
+}
+```
+
+```ts
+// Vì sao noUncheckedIndexedAccess:
+const first = holdings[0];        // ✅ kiểu là Holding | undefined → buộc kiểm tra
+console.log(first.symbol);        // ❌ lỗi compile nếu chưa guard → tránh crash runtime
+```
+
+- **ESLint** (next + typescript) lo đúng/sai; **Prettier** lo format — cấu hình để không chồng lấn (vd `eslint-config-prettier` tắt rule format của ESLint).
 - Pin Node version qua `.nvmrc` và/hoặc `engines` trong `package.json`.
 - **Pre-commit hook** (husky + lint-staged) chạy lint/format trên file staged.
-- Scripts chuẩn trong `package.json`: `dev`, `build`, `lint`, `typecheck`, `format`, `db:migrate`, `db:seed`.
+- Scripts chuẩn trong `package.json`:
+
+```jsonc
+// ✅ Good
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed"
+  }
+}
+```

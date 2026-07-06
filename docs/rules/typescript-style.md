@@ -2,15 +2,123 @@
 
 Quy tắc nền cho mọi file TypeScript trong Navtrack.
 
+## Kiểu & strict
+
 - Bật **TS strict**; tránh `any`. Khi chưa rõ kiểu, dùng `unknown` + narrowing.
-- Dùng **named export** (không default export), trừ nơi Next bắt buộc default (`page.tsx`, `layout.tsx`, `error.tsx`...).
+
+```ts
+// ❌ Bad — any nuốt hết type safety
+function parseHolding(input: any) {
+  return input.symbol.toUpperCase();
+}
+
+// ✅ Good — unknown + narrowing
+function parseHolding(input: unknown): string {
+  const parsed = holdingSchema.parse(input); // zod
+  return parsed.symbol.toUpperCase();
+}
+```
+
 - Dùng `type` mặc định cho object/union; chỉ dùng `interface` khi cần extend công khai.
+
+```ts
+// ✅ Good
+type AssetType = "STOCK" | "FUND" | "BOND" | "GOLD";
+type HoldingSummary = { symbol: string; marketValue: string };
+
+// ❌ Bad — interface cho union không dùng được, và ở đây không cần interface
+interface HoldingSummary { symbol: string; marketValue: string }
+```
+
 - Khai **explicit return type** cho hàm export; để inference lo biến cục bộ.
-- Tất cả định danh, comment, commit message bằng **tiếng Anh**. Giữ nguyên thuật ngữ nghiệp vụ (XIRR, NAV, cashflow, dividend...).
-- Đặt tên: component `PascalCase`, biến/hàm `camelCase`, hằng thật `UPPER_SNAKE`, type `PascalCase`.
+
+```ts
+// ✅ Good — hàm export có return type rõ
+export function computeAbsolutePnl(cashflows: Cashflow[]): Decimal { ... }
+
+// ❌ Bad — hàm export để inference, dễ trôi kiểu ngoài ý muốn
+export function computeAbsolutePnl(cashflows: Cashflow[]) { ... }
+```
+
+## Export
+
+- Dùng **named export** (không default export), trừ nơi Next bắt buộc default (`page.tsx`, `layout.tsx`, `error.tsx`...).
+
+```ts
+// ✅ Good — named export cho component/hàm thường
+export function HoldingTable(props: Props) { ... }
+
+// ❌ Bad — default export ở file thường
+export default function HoldingTable(props: Props) { ... }
+
+// ✅ Ngoại lệ đúng — page.tsx bắt buộc default
+export default function DashboardPage() { ... }
+```
+
+## Đặt tên
+
+- component `PascalCase`, biến/hàm `camelCase`, hằng thật `UPPER_SNAKE`, type `PascalCase`.
 - **File đặt kebab-case** (vd `holding-table.tsx`, `format.ts`).
+
+```
+✅ Good: holding-table.tsx, use-hide-amounts.ts, xirr.ts
+❌ Bad:  HoldingTable.tsx, useHideAmounts.ts, Xirr.ts
+```
+
+- Tất cả định danh, comment, commit message bằng **tiếng Anh**. Giữ nguyên thuật ngữ nghiệp vụ (XIRR, NAV, cashflow, dividend...).
+
+```ts
+// ❌ Bad — tên tiếng Việt
+const soLuongCoPhieu = 100;
+// ✅ Good
+const shareQuantity = 100;
+```
+
+## Cú pháp & an toàn
+
 - Ưu tiên `const`; dùng `let` chỉ khi reassign; không `var`. Dùng `async/await`, không chuỗi `.then()`.
+
+```ts
+// ❌ Bad
+var total = 0;
+fetchPrices().then((p) => { /* ... */ });
+
+// ✅ Good
+const prices = await fetchPrices();
+```
+
 - **Suy type từ zod** bằng `z.infer` để không khai trùng kiểu ở tầng validate và TS.
-- Comment giải thích **"tại sao"**, không mô tả "cái gì"; giữ tối thiểu.
+
+```ts
+// ✅ Good — một nguồn sự thật
+const holdingSchema = z.object({ symbol: z.string(), quantity: z.number() });
+type HoldingInput = z.infer<typeof holdingSchema>;
+
+// ❌ Bad — khai trùng, dễ lệch nhau
+const holdingSchema = z.object({ symbol: z.string(), quantity: z.number() });
+type HoldingInput = { symbol: string; quantity: number };
+```
+
 - Không mutate props/state trực tiếp; ưu tiên bất biến (readonly/spread).
+
+```ts
+// ❌ Bad — mutate mảng đầu vào
+function addFee(cashflows: Cashflow[]) { cashflows.push(fee); return cashflows; }
+
+// ✅ Good — trả bản mới
+function withFee(cashflows: readonly Cashflow[]): Cashflow[] { return [...cashflows, fee]; }
+```
+
+- Comment giải thích **"tại sao"**, không mô tả "cái gì"; giữ tối thiểu.
+
+```ts
+// ❌ Bad — mô tả cái mắt đã thấy
+// increment i by 1
+i += 1;
+
+// ✅ Good — giải thích lý do
+// XIRR cần ít nhất 1 dòng tiền dương; ghép NAV hiện tại làm dòng cuối giả định.
+cashflows.push({ date: today, amount: currentNav });
+```
+
 - Không để biến/import thừa (lint chặn).
