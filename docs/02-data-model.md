@@ -93,8 +93,10 @@ model Dividend {
   holding       Holding       @relation(fields: [holdingId], references: [id])
   type          DividendType
   date          DateTime
-  cashAmount    Decimal?      // dùng khi type = CASH, dòng tiền dương cho XIRR
-  stockQuantity Decimal?      // dùng khi type = STOCK, cộng thêm số lượng nắm giữ
+  grossAmount   Decimal?      // type = CASH: cổ tức gộp trước thuế
+  taxAmount     Decimal?      // type = CASH: thuế TNCN tự khấu trừ (~5%)
+  netAmount     Decimal?      // type = CASH: thực nhận sau thuế = dòng tiền dương cho XIRR
+  stockQuantity Decimal?      // type = STOCK: cộng thêm số lượng nắm giữ (không phát sinh tiền)
   note          String?
 }
 
@@ -135,6 +137,8 @@ model TaxRule {
 - **Vị thế mở ban đầu** (khi khởi tạo, không import lịch sử) được mô hình hóa như **một `Cashflow` kiểu BUY** đặt tại ngày mốc: `quantity` = số lượng đang giữ, `pricePerUnit` = giá vốn bình quân, `amount` = số âm tương ứng. Không cần model riêng — XIRR tính từ mốc này trở đi.
 - **`Cashflow.amount`** mang dấu sẵn (âm khi mua, dương khi bán) để dùng trực tiếp trong chuỗi dòng tiền XIRR, tránh phải suy luận dấu ở tầng tính toán.
 - **`Dividend`** tách khỏi `Cashflow` vì cổ tức cổ phiếu không phải dòng tiền — chỉ tăng `stockQuantity` nắm giữ, không ảnh hưởng XIRR trực tiếp (chỉ ảnh hưởng gián tiếp qua NAV tăng do số lượng tăng).
+- **Cổ tức tiền mặt tự khấu trừ thuế:** khi ghi cổ tức tiền mặt, app tự trừ thuế TNCN (~5% ở VN) → lưu `grossAmount`, `taxAmount`, `netAmount`. **Dòng tiền dương đưa vào XIRR là `netAmount` (số thực nhận sau thuế)**. Cổ tức bằng cổ phiếu chỉ tăng số lượng, thuế xử lý khi bán (để sau).
+- **Thuế cổ tức khác thuế khi bán:** thuế cổ tức tiền mặt (~5%) là loại riêng, không dùng chung `TaxRule` theo `AssetType` (vốn cho thuế bán ~0.1%). Mức % cụ thể cần xác nhận (điểm còn mở).
 - **`Snapshot.holdingId = null`** dùng cho snapshot tổng danh mục (tổng NAV mọi tài sản tại 1 mốc) — cần cho biểu đồ NAV theo thời gian ở mục 03-roadmap.
 - **`NavOverride`** tách bảng riêng thay vì 1 field `nav_override` trên `Holding`, vì giá override có thể thay đổi theo từng ngày (không chỉ 1 giá cố định) — quan trọng với vàng/trái phiếu nhập tay thường xuyên.
 - **`TaxRule`** để thuế suất không hard-code trong logic, cho phép chỉnh khi quy định thuế thay đổi. Cần xác nhận mức % cụ thể trước khi triển khai (xem điểm còn mở trong `01-business-decisions.md`).

@@ -30,6 +30,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 
 ## Phase 4 — Cổ tức
 - Model `Dividend` (tiền mặt ảnh hưởng XIRR, cổ phiếu tăng số lượng nắm giữ)
+- **Cổ tức tiền mặt tự khấu trừ thuế TNCN (~5%):** lưu gộp/thuế/thực nhận, dòng tiền dương cho XIRR = số thực nhận sau thuế
 - UI ghi nhận cổ tức gắn với từng `Holding`
 
 ## Phase 5 — Thuế
