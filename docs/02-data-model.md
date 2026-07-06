@@ -32,8 +32,18 @@ enum SnapshotPeriod {
   TODAY
 }
 
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  holdings  Holding[]
+  createdAt DateTime  @default(now())
+}
+
 model Holding {
   id           String        @id @default(cuid())
+  userId       String        // mỗi danh mục thuộc về đúng một người dùng
+  user         User          @relation(fields: [userId], references: [id])
   type         AssetType
   symbol       String        // mã CP/quỹ, loại vàng, mã trái phiếu
   name         String?
@@ -43,6 +53,8 @@ model Holding {
   snapshots    Snapshot[]
   navOverrides NavOverride[]
   createdAt    DateTime      @default(now())
+
+  @@index([userId])
 }
 
 model Cashflow {
@@ -101,6 +113,7 @@ model TaxRule {
 
 ## Ghi chú thiết kế
 
+- **`User`** tách dữ liệu theo từng người: mỗi `Holding` gắn với đúng một `userId`, mọi bảng con (`Cashflow`, `Dividend`, `Snapshot`, `NavOverride`) đi theo qua quan hệ với `Holding` nên không cần lặp lại `userId`. Snapshot tổng danh mục (`holdingId = null`) sẽ cần thêm `userId` riêng khi triển khai để biết thuộc về ai. Tài khoản do quản trị tạo/mời (không mở đăng ký công khai) — phù hợp tính chất phi thương mại.
 - **`Cashflow.amount`** mang dấu sẵn (âm khi mua, dương khi bán) để dùng trực tiếp trong chuỗi dòng tiền XIRR, tránh phải suy luận dấu ở tầng tính toán.
 - **`Dividend`** tách khỏi `Cashflow` vì cổ tức cổ phiếu không phải dòng tiền — chỉ tăng `stockQuantity` nắm giữ, không ảnh hưởng XIRR trực tiếp (chỉ ảnh hưởng gián tiếp qua NAV tăng do số lượng tăng).
 - **`Snapshot.holdingId = null`** dùng cho snapshot tổng danh mục (tổng NAV mọi tài sản tại 1 mốc) — cần cho biểu đồ NAV theo thời gian ở mục 03-roadmap.

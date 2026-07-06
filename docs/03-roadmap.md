@@ -2,10 +2,11 @@
 
 Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisions.md`: import dữ liệu cũ trước (để không phải nhập tay lại), sau đó lõi XIRR, rồi tới cổ tức/thuế, cuối cùng là biểu đồ.
 
-## Phase 1 — Nền tảng + import dữ liệu cũ
+## Phase 1 — Nền tảng + đăng nhập + import dữ liệu cũ
 - Scaffold Next.js + TypeScript + Prisma + PostgreSQL
-- Schema: `Holding`, `Cashflow`, `Snapshot` (chưa cần `Dividend`/`TaxRule` ở phase này)
-- Tính năng import CSV/Excel từ Google Sheets hiện tại → tạo `Holding` + `Cashflow` hàng loạt
+- Đăng nhập và tách dữ liệu theo người dùng (`User`), tài khoản do quản trị tạo/mời — không mở đăng ký công khai
+- Schema: `User`, `Holding`, `Cashflow`, `Snapshot` (chưa cần `Dividend`/`TaxRule` ở phase này)
+- Tính năng import CSV/Excel từ Google Sheets hiện tại → tạo `Holding` + `Cashflow` hàng loạt cho đúng người dùng
 - CRUD cơ bản cho giao dịch mua/bán
 
 ## Phase 2 — Lõi tính XIRR

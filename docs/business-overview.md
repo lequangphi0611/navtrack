@@ -46,13 +46,14 @@ Hai biểu đồ trả lời hai câu hỏi tôi hay hỏi nhất:
 
 ## Ai dùng
 
-Chỉ mình tôi (và có thể người nhà). Đây là công cụ cá nhân, không phải sản phẩm để bán — nên không có phần đăng ký, thanh toán, hay hỗ trợ nhiều người dùng.
+Nhiều người, nhưng mỗi người một cõi riêng. Tôi, người nhà, hay bạn bè — ai cũng có tài khoản đăng nhập riêng và một danh mục hoàn toàn tách biệt; tôi không nhìn thấy tiền của người khác và ngược lại. Đây vẫn là công cụ dùng chung trong nhóm quen, **không phải sản phẩm để bán** — không thu phí, không gói cước, không bán cho người lạ.
 
 ## Ranh giới — cái này *không* làm
 
 - Không phải app đặt lệnh mua/bán — nó chỉ theo dõi, không giao dịch.
 - Không tư vấn nên mua gì bán gì.
 - Không cố realtime từng giây — cập nhật giá theo ngày là đủ.
+- Không phải dịch vụ thương mại — không thu phí, không quảng cáo, không mở đăng ký cho công chúng. Tài khoản do tôi tạo/mời, không phải ai cũng tự đăng ký được.
 
 ## Điều còn cần chốt
 
