@@ -28,9 +28,9 @@ Tôi không phải bán mới biết mình lời — Navtrack lấy giá trị t
 
 Khi một tháng hoặc một năm khép lại, Navtrack chụp lại giá trị danh mục tại đúng thời điểm đó và giữ nguyên. Sau này giá có đổi thế nào, báo cáo tháng cũ vẫn đúng như lúc nó xảy ra — điều mà Sheet không làm được.
 
-### 4. Không phải gõ lại từ đầu
+### 4. Bắt đầu từ những gì tôi đang giữ
 
-Toàn bộ lịch sử nhiều năm trong Sheet hiện tại sẽ được nạp vào một lần, nên tôi không mất công nhập tay lại.
+Dữ liệu cũ trong Sheet của tôi không tách chi tiết từng mã, nên tái dựng lịch sử đầy đủ là không thực tế. Thay vì vậy, tôi khai báo *vị thế hiện tại* làm điểm xuất phát: mỗi mã đang giữ, tôi nhập số lượng, giá vốn bình quân và ngày chốt. Từ mốc đó trở đi, mọi giao dịch mua/bán mới được ghi bình thường, và lãi/lỗ được tính từ điểm này.
 
 ### 5. Xử lý đúng những thứ Sheet làm ẩu
 

@@ -40,7 +40,7 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 | Giao diện | **Tailwind CSS + shadcn/ui** | Tự sở hữu component, hiện đại, khớp Next App Router và Recharts |
 | Biểu đồ | **Recharts** | Khớp liền shadcn/ui (component chart dựng trên Recharts), đủ cho NAV + phân bổ |
 | Tính XIRR | **Lai: thư viện npm + lớp bọc kiểm tra** | Thư viện làm lõi tính; tự bọc validate dấu dòng tiền, bắt ca không hội tụ, gắn nhãn "theo năm" |
-| Import dữ liệu cũ | **CSV + PapaParse** | Sheet gom về một bảng, xuất CSV; import là di trú một lần nên giữ đơn giản |
+| Import dữ liệu cũ | **CSV + PapaParse** *(đã hoãn)* | Hoãn ở Phase 1: dữ liệu cũ không tách chi tiết từng mã nên nhập tay vị thế ban đầu thay vì import. Giữ lựa chọn này cho khi làm import sau (Backlog) |
 
 ## Ghi chú triển khai
 

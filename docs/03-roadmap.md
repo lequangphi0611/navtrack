@@ -2,12 +2,14 @@
 
 Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisions.md`: import dữ liệu cũ trước (để không phải nhập tay lại), sau đó lõi XIRR, rồi tới cổ tức/thuế, cuối cùng là biểu đồ.
 
-## Phase 1 — Nền tảng + đăng nhập + import dữ liệu cũ
+## Phase 1 — Nền tảng + đăng nhập + nhập vị thế ban đầu
 - Scaffold Next.js + TypeScript + Prisma + PostgreSQL
 - Đăng nhập và tách dữ liệu theo người dùng (`User`), tài khoản do quản trị tạo/mời — không mở đăng ký công khai
 - Schema: `User`, `Holding`, `Cashflow`, `Snapshot` (chưa cần `Dividend`/`TaxRule` ở phase này)
-- Tính năng import CSV/Excel từ Google Sheets hiện tại → tạo `Holding` + `Cashflow` hàng loạt cho đúng người dùng
+- **Nhập vị thế hiện tại làm mốc:** mỗi mã đang giữ → tạo `Holding` + một `Cashflow` kiểu BUY tại ngày mốc (số lượng × giá vốn bình quân). XIRR tính từ mốc này trở đi.
 - CRUD cơ bản cho giao dịch mua/bán
+
+> **Đã hoãn:** import CSV/Excel từ Google Sheets — dữ liệu cũ không tách chi tiết từng mã nên không dựng lại lịch sử được, tạm thời nhập tay. Xem Backlog.
 
 ## Phase 2 — Lõi tính XIRR
 - Ghép dòng tiền giả định (NAV hiện tại) vào cuối chuỗi khi tính, không lưu DB
@@ -35,6 +37,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 - **Chế độ ẩn số tiền:** nút mắt bật/tắt nhanh trên dashboard + mặc định trong Settings (`User.hideAmountsByDefault`, lưu theo user). Chỉ che giá trị tiền tuyệt đối, giữ nguyên XIRR và các phần trăm.
 
 ## Backlog (chưa ưu tiên, cân nhắc sau khi dùng thử ổn định)
+- Import CSV/Excel từ Google Sheets (hoãn từ Phase 1) — làm khi có nhu cầu nạp dữ liệu chi tiết từng mã
 - So sánh benchmark (VN-Index, lãi suất tiết kiệm)
 - Nhật ký giao dịch có ghi chú lý do mua/bán
 - Cảnh báo giá khi chạm ngưỡng
