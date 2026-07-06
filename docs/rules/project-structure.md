@@ -14,13 +14,20 @@ navtrack/
 │  ├─ features/            # module theo tính năng
 │  │  └─ holdings/
 │  │     ├─ components/
-│  │     ├─ actions.ts     # server actions
-│  │     ├─ queries.ts     # truy vấn DB (server-only)
-│  │     ├─ schemas.ts     # zod
+│  │     │  └─ HoldingTable/       # component = PascalCase, thư mục riêng
+│  │     │     ├─ HoldingTable.tsx
+│  │     │     └─ index.ts         # export { HoldingTable } from "./HoldingTable"
+│  │     ├─ hooks/                 # use-*.ts (kebab-case)
+│  │     ├─ actions.ts             # server actions
+│  │     ├─ queries.ts             # truy vấn DB (server-only)
+│  │     ├─ schemas.ts             # zod
 │  │     └─ types.ts
 │  ├─ components/          # dùng chung nhiều feature
-│  │  └─ ui/               # atoms shadcn
-│  └─ lib/                 # db, auth, format, xirr
+│  │  ├─ ui/               # atoms shadcn (giữ nguyên quy ước shadcn, kebab)
+│  │  └─ MoneyValue/       # component chung: PascalCase + index.ts
+│  │     ├─ MoneyValue.tsx
+│  │     └─ index.ts
+│  └─ lib/                 # db, auth, format, xirr (kebab: db.ts, format.ts...)
 ├─ prisma/                 # schema.prisma + migrations/
 ├─ jobs/price-fetcher/     # job Python (requirements.txt, README)
 └─ e2e/                    # test Playwright

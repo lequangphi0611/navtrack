@@ -58,11 +58,26 @@ export default function DashboardPage() { ... }
 ## Đặt tên
 
 - component `PascalCase`, biến/hàm `camelCase`, hằng thật `UPPER_SNAKE`, type `PascalCase`.
-- **File đặt kebab-case** (vd `holding-table.tsx`, `format.ts`).
+- **Component: PascalCase, mỗi component một thư mục riêng** dạng `ComponentName/ComponentName.tsx` + `index.ts` (barrel entry re-export). Sub-part chỉ dùng nội bộ (skeleton, sub-component) colocate trong cùng thư mục. Import qua thư mục.
+- **File không phải component** (hook, util, lib) đặt **kebab-case**.
+- **Ngoại lệ:** file shadcn sinh ra ở `components/ui/` giữ nguyên quy ước shadcn (kebab, một file) — không đụng vào.
 
 ```
-✅ Good: holding-table.tsx, use-hide-amounts.ts, xirr.ts
-❌ Bad:  HoldingTable.tsx, useHideAmounts.ts, Xirr.ts
+✅ Good
+  components/**/Account/Account.tsx        # component (PascalCase, thư mục riêng)
+  components/**/Account/index.ts           # entry: export { Account } from "./Account"
+  components/**/Account/AccountSkeleton.tsx # sub-part colocate
+  lib/format.ts, lib/xirr.ts               # util → kebab-case
+  features/holdings/hooks/use-hide-amounts.ts
+
+❌ Bad
+  components/account.tsx                    # component kebab, không có thư mục riêng
+  components/**/Account/Format.ts           # util lại PascalCase
+```
+
+```ts
+// components/**/Account/index.ts — entry chỉ re-export (named)
+export { Account } from "./Account";
 ```
 
 - Tất cả định danh, comment, commit message bằng **tiếng Anh**. Giữ nguyên thuật ngữ nghiệp vụ (XIRR, NAV, cashflow, dividend...).
