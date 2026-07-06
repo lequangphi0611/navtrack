@@ -63,4 +63,4 @@ Nhiều người, nhưng mỗi người một cõi riêng. Tôi, người nhà, 
 
 ---
 
-*Chi tiết kỹ thuật (cấu trúc dữ liệu, thứ tự triển khai) nằm ở [`02-data-model.md`](./02-data-model.md) và [`03-roadmap.md`](./03-roadmap.md).*
+*Chi tiết kỹ thuật: [`04-tech-stack.md`](./04-tech-stack.md) (công nghệ), [`02-data-model.md`](./02-data-model.md) (cấu trúc dữ liệu), [`03-roadmap.md`](./03-roadmap.md) (thứ tự triển khai).*
