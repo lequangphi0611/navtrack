@@ -88,6 +88,7 @@ export async function addHolding(input: any) {
 ```
 
 - Lỗi **không lường trước** (bug, DB chết) để `error.tsx` của route bắt; đừng nuốt lỗi im lặng.
+- Phân loại lỗi, `AppError`, và ghi log: xem [`error-handling.md`](./error-handling.md).
 
 ## Quy ước component
 
