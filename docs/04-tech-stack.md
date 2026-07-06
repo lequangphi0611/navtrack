@@ -58,6 +58,11 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 ### Đăng nhập
 - Google OAuth qua Auth.js. Tài khoản do quản trị tạo/mời — **không mở đăng ký công khai** (phù hợp tính chất phi thương mại). Có thể giới hạn bằng danh sách email được phép.
 
+### Ảnh/logo mã cổ phiếu
+- **Chỉ dùng avatar chữ (monogram):** vẽ ô bo tròn màu, chữ là mã cổ phiếu, màu suy ra từ hash của mã. Không cần trường `logoUrl` trong DB, không phụ thuộc nguồn logo ngoài.
+- Lý do: vnstock **không** cung cấp logo đáng tin cho cổ phiếu VN, và không có API logo miễn phí chuẩn cho thị trường VN. Avatar chữ phủ 100% mọi mã, đồng bộ, không vướng bản quyền.
+- Danh sách *mã* (để autocomplete khi thêm cổ phiếu) thì lấy được từ vnstock (`listing.all_symbols()`) — job Python nạp vào DB, khác với chuyện logo.
+
 ## Chi phí
 
 Tổng: **~$0/tháng** — Vercel, Neon, GitHub Actions đều dùng free tier, dữ liệu nhỏ nên không chạm giới hạn. Job Python chạy mỗi ngày cũng giữ cho DB không bị coi là "không hoạt động".
