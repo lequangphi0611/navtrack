@@ -9,5 +9,6 @@ Bộ quy tắc coding cho Navtrack, tách theo từng mảng. File này là **ch
 | Component: Atomic Design, Server Component/Presentational, shadcn | [`rules/component-architecture.md`](./rules/component-architecture.md) |
 | Prisma schema, tiền tệ/Decimal, migration, tách dữ liệu theo user | [`rules/data-prisma.md`](./rules/data-prisma.md) |
 | Package manager, TS config, ESLint/Prettier | [`rules/tooling.md`](./rules/tooling.md) |
+| Test: unit (logic), end-to-end (Playwright) | [`rules/testing.md`](./rules/testing.md) |
 
 Xem thêm: [`04-tech-stack.md`](./04-tech-stack.md) (công nghệ), [`02-data-model.md`](./02-data-model.md) (schema).
