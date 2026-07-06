@@ -6,7 +6,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 - Scaffold Next.js + TypeScript + Prisma + PostgreSQL
 - Đăng nhập Google (Auth.js) và tách dữ liệu theo người dùng (`User`)
 - **Chỉ người được mời** (không mở đăng ký công khai): bảng allowlist `AllowedUser` (soft-delete, có audit), chặn tại `signIn` callback (kiểm `email_verified`); dùng **database sessions** để thu hồi quyền tức thời. Một admin seed để bootstrap.
-- Schema: `User`, `AllowedUser`, `Holding`, `Cashflow` + enum (`AssetType`, `CashflowType`). Chưa cần `Dividend`/`TaxRule`/`Snapshot` ở phase này.
+- Schema: `User`, `AllowedUser`, `Holding`, `Cashflow` + enum (`AssetType`, `CashflowType`). Chưa cần `Dividend`/`Setting`/`Snapshot` ở phase này.
 - **Nhập vị thế hiện tại làm mốc:** mỗi mã đang giữ → tạo `Holding` + một `Cashflow` kiểu BUY tại ngày mốc (số lượng × giá vốn bình quân). XIRR tính từ mốc này trở đi.
   - **Không phải tính năng/màn riêng** — chính là thao tác "thêm một Holding mới", dùng mãi về sau mỗi khi mua mã mới.
   - **Luồng lần đầu:** vào thẳng màn chính; khi trống hiện empty state ("Chưa có gì — thêm vị thế đầu tiên") + nút Thêm mã. Form có nút **"Lưu & thêm mã khác"** để nhập liên tiếp nhiều mã. Không có wizard onboarding riêng.
@@ -34,9 +34,10 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 - UI ghi nhận cổ tức gắn với từng `Holding`
 
 ## Phase 5 — Thuế
-- Model `TaxRule` theo `AssetType`
-- Tự động trừ thuế khi ghi nhận giao dịch bán, hiển thị lãi/lỗ sau thuế
-- Xác nhận mức thuế suất cụ thể trước khi code (điểm còn mở)
+- Bảng master `Setting` (cấu hình được, effective dating) giữ thuế bán `SALE_TAX_<LOẠI>` và thuế cổ tức `DIVIDEND_TAX_RATE`
+- UI settings để chỉnh thuế suất; tra thuế theo ngày giao dịch (effective dating)
+- Tự động trừ thuế khi ghi giao dịch bán, hiển thị lãi/lỗ sau thuế
+- Xác nhận mức thuế suất cụ thể trước khi seed (điểm còn mở)
 
 ## Phase 6 — Biểu đồ + hoàn thiện dashboard
 - Biểu đồ NAV theo thời gian (dựa trên snapshot đã lưu)

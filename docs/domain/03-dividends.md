@@ -20,7 +20,7 @@
 - Số lượng nắm giữ (xem `01-assets-and-holdings.md`) cộng thêm Σ(dividend STOCK.stockQuantity).
 
 ## Ca biên
-- **Thuế cổ tức khác thuế bán:** thuế cổ tức tiền mặt (~5%) là loại **riêng**, không dùng chung `TaxRule` theo `AssetType` (dành cho thuế bán ~0.1%). Xem `07-tax.md`.
+- **Thuế cổ tức khác thuế bán:** thuế cổ tức tiền mặt lấy từ key `DIVIDEND_TAX_RATE` trong bảng `Setting`, khác key thuế bán `SALE_TAX_<LOẠI>`. Tra theo ngày chia cổ tức (effective dating). Xem `07-tax.md`.
 - **Mức 5% cần xác nhận** (điểm còn mở) — là mức phổ biến ở VN nhưng chưa chốt chính thức.
 - **Cổ tức của quỹ/vàng/trái phiếu:** mô hình vẫn áp dụng nếu có (vd lãi trái phiếu có thể coi như dòng tiền dương) — nhưng xử lý cụ thể để khi làm Phase liên quan.
 

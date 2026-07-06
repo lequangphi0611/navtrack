@@ -120,11 +120,33 @@ model NavOverride {
   note      String?
 }
 
-// Thuế suất theo loại tài sản — cấu hình được, không hard-code
-model TaxRule {
-  id          String    @id @default(cuid())
-  assetType   AssetType @unique
-  ratePercent Decimal   // vd 0.1 cho STOCK (thuế TNCN 0.1% trên giá trị bán)
+enum SettingValueType {
+  DECIMAL
+  INT
+  STRING
+  BOOLEAN
+  DATE
+}
+
+// Bảng master cấu hình được (thay TaxRule cũ) — gom mọi tham số chính sách:
+// thuế bán theo loại (SALE_TAX_STOCK...), thuế cổ tức (DIVIDEND_TAX_RATE), v.v.
+// Effective dating: mỗi key có nhiều dòng theo thời gian; giá trị áp dụng cho
+// một ngày = dòng có effectiveFrom lớn nhất mà <= ngày đó.
+model Setting {
+  id            String           @id @default(cuid())
+  key           String           // khóa máy, vd "SALE_TAX_STOCK", "DIVIDEND_TAX_RATE"
+  value         String           // giá trị dạng chuỗi, parse theo valueType
+  valueType     SettingValueType
+  label         String           // mô tả người đọc, vd "Thuế bán cổ phiếu (%)"
+  group         String           // gom nhóm trên UI settings, vd "TAX", "DISPLAY"
+  unit          String?          // đơn vị hiển thị, vd "%", "VND"
+  effectiveFrom DateTime         // thời điểm giá trị này bắt đầu có hiệu lực
+  updatedBy     String?          // ai đổi (audit)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([key, effectiveFrom])
+  @@index([key, effectiveFrom])
 }
 ```
 
@@ -138,9 +160,11 @@ model TaxRule {
 - **`Cashflow.amount`** mang dấu sẵn (âm khi mua, dương khi bán) để dùng trực tiếp trong chuỗi dòng tiền XIRR, tránh phải suy luận dấu ở tầng tính toán.
 - **`Dividend`** tách khỏi `Cashflow` vì cổ tức cổ phiếu không phải dòng tiền — chỉ tăng `stockQuantity` nắm giữ, không ảnh hưởng XIRR trực tiếp (chỉ ảnh hưởng gián tiếp qua NAV tăng do số lượng tăng).
 - **Cổ tức tiền mặt tự khấu trừ thuế:** khi ghi cổ tức tiền mặt, app tự trừ thuế TNCN (~5% ở VN) → lưu `grossAmount`, `taxAmount`, `netAmount`. **Dòng tiền dương đưa vào XIRR là `netAmount` (số thực nhận sau thuế)**. Cổ tức bằng cổ phiếu chỉ tăng số lượng, thuế xử lý khi bán (để sau).
-- **Thuế cổ tức khác thuế khi bán:** thuế cổ tức tiền mặt (~5%) là loại riêng, không dùng chung `TaxRule` theo `AssetType` (vốn cho thuế bán ~0.1%). Mức % cụ thể cần xác nhận (điểm còn mở).
 - **`Snapshot.holdingId = null`** dùng cho snapshot tổng danh mục (tổng NAV mọi tài sản tại 1 mốc) — cần cho biểu đồ NAV theo thời gian ở mục 03-roadmap.
 - **`NavOverride`** tách bảng riêng thay vì 1 field `nav_override` trên `Holding`, vì giá override có thể thay đổi theo từng ngày (không chỉ 1 giá cố định) — quan trọng với vàng/trái phiếu nhập tay thường xuyên.
-- **`TaxRule`** để thuế suất không hard-code trong logic, cho phép chỉnh khi quy định thuế thay đổi. Cần xác nhận mức % cụ thể trước khi triển khai (xem điểm còn mở trong `01-business-decisions.md`).
+- **`Setting` (bảng master cấu hình):** thay `TaxRule`, gom mọi tham số chính sách chỉnh được mà không sửa code. Thuế bán để theo key mỗi loại (`SALE_TAX_STOCK`, `SALE_TAX_FUND`, `SALE_TAX_BOND`, `SALE_TAX_GOLD`), thuế cổ tức `DIVIDEND_TAX_RATE`.
+  - **Effective dating:** mỗi `key` có thể có nhiều dòng theo thời gian. **Giá trị áp dụng cho một ngày** = dòng cùng `key` có `effectiveFrom` lớn nhất mà `<= ngày` cần tra (không dùng `effectiveTo` để tránh lỗi chồng lấn khoảng). Nhờ vậy, nhập giao dịch lùi ngày vẫn áp đúng thuế suất của thời điểm đó.
+  - `valueType` bắt buộc để parse an toàn (thuế là `DECIMAL`). `updatedBy`/`updatedAt` để audit thay đổi chính sách.
+  - **Vẫn cần xác nhận mức % cụ thể** trước khi seed (điểm còn mở): bán ~0.1%, cổ tức ~5%.
 
 Đây là bản nháp — sẽ tinh chỉnh khi bắt đầu code (vd cân nhắc `Decimal` precision, index theo `holdingId + date`, unique constraint cho snapshot theo mốc đã đóng băng).

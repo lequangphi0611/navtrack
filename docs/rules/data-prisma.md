@@ -104,7 +104,7 @@ export const db = new PrismaClient();
 ```
 
 - Commit file migration. **Không sửa migration đã áp dụng** — tạo migration mới. Dev dùng `migrate dev`, prod dùng `migrate deploy`.
-- `prisma/seed.ts` để seed giá trị mặc định (vd `TaxRule` theo `AssetType`).
+- `prisma/seed.ts` để seed giá trị mặc định (vd các dòng `Setting` cho thuế bán/cổ tức với `effectiveFrom` ban đầu).
 - **Không truyền thẳng model Prisma ra client.** Convert `Decimal` → **`string`** (không phải `number`) tại biên server; **mọi toán tiền chỉ làm ở server bằng `Decimal`**, client chỉ hiển thị.
 
 ```ts
