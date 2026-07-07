@@ -46,7 +46,8 @@ model User {
 model AllowedUser {
   id        String    @id @default(cuid())
   email     String    @unique
-  invitedBy String?
+  canInvite Boolean   @default(false) // true = được phép mời người khác (chỉ cấp qua DB)
+  invitedBy String?   // email người đã mời (null nếu là admin seed)
   createdAt DateTime  @default(now())
   revokedAt DateTime? // null = còn quyền; có giá trị = đã thu hồi
 }

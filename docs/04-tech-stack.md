@@ -59,7 +59,8 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 - Google OAuth qua Auth.js. **Không mở đăng ký công khai** (phù hợp tính chất phi thương mại).
 - **Allowlist trong DB:** bảng `AllowedUser { email, invitedBy, createdAt, revokedAt }` (soft-delete để giữ audit). Chặn tại **`signIn` callback** — chỉ cho vào nếu email có trong allowlist, chưa `revokedAt`, và `email_verified`. Không allowlist theo `@gmail.com`, không tự chuẩn hóa dấu chấm Gmail.
 - **Database sessions** (Prisma adapter) thay vì JWT, để **thu hồi quyền tức thời**: set `revokedAt` + xóa `Session` row là mất quyền ngay, không phải chờ token hết hạn.
-- **Bootstrap:** một admin email seed sẵn để tạo allowlist ban đầu.
+- **Bootstrap:** một admin email seed sẵn (`canInvite = true`) để tạo allowlist ban đầu.
+- **Mời có phân quyền:** user có cờ `AllowedUser.canInvite` mới mời được người khác; mời = insert `AllowedUser` (người mới `canInvite = false`). Cấp `canInvite` cho ai chỉ làm trực tiếp trên DB. Giới hạn số thành viên bằng `MAX_MEMBERS` trong `Setting` (đếm `AllowedUser` chưa thu hồi). Xem `domain/08-users-access-and-privacy.md`.
 - Mời/thu hồi không cần redeploy (thao tác trên DB). *(Quyết định GP2 sau khi cân nhắc so với ENV allowlist + JWT — xem lý do: revoke của JWT không tức thời.)*
 
 ### Ảnh/logo mã cổ phiếu
