@@ -35,7 +35,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 
 ## Phase 5 — Thuế
 - Bảng master `Setting` (cấu hình được, effective dating) giữ thuế bán `SALE_TAX_<LOẠI>` và thuế cổ tức `DIVIDEND_TAX_RATE`
-- UI settings để chỉnh thuế suất; tra thuế theo ngày giao dịch (effective dating)
+- Thuế suất chỉnh **trực tiếp trên DB** (không có UI admin); app chỉ resolve, tra thuế theo ngày giao dịch (effective dating)
 - Tự động trừ thuế khi ghi giao dịch bán, hiển thị lãi/lỗ sau thuế
 - Xác nhận mức thuế suất cụ thể trước khi seed (điểm còn mở)
 

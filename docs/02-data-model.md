@@ -138,7 +138,7 @@ model Setting {
   value         String           // giá trị dạng chuỗi, parse theo valueType
   valueType     SettingValueType
   label         String           // mô tả người đọc, vd "Thuế bán cổ phiếu (%)"
-  group         String           // gom nhóm trên UI settings, vd "TAX", "DISPLAY"
+  group         String           // gom nhóm (ngữ cảnh cho người sửa DB), vd "TAX", "DISPLAY"
   unit          String?          // đơn vị hiển thị, vd "%", "VND"
   effectiveFrom DateTime         // thời điểm giá trị này bắt đầu có hiệu lực
   updatedBy     String?          // ai đổi (audit)

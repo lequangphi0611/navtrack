@@ -13,7 +13,7 @@
   - `amount` (dòng tiền vào) của SELL đã **trừ thuế**: `= (quantity × price) − fee − tax`.
 - **Thuế cổ tức tiền mặt** = `DIVIDEND_TAX_RATE` (~**5%**) khấu trừ khi ghi cổ tức; dòng tiền dương vào XIRR = số thực nhận sau thuế.
 - **Đóng băng tại thời điểm ghi:** thuế đã tính lưu trên giao dịch (`taxAmount`) nên đổi `Setting` sau này **không** hồi tố bản ghi cũ.
-- **Cấu hình được, không hard-code:** mọi thuế suất trong `Setting`, sửa qua UI settings, có audit (`updatedBy`/`updatedAt`).
+- **Cấu hình được, không hard-code:** mọi thuế suất trong `Setting`, **sửa trực tiếp trên DB** (không có UI admin — xem `09-settings.md`), có audit (`updatedBy`/`updatedAt`).
 - Lãi/lỗ hiển thị là **sau thuế**.
 
 ## Cách tính
