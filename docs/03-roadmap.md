@@ -20,6 +20,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 - Ghép dòng tiền giả định (NAV hiện tại) vào cuối chuỗi khi tính, không lưu DB
 - Hỗ trợ chọn mốc chốt: hôm nay / cuối tháng / cuối năm / tùy chỉnh
 - Hiển thị song song: XIRR (theo năm) + lãi/lỗ tuyệt đối trong kỳ
+- Thêm model `PriceQuote` (giá tự động EOD) + job Python ghi qua vnstock; app đọc để định giá
 - Tích hợp `vnstock` cho giá tự động (cổ phiếu, quỹ mở); `NavOverride` cho vàng/trái phiếu nhập tay
 
 ## Phase 3 — Snapshot tự động

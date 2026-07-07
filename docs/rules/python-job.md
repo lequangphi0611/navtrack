@@ -6,7 +6,7 @@ Quy tắc cho job Python lấy giá bằng `vnstock`, chạy trên GitHub Action
 - Đặt ở thư mục **tách riêng ngoài app Next**, vd `jobs/price-fetcher/`, có `requirements.txt` + README riêng.
 - **Chỉ chia sẻ schema Postgres với TS** — không import code TS, TS không gọi job.
 - **Prisma sở hữu migration.** Job **chỉ đọc/ghi theo bảng đã có**, **không** `CREATE/ALTER TABLE`, không chạy migration.
-- App Next **chỉ đọc** giá; job **chỉ ghi** giá tự động. (Bảng giá tự động do Prisma định nghĩa ở Phase 2.)
+- App Next **chỉ đọc** giá; job **chỉ ghi** giá tự động vào bảng **`PriceQuote`** (do Prisma định nghĩa — xem `02-data-model.md`), upsert theo `(symbol, date)`.
 
 ## Kết nối & secrets
 - Đọc `DATABASE_URL` từ **env / GitHub Secrets**; không hardcode, không log.

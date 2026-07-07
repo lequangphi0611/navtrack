@@ -4,15 +4,15 @@
 Định nghĩa cách xác định giá trị thị trường hiện tại (NAV) của từng vị thế và cả danh mục, từ nguồn tự động hoặc nhập tay.
 
 ## Entity / field
-- `NavOverride`: `holdingId`, `date`, `price`, `note?` — giá nhập tay theo ngày.
-- Giá tự động: lấy từ `vnstock`, **ghi vào DB bởi job Python** (app chỉ đọc; xem `04-tech-stack.md`).
+- `NavOverride`: `holdingId`, `date`, `price`, `note?` — giá **nhập tay** theo ngày (gắn với một `Holding`).
+- `PriceQuote`: `symbol`, `date`, `price`, `source` — giá **tự động** (EOD), job Python ghi từ `vnstock`, app **chỉ đọc**. Dùng chung theo `symbol` (không theo user).
 
 ## Quy tắc & bất biến
 - **NAV của một vị thế** = `số lượng hiện tại × giá tại thời điểm cần định giá`.
 - **Nguồn giá theo loại tài sản:**
   - STOCK, FUND: **tự động** (vnstock), vẫn cho sửa tay khi cần.
   - GOLD, BOND: **mặc định nhập tay** (nguồn tự động kém ổn định).
-- **Ưu tiên giá:** nếu có `NavOverride` cho ngày cần → dùng giá nhập tay; nếu không → dùng giá tự động. UI ghi rõ nguồn ("Tự động (vnstock)" / "Nhập tay").
+- **Ưu tiên giá tại ngày D:** nếu có `NavOverride` (mã đó, ngày ≤ D gần nhất) → dùng **giá nhập tay**; nếu không → tra `PriceQuote` của mã đó, lấy **giá có `date` gần nhất ≤ D** (cho ngày nghỉ/lễ không có giá đúng ngày). UI ghi rõ nguồn ("Tự động (vnstock)" / "Nhập tay").
 - **Vàng:** dùng **giá mua vào** (giá bạn bán ra được), lưu ý đơn vị chỉ/lượng khớp với `Holding.unit`.
 - App TypeScript **chỉ đọc** giá; **không** gọi vnstock trực tiếp.
 
