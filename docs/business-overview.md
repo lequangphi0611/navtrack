@@ -28,9 +28,9 @@ Tôi không phải bán mới biết mình lời — Navtrack lấy giá trị t
 
 Khi một tháng hoặc một năm khép lại, Navtrack chụp lại giá trị danh mục tại đúng thời điểm đó và giữ nguyên. Sau này giá có đổi thế nào, báo cáo tháng cũ vẫn đúng như lúc nó xảy ra — điều mà Sheet không làm được.
 
-### 4. Không phải gõ lại từ đầu
+### 4. Bắt đầu từ những gì tôi đang giữ
 
-Toàn bộ lịch sử nhiều năm trong Sheet hiện tại sẽ được nạp vào một lần, nên tôi không mất công nhập tay lại.
+Dữ liệu cũ trong Sheet của tôi không tách chi tiết từng mã, nên tái dựng lịch sử đầy đủ là không thực tế. Thay vì vậy, tôi khai báo *vị thế hiện tại* làm điểm xuất phát: mỗi mã đang giữ, tôi nhập số lượng, giá vốn bình quân và ngày chốt. Từ mốc đó trở đi, mọi giao dịch mua/bán mới được ghi bình thường, và lãi/lỗ được tính từ điểm này.
 
 ### 5. Xử lý đúng những thứ Sheet làm ẩu
 
@@ -43,6 +43,10 @@ Toàn bộ lịch sử nhiều năm trong Sheet hiện tại sẽ được nạp
 Hai biểu đồ trả lời hai câu hỏi tôi hay hỏi nhất:
 - **Danh mục của tôi đang lớn lên hay co lại?** — đường giá trị tài sản theo thời gian.
 - **Tiền của tôi đang nằm ở đâu?** — tỷ trọng cổ phiếu / quỹ / trái phiếu / vàng.
+
+### 7. Ẩn số tiền khi cần riêng tư
+
+Một nút để che nhanh các con số tiền trên dashboard — hữu ích khi tôi mở app nơi đông người hay chụp màn hình. Điểm khéo: nó chỉ giấu *số tiền* (tôi có bao nhiêu), còn giữ lại *phần trăm* hiệu suất — nên tôi vẫn xem được mình đầu tư tốt hay không mà không để lộ mình có bao nhiêu tiền.
 
 ## Ai dùng
 
@@ -63,4 +67,6 @@ Nhiều người, nhưng mỗi người một cõi riêng. Tôi, người nhà, 
 
 ---
 
-*Chi tiết kỹ thuật: [`04-tech-stack.md`](./04-tech-stack.md) (công nghệ), [`02-data-model.md`](./02-data-model.md) (cấu trúc dữ liệu), [`03-roadmap.md`](./03-roadmap.md) (thứ tự triển khai).*
+*Đặc tả nghiệp vụ chi tiết: [`domain/`](./domain/README.md) (domain specs — luật nghiệp vụ chính xác).*
+
+*Chi tiết kỹ thuật: [`04-tech-stack.md`](./04-tech-stack.md) (công nghệ), [`02-data-model.md`](./02-data-model.md) (cấu trúc dữ liệu), [`03-roadmap.md`](./03-roadmap.md) (thứ tự triển khai), [`coding-rules.md`](./coding-rules.md) (quy tắc code).*

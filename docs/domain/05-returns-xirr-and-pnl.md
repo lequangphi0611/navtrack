@@ -1,0 +1,32 @@
+# Returns: XIRR & P&L
+
+## Mục đích
+Định nghĩa hai chỉ số đo hiệu quả đầu tư: **XIRR (tỷ suất theo năm)** và **lãi/lỗ tuyệt đối**, cùng cách xử lý ca "chưa bán".
+
+## Entity / field
+- Không có bảng riêng — tính từ `Cashflow` (dòng tiền thật), `Dividend` (net cash), và NAV hiện tại (xem `04-pricing-and-valuation.md`).
+
+## Quy tắc & bất biến
+- **XIRR luôn là tỷ suất quy đổi theo năm (annualized)**, dù kỳ đầu tư dài hay ngắn. **Bắt buộc gắn nhãn "theo năm"** để tránh hiểu nhầm (vd 3 tháng lời 2% có thể annualize ra >8%).
+- XIRR cần **ít nhất một dòng tiền âm và một dòng tiền dương** mới tính được.
+- **Chưa bán vẫn tính được:** ghép thêm **một dòng tiền dương giả định = NAV hiện tại** vào cuối chuỗi khi tính.
+  - Dòng tiền giả định **không lưu DB** — chỉ ghép runtime lúc tính, để không làm bẩn lịch sử giao dịch.
+  - Mốc chốt chọn được: **hôm nay / cuối tháng / cuối năm / tùy chỉnh**; mỗi mốc → NAV khác → XIRR khác.
+- **"Không tính được" là kết quả nghiệp vụ, KHÔNG phải lỗi** — trả status rõ ràng (`NO_POSITIVE_FLOW`, `NO_CONVERGE`), **không âm thầm trả -100%** hay `NaN` (xem `rules/error-handling.md`).
+- Hiển thị **song song hai chỉ số**, không lẫn lộn.
+
+## Cách tính
+- **Chuỗi dòng tiền cho XIRR** = các `Cashflow.amount` (đã mang dấu) + các `Dividend.netAmount` (dương) + dòng tiền giả định NAV tại mốc chốt (dương).
+- **XIRR** = nghiệm r của: Σ [ CFᵢ / (1+r)^((dateᵢ − date₀)/365) ] = 0. Giải bằng Newton-Raphson + bisection dự phòng (xem `rules/tooling.md` / lớp bọc XIRR).
+- **Lãi/lỗ tuyệt đối trong kỳ** = giá trị cuối kỳ (NAV tại mốc) − tổng vốn ròng đã bỏ vào.
+  - Tổng vốn ròng = Σ tiền ra (mua) − Σ tiền vào đã rút (bán + cổ tức) trước mốc.
+
+## Ca biên
+- **Toàn dòng tiền âm** (chỉ mua, chưa có NAV/bán): không ghép NAV thì XIRR lỗi → phải có NAV giả định; nếu NAV không xác định (thiếu giá) thì trả "không tính được".
+- **Kỳ rất ngắn:** annualize khuếch đại; vẫn hiển thị nhưng nhãn "theo năm" bắt buộc, cân nhắc chú thích kỳ ngắn.
+- **Mốc đã qua (cuối tháng/năm):** dùng NAV **đã đóng băng** trong snapshot, không tính lại theo giá mới (xem `06-snapshots.md`).
+- **Nhiều dòng tiền cùng ngày:** hợp lệ, không ảnh hưởng nghiệm.
+
+## Ví dụ
+- Bỏ 100tr ngày 2023-01-01, NAV hôm nay 112tr, chưa bán → chuỗi `[-100tr(2023-01-01), +112tr(hôm nay)]` → XIRR ≈ 12%/năm; lãi tuyệt đối = +12tr.
+- Chỉ mới mua, chưa có giá thị trường → NAV không xác định → **"Chưa tính được XIRR"** (không phải −100%).
