@@ -3,11 +3,19 @@
 Hướng dẫn cho Claude khi làm việc trên **Navtrack** — web app quản lý danh mục đầu tư cá nhân (cổ phiếu, quỹ, trái phiếu, vàng), tính lãi/lỗ theo XIRR. Phi thương mại, nhiều user riêng tư.
 
 ## Bắt buộc đọc trước khi code
+Đọc **mọi lần**, bất kể đang làm phần nào — nền tảng chung của cả dự án:
+- **README:** [`README.md`](./README.md) — cách cài đặt, chạy app local, chạy e2e (Playwright), setup job Python.
 - **Coding rules:** [`docs/coding-rules.md`](./docs/coding-rules.md) — index trỏ tới rules từng mảng trong `docs/rules/`. **Tuân thủ khi viết code.**
 - **Domain specs:** [`docs/domain/README.md`](./docs/domain/README.md) — luật nghiệp vụ chính xác (XIRR, cost basis, thuế, cổ tức, pricing, access...).
 - **Data model:** [`docs/02-data-model.md`](./docs/02-data-model.md) — schema Prisma.
 - **Tech stack:** [`docs/04-tech-stack.md`](./docs/04-tech-stack.md).
 - **Business overview:** [`docs/business-overview.md`](./docs/business-overview.md).
+
+## Đọc khi cần (theo ngữ cảnh)
+Chỉ cần mở khi việc đang làm chạm đúng phần liên quan:
+- **AGENTS.md:** [`AGENTS.md`](./AGENTS.md) — **đọc trước khi viết code đụng tới API/quy ước của Next.js**. Dự án dùng Next.js 16 (rất mới so với kiến thức huấn luyện của model) — có breaking changes về API/cấu trúc file so với các bản Next.js cũ quen thuộc. Trỏ tới `node_modules/next/dist/docs/` để tra API/convention chính xác thay vì suy đoán từ training data.
+- **Từng file `docs/rules/*`:** đọc file tương ứng khi code phần đó (vd sửa Prisma schema → `docs/rules/schema.md` + `data-prisma.md`; sửa job Python → `python-job.md`; dựng component → `component-architecture.md`).
+- **`process/phase-x.md`:** đọc phase đang làm (xem `process/PROCESS.md` để biết đang ở phase nào).
 
 ## Tiến trình triển khai
 - **Theo dõi tại [`process/PROCESS.md`](./process/PROCESS.md)** — trỏ tới chi tiết từng phase (`process/phase-x.md`).
