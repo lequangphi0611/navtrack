@@ -66,7 +66,7 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 ### Ảnh/logo mã cổ phiếu
 - **Chỉ dùng avatar chữ (monogram):** vẽ ô bo tròn màu, chữ là mã cổ phiếu, màu suy ra từ hash của mã. Không cần trường `logoUrl` trong DB, không phụ thuộc nguồn logo ngoài.
 - Lý do: vnstock **không** cung cấp logo đáng tin cho cổ phiếu VN, và không có API logo miễn phí chuẩn cho thị trường VN. Avatar chữ phủ 100% mọi mã, đồng bộ, không vướng bản quyền.
-- Danh sách *mã* (để autocomplete khi thêm cổ phiếu) thì lấy được từ vnstock (`listing.all_symbols()`) — job Python nạp vào DB, khác với chuyện logo.
+- Danh sách *mã* (để autocomplete khi thêm cổ phiếu) lấy được từ vnstock (`listing.all_symbols()`), khác với chuyện logo. **Hoãn cùng autocomplete** (Phase 1 gõ tự do): bảng lưu danh sách mã sẽ định nghĩa khi làm tính năng này (Backlog).
 
 ## Chi phí
 

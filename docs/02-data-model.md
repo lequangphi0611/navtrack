@@ -39,6 +39,7 @@ model User {
   hideAmountsByDefault Boolean  @default(false) // trạng thái mặc định của chế độ ẩn số tiền trên dashboard
   holdings            Holding[]
   createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
 // Allowlist "chỉ người được mời" — gate ở signIn callback của Auth.js.
@@ -49,6 +50,7 @@ model AllowedUser {
   canInvite Boolean   @default(false) // true = được phép mời người khác (chỉ cấp qua DB)
   invitedBy String?   // email người đã mời (null nếu là admin seed)
   createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   revokedAt DateTime? // null = còn quyền; có giá trị = đã thu hồi
 }
 
@@ -59,7 +61,7 @@ model AllowedUser {
 model Holding {
   id           String        @id @default(cuid())
   userId       String        // mỗi danh mục thuộc về đúng một người dùng
-  user         User          @relation(fields: [userId], references: [id])
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   type         AssetType
   symbol       String        // mã CP/quỹ, loại vàng, mã trái phiếu
   name         String?
@@ -69,6 +71,7 @@ model Holding {
   snapshots    Snapshot[]
   navOverrides NavOverride[]
   createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   @@index([userId])
 }
@@ -76,49 +79,77 @@ model Holding {
 model Cashflow {
   id           String       @id @default(cuid())
   holdingId    String
-  holding      Holding      @relation(fields: [holdingId], references: [id])
+  holding      Holding      @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   type         CashflowType
   date         DateTime
-  quantity     Decimal
-  pricePerUnit Decimal
-  amount       Decimal      // dấu +/- dùng trực tiếp cho XIRR
-  taxAmount    Decimal      @default(0)
-  feeAmount    Decimal      @default(0)
+  quantity     Decimal      @db.Decimal(20, 4)
+  pricePerUnit Decimal      @db.Decimal(20, 4)
+  amount       Decimal      @db.Decimal(20, 4) // dấu +/- dùng trực tiếp cho XIRR
+  taxAmount    Decimal      @default(0) @db.Decimal(20, 4)
+  feeAmount    Decimal      @default(0) @db.Decimal(20, 4)
   note         String?
   createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([holdingId, date])
 }
 
 model Dividend {
   id            String        @id @default(cuid())
   holdingId     String
-  holding       Holding       @relation(fields: [holdingId], references: [id])
+  holding       Holding       @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   type          DividendType
   date          DateTime
-  grossAmount   Decimal?      // type = CASH: cổ tức gộp trước thuế
-  taxAmount     Decimal?      // type = CASH: thuế TNCN tự khấu trừ (~5%)
-  netAmount     Decimal?      // type = CASH: thực nhận sau thuế = dòng tiền dương cho XIRR
-  stockQuantity Decimal?      // type = STOCK: cộng thêm số lượng nắm giữ (không phát sinh tiền)
+  grossAmount   Decimal?      @db.Decimal(20, 4) // type = CASH: cổ tức gộp trước thuế
+  taxAmount     Decimal?      @db.Decimal(20, 4) // type = CASH: thuế TNCN tự khấu trừ (~5%)
+  netAmount     Decimal?      @db.Decimal(20, 4) // type = CASH: thực nhận sau thuế = dòng tiền dương cho XIRR
+  stockQuantity Decimal?      @db.Decimal(20, 4) // type = STOCK: cộng thêm số lượng nắm giữ (không phát sinh tiền)
   note          String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([holdingId, date])
 }
 
 model Snapshot {
   id        String          @id @default(cuid())
   holdingId String?         // null = snapshot tổng cả danh mục
-  holding   Holding?        @relation(fields: [holdingId], references: [id])
+  holding   Holding?        @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   date      DateTime
-  value     Decimal
+  value     Decimal         @db.Decimal(20, 4)
   source    SnapshotSource
   period    SnapshotPeriod
   frozen    Boolean         @default(true) // false chỉ cho period = TODAY (tính động, không lưu thật)
+  createdAt DateTime        @default(now())
+
+  @@index([holdingId, date])
 }
 
 model NavOverride {
   id        String   @id @default(cuid())
   holdingId String
-  holding   Holding  @relation(fields: [holdingId], references: [id])
+  holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   date      DateTime
-  price     Decimal
+  price     Decimal  @db.Decimal(20, 4)
   note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([holdingId, date])
+}
+
+// Giá tự động (EOD) — job Python ghi, app chỉ đọc. Dùng chung, không theo user.
+model PriceQuote {
+  id        String   @id @default(cuid())
+  symbol    String   // mã theo vnstock (cổ phiếu/quỹ)
+  date      DateTime @db.Date // NGÀY (date-only, không phần giờ) — để @@unique đảm bảo 1 giá/mã/ngày
+  price     Decimal  @db.Decimal(20, 4) // VND / cổ phần
+  source    String   // nguồn, vd "vnstock"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([symbol, date]) // 1 giá / mã / ngày — đích upsert idempotent của job
+  @@index([symbol, date])
 }
 
 enum SettingValueType {
@@ -163,6 +194,7 @@ model Setting {
 - **Cổ tức tiền mặt tự khấu trừ thuế:** khi ghi cổ tức tiền mặt, app tự trừ thuế TNCN (~5% ở VN) → lưu `grossAmount`, `taxAmount`, `netAmount`. **Dòng tiền dương đưa vào XIRR là `netAmount` (số thực nhận sau thuế)**. Cổ tức bằng cổ phiếu chỉ tăng số lượng, thuế xử lý khi bán (để sau).
 - **`Snapshot.holdingId = null`** dùng cho snapshot tổng danh mục (tổng NAV mọi tài sản tại 1 mốc) — cần cho biểu đồ NAV theo thời gian ở mục 03-roadmap.
 - **`NavOverride`** tách bảng riêng thay vì 1 field `nav_override` trên `Holding`, vì giá override có thể thay đổi theo từng ngày (không chỉ 1 giá cố định) — quan trọng với vàng/trái phiếu nhập tay thường xuyên.
+- **`PriceQuote` (giá tự động):** job Python ghi giá EOD từ vnstock vào đây, app **chỉ đọc**. Là bảng **dùng chung theo `symbol`** (không theo user, không gắn `Holding`) — nhiều user giữ cùng mã chia sẻ một giá. Định giá một `Holding` tại ngày D: ưu tiên `NavOverride` (nhập tay), nếu không có thì tra `PriceQuote` của mã đó (giá có `date` gần nhất ≤ D — cho ngày nghỉ/lễ). `@@unique([symbol, date])` là đích upsert idempotent của job. `symbol` ở đây là mã vnstock; nếu sau này cần phân biệt trùng mã khác loại, thêm cột thị trường/loại.
 - **`Setting` (bảng master cấu hình):** thay `TaxRule`, gom mọi tham số chính sách chỉnh được mà không sửa code. Thuế bán để theo key mỗi loại (`SALE_TAX_STOCK`, `SALE_TAX_FUND`, `SALE_TAX_BOND`, `SALE_TAX_GOLD`), thuế cổ tức `DIVIDEND_TAX_RATE`.
   - **Effective dating:** mỗi `key` có thể có nhiều dòng theo thời gian. **Giá trị áp dụng cho một ngày** = dòng cùng `key` có `effectiveFrom` lớn nhất mà `<= ngày` cần tra (không dùng `effectiveTo` để tránh lỗi chồng lấn khoảng). Nhờ vậy, nhập giao dịch lùi ngày vẫn áp đúng thuế suất của thời điểm đó.
   - `valueType` bắt buộc để parse an toàn (thuế là `DECIMAL`). `updatedBy`/`updatedAt` để audit thay đổi chính sách.

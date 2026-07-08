@@ -1,12 +1,13 @@
 # Roadmap theo phase
 
-Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisions.md`: import dữ liệu cũ trước (để không phải nhập tay lại), sau đó lõi XIRR, rồi tới cổ tức/thuế, cuối cùng là biểu đồ.
+Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.md`](./business-overview.md) và [`domain/`](./domain/README.md): nền tảng + nhập vị thế trước, sau đó lõi XIRR + giá, rồi snapshot, cổ tức/thuế, cuối cùng là biểu đồ.
 
 ## Phase 1 — Nền tảng + đăng nhập + nhập vị thế ban đầu
 - Scaffold Next.js + TypeScript + Prisma + PostgreSQL
 - Đăng nhập Google (Auth.js) và tách dữ liệu theo người dùng (`User`)
-- **Chỉ người được mời** (không mở đăng ký công khai): bảng allowlist `AllowedUser` (soft-delete, có audit), chặn tại `signIn` callback (kiểm `email_verified`); dùng **database sessions** để thu hồi quyền tức thời. Một admin seed để bootstrap.
-- Schema: `User`, `AllowedUser`, `Holding`, `Cashflow` + enum (`AssetType`, `CashflowType`). Chưa cần `Dividend`/`Setting`/`Snapshot` ở phase này.
+- **Chỉ người được mời** (không mở đăng ký công khai): bảng allowlist `AllowedUser` (soft-delete, có audit), chặn tại `signIn` callback (kiểm `email_verified`); dùng **database sessions** để thu hồi quyền tức thời. Một admin seed để bootstrap. Mời có phân quyền (`canInvite`) + giới hạn `MAX_MEMBERS`.
+- **Bảng `Setting`** (hạ tầng cấu hình, effective dating) + `resolveSetting` + seed — **chuyển sớm từ Phase 5** vì `MAX_MEMBERS` (access) và `DIVIDEND_TAX_RATE` (cổ tức) đều cần. Phase 5 chỉ còn áp dụng thuế bán.
+- Schema: `User`, `AllowedUser`, `Setting`, `Holding`, `Cashflow` + enum (`AssetType`, `CashflowType`, `SettingValueType`). Chưa cần `Dividend`/`Snapshot`/`PriceQuote` ở phase này.
 - **Nhập vị thế hiện tại làm mốc:** mỗi mã đang giữ → tạo `Holding` + một `Cashflow` kiểu BUY tại ngày mốc (số lượng × giá vốn bình quân). XIRR tính từ mốc này trở đi.
   - **Không phải tính năng/màn riêng** — chính là thao tác "thêm một Holding mới", dùng mãi về sau mỗi khi mua mã mới.
   - **Luồng lần đầu:** vào thẳng màn chính; khi trống hiện empty state ("Chưa có gì — thêm vị thế đầu tiên") + nút Thêm mã. Form có nút **"Lưu & thêm mã khác"** để nhập liên tiếp nhiều mã. Không có wizard onboarding riêng.
@@ -16,10 +17,11 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 
 > **Đã hoãn:** import CSV/Excel từ Google Sheets — dữ liệu cũ không tách chi tiết từng mã nên không dựng lại lịch sử được, tạm thời nhập tay. Xem Backlog.
 
-## Phase 2 — Lõi tính XIRR
+## Phase 2 — Lõi XIRR + giá tự động
 - Ghép dòng tiền giả định (NAV hiện tại) vào cuối chuỗi khi tính, không lưu DB
 - Hỗ trợ chọn mốc chốt: hôm nay / cuối tháng / cuối năm / tùy chỉnh
 - Hiển thị song song: XIRR (theo năm) + lãi/lỗ tuyệt đối trong kỳ
+- Thêm model `PriceQuote` (giá tự động EOD) + job Python ghi qua vnstock; app đọc để định giá
 - Tích hợp `vnstock` cho giá tự động (cổ phiếu, quỹ mở); `NavOverride` cho vàng/trái phiếu nhập tay
 
 ## Phase 3 — Snapshot tự động
@@ -33,10 +35,10 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 - **Cổ tức tiền mặt tự khấu trừ thuế TNCN (~5%):** lưu gộp/thuế/thực nhận, dòng tiền dương cho XIRR = số thực nhận sau thuế
 - UI ghi nhận cổ tức gắn với từng `Holding`
 
-## Phase 5 — Thuế
-- Bảng master `Setting` (cấu hình được, effective dating) giữ thuế bán `SALE_TAX_<LOẠI>` và thuế cổ tức `DIVIDEND_TAX_RATE`
-- Thuế suất chỉnh **trực tiếp trên DB** (không có UI admin); app chỉ resolve, tra thuế theo ngày giao dịch (effective dating)
-- Tự động trừ thuế khi ghi giao dịch bán, hiển thị lãi/lỗ sau thuế
+## Phase 5 — Thuế bán (áp dụng)
+- Bảng `Setting` + `resolveSetting` **đã tạo ở Phase 1** — phase này chỉ dùng.
+- Tự động trừ thuế khi ghi giao dịch bán theo `SALE_TAX_<LOẠI>` (tra tại ngày giao dịch), hiển thị lãi/lỗ sau thuế
+- Thuế suất chỉnh **trực tiếp trên DB** (không có UI admin)
 - Xác nhận mức thuế suất cụ thể trước khi seed (điểm còn mở)
 
 ## Phase 6 — Biểu đồ + hoàn thiện dashboard
