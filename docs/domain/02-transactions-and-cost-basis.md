@@ -15,6 +15,9 @@
 - **Không sửa giao dịch đã xảy ra thành dạng "ẩn"** — mọi thay đổi là sửa/xóa bản ghi rõ ràng, giữ lịch sử trung thực.
 - **Bán không vượt quá số lượng đang giữ** tại thời điểm bán (validate ở biên server).
 
+## Gắn giao dịch vào Holding (find-or-create)
+- Khi ghi giao dịch cho một mã, hệ thống tìm `Holding` theo `(userId, symbol, type)`: **có thì gắn vào, chưa có thì tạo mới** (`@@unique([userId, symbol, type])`). Mua trùng mã đang giữ **không** tạo Holding thứ hai — xem `01-assets-and-holdings.md`.
+
 ## Cách tính — giá vốn bình quân gia quyền
 - **Khi MUA thêm**, giá vốn bình quân được tính lại theo trọng số:
   ```
@@ -30,7 +33,7 @@
 - Đây **không phải entity riêng** — dùng lại `Cashflow` kiểu BUY.
 
 ## Ca biên
-- **Bán hết rồi mua lại:** số lượng về 0 rồi tăng lại; giá vốn bình quân bắt đầu lại từ lần mua mới (không còn lịch sử vốn cũ vì đã đóng vị thế). Cân nhắc: có giữ `Holding` cũ hay tạo mới — mặc định giữ cùng `Holding`, giá vốn tính lại từ mua mới khi SL đang là 0.
+- **Bán hết rồi mua lại:** dùng lại **chính `Holding` đó** (ràng buộc unique buộc vậy); số lượng về 0 rồi tăng lại, giá vốn bình quân bắt đầu lại từ lần mua mới khi SL đang là 0.
 - **Phí/thuế bằng 0:** mặc định `feeAmount = 0`, `taxAmount = 0`.
 - **Giao dịch cùng ngày:** XIRR chấp nhận nhiều dòng tiền cùng ngày; thứ tự trong ngày không ảnh hưởng XIRR.
 

@@ -24,8 +24,9 @@
 
 ## Ca biên
 - **Vàng đổi đơn vị:** không tự quy đổi chỉ↔lượng; giữ nhất quán một `unit` cho mỗi `Holding`. Nếu người dùng nhập lẫn, coi là dữ liệu sai — validate ở form.
-- **Trùng mã khác loại:** về lý thuyết một `symbol` có thể xuất hiện ở loại khác; khóa định danh là `Holding.id`, không phải `symbol`. Không giả định `symbol` là duy nhất.
-- **Cùng mã, hai lần tạo Holding:** cho phép nhưng nên gộp về một `Holding` để bình quân gia quyền đúng; UI nên cảnh báo nếu tạo trùng mã đang có.
+- **Một vị thế cho mỗi `(userId, symbol, type)`** — ràng buộc `@@unique([userId, symbol, type])`. **Mua mã đã giữ → tự gộp** (find-or-create): giao dịch gắn vào `Holding` sẵn có, không tạo Holding trùng. Nhờ vậy bình quân gia quyền luôn đúng và vị thế không bị phân mảnh.
+- **Trùng mã khác loại:** cùng `symbol` nhưng khác `type` (vd hiếm gặp) là **hai Holding riêng** — được phép vì khóa duy nhất gồm cả `type`. Khóa định danh vẫn là `Holding.id`.
+- **Bán hết rồi mua lại:** dùng lại **chính `Holding` đó** (SL về 0 rồi tăng); giá vốn bình quân bắt đầu lại từ lần mua mới.
 
 ## Ví dụ
 - Mua 100 cổ phần `FPT` → `Holding{ type: STOCK, symbol: "FPT", unit: "cổ phần" }`.
