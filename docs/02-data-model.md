@@ -26,7 +26,7 @@ enum SnapshotSource {
 }
 
 enum SnapshotPeriod {
-  PERIODIC  // snapshot định kỳ theo tần suất cấu hình (tháng/tuần) trong Setting
+  PERIODIC  // snapshot định kỳ (tháng/tuần) — lịch nằm trong cron workflow, không phải Setting
   YEAR_END
   MANUAL
   TODAY

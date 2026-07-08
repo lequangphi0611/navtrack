@@ -12,11 +12,8 @@ App **chỉ đọc / resolve** giá trị cấu hình (thuế bán, thuế cổ 
 | `SALE_TAX_STOCK` / `_FUND` / `_BOND` / `_GOLD` | TAX | DECIMAL | thuế bán theo loại (%), effective-dated theo ngày giao dịch |
 | `DIVIDEND_TAX_RATE` | TAX | DECIMAL | thuế cổ tức tiền mặt (%), effective-dated |
 | `MAX_MEMBERS` | ACCESS | INT | số thành viên tối đa (đếm `AllowedUser` chưa thu hồi); resolve với `atDate = hôm nay`, không cần effective dating — xem `08-users-access-and-privacy.md` |
-| `NAV_SNAPSHOT_FREQUENCY` | SNAPSHOT | STRING | `MONTHLY` \| `WEEKLY` — tần suất chốt NAV định kỳ |
-| `NAV_SNAPSHOT_DAY_OF_MONTH` | SNAPSHOT | INT | ngày chốt khi MONTHLY (1-31; vượt số ngày trong tháng thì co về cuối tháng) |
-| `NAV_SNAPSHOT_DAY_OF_WEEK` | SNAPSHOT | INT | thứ chốt khi WEEKLY (1=Thứ Hai … 7=Chủ Nhật) |
 
-Nhóm `SNAPSHOT` resolve với `atDate = hôm nay` (cấu hình vận hành, không effective-dated theo giao dịch). Xem `06-snapshots.md`.
+> **Không đưa vào `Setting`:** tần suất/ngày chốt NAV — nằm ở **cron của GitHub Actions workflow** (committed config), không phải cấu hình runtime. Xem `06-snapshots.md`.
 
 ## Resolution — cách app lấy giá trị
 

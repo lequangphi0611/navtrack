@@ -5,7 +5,7 @@
 
 ## Entity / field
 - `Snapshot`: `holdingId?` (null = tổng danh mục), `date`, `value`, `source` (`AUTO`/`MANUAL`), `period` (`PERIODIC`/`YEAR_END`/`MANUAL`/`TODAY`), `frozen`.
-- Tần suất chốt định kỳ **cấu hình trong `Setting`** (xem `09-settings.md`): `NAV_SNAPSHOT_FREQUENCY`, `NAV_SNAPSHOT_DAY_OF_MONTH`, `NAV_SNAPSHOT_DAY_OF_WEEK`.
+- Tần suất chốt định kỳ **nằm trong cron của GitHub Actions workflow** (committed config), **không** trong `Setting` và **không** chạy hằng ngày — cron chỉ fire đúng ngày cần. Đổi tần suất = sửa cron trong workflow rồi commit.
 - *(Model `Snapshot` được thêm ở Phase 3 — không có trong Phase 1.)*
 
 ## Quy tắc & bất biến
@@ -15,14 +15,14 @@
 - **`source`** ghi rõ giá trị đến từ nguồn tự động hay nhập tay tại thời điểm chốt.
 
 ## Khi nào lưu snapshot
-- **Tự động (cron) — định kỳ (`PERIODIC`), tần suất cấu hình:**
-  - `NAV_SNAPSHOT_FREQUENCY = MONTHLY` → chốt vào ngày `NAV_SNAPSHOT_DAY_OF_MONTH` (1-31; nếu vượt số ngày trong tháng thì **co về ngày cuối tháng** — vd 31 = luôn cuối tháng).
-  - `NAV_SNAPSHOT_FREQUENCY = WEEKLY` → chốt vào thứ `NAV_SNAPSHOT_DAY_OF_WEEK` (1=Thứ Hai … 7=Chủ Nhật).
-  - Cron chạy hằng ngày, đọc setting (resolve `atDate = hôm nay`) và chỉ chốt nếu hôm nay khớp ngày cấu hình.
-- **Tự động (cron) — cuối năm (`YEAR_END`):** vẫn chốt cuối mỗi năm cho báo cáo năm.
+- **Tự động (`PERIODIC`) — lịch nằm trong cron workflow, không chạy hằng ngày:**
+  - **Tháng:** cron fire **ngày 01** hằng tháng (`0 0 1 * *`); snapshot ghi cho **ngày cuối tháng liền trước** (dùng giá EOD cuối tháng đó). Tránh được chuyện cron không biểu diễn được "ngày cuối tháng".
+  - **Tuần:** cron fire theo thứ trong tuần (cron hỗ trợ day-of-week trực tiếp, vd `0 0 * * 0` = Chủ Nhật).
+  - Chọn tháng hay tuần = đặt cron expression tương ứng trong workflow.
+- **Tự động — cuối năm (`YEAR_END`):** vẫn chốt cuối mỗi năm cho báo cáo năm (cron ngày 01/01 ghi cho 31/12 năm trước, tương tự).
 - **Thủ công:** mỗi khi có giao dịch mua/bán; khi người dùng bấm **"Chốt số liệu hôm nay"** (`MANUAL`).
 - **Không lưu:** mốc "hôm nay" khi chỉ xem dashboard.
-- **Tần suất định kỳ cấu hình được:** tháng (ngày tùy chọn) hoặc tuần (thứ tùy chọn), qua `Setting`. Không snapshot theo ngày.
+- **Tần suất định kỳ:** tháng hoặc tuần, đặt qua **cron workflow** (không qua `Setting`, không chạy hằng ngày). Không snapshot theo ngày.
 
 ## Cách tính
 - Giá trị snapshot = NAV tại mốc (xem `04-pricing-and-valuation.md`) — với snapshot tổng danh mục là Σ NAV mọi `Holding` của user.
@@ -34,7 +34,7 @@
 - **Nhiều lần "chốt hôm nay" trong ngày:** cân nhắc gộp về một bản ghi/ngày để tránh trùng.
 
 ## Ví dụ
-- `FREQUENCY=MONTHLY, DAY_OF_MONTH=31` → tháng 2/2025 chốt ngày **28** (co về cuối tháng); tháng 3 chốt ngày 31.
-- `FREQUENCY=WEEKLY, DAY_OF_WEEK=7` → chốt mỗi Chủ Nhật, `period: PERIODIC`.
-- 2024-12-31, cron chạy → lưu `Snapshot{ holdingId: null, date: 2024-12-31, value: <NAV tổng>, period: YEAR_END, frozen: true }`.
+- Cron `0 0 1 * *` fire 01/03/2025 → ghi `Snapshot{ date: 28/02/2025, period: PERIODIC, frozen: true }` (cuối tháng 2, giá EOD 28/02).
+- Cron `0 0 * * 0` → chốt mỗi Chủ Nhật, `period: PERIODIC`.
+- Cron 01/01/2025 → ghi `Snapshot{ date: 31/12/2024, period: YEAR_END, frozen: true }`.
 - Xem dashboard hôm nay → tính NAV động, **không** tạo snapshot.
