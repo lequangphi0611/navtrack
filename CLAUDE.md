@@ -16,6 +16,7 @@ Chỉ cần mở khi việc đang làm chạm đúng phần liên quan:
 - **AGENTS.md:** [`AGENTS.md`](./AGENTS.md) — **đọc trước khi viết code đụng tới API/quy ước của Next.js**. Dự án dùng Next.js 16 (rất mới so với kiến thức huấn luyện của model) — có breaking changes về API/cấu trúc file so với các bản Next.js cũ quen thuộc. Trỏ tới `node_modules/next/dist/docs/` để tra API/convention chính xác thay vì suy đoán từ training data.
 - **Từng file `docs/rules/*`:** đọc file tương ứng khi code phần đó (vd sửa Prisma schema → `docs/rules/schema.md` + `data-prisma.md`; sửa job Python → `python-job.md`; dựng component → `component-architecture.md`).
 - **`process/phase-x.md`:** đọc phase đang làm (xem `process/PROCESS.md` để biết đang ở phase nào).
+- **HARNESS.md:** [`HARNESS.md`](./HARNESS.md) — quyền hạn lệnh (`allow`/`deny`) cấu hình ở `.claude/settings.json`. Đọc khi cần chạy lệnh lạ chưa chắc được phép, hoặc khi sửa `.claude/settings.json`.
 
 ## Tiến trình triển khai
 - **Theo dõi tại [`process/PROCESS.md`](./process/PROCESS.md)** — trỏ tới chi tiết từng phase (`process/phase-x.md`).
