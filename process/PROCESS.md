@@ -10,7 +10,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 2 | Lõi XIRR + giá tự động | ⬜ | [phase-2.md](./phase-2.md) |
 | 3 | Snapshot tự động | ⬜ | [phase-3.md](./phase-3.md) |
 | 4 | Cổ tức | ⬜ | [phase-4.md](./phase-4.md) |
-| 5 | Thuế + bảng Setting | ⬜ | [phase-5.md](./phase-5.md) |
+| 5 | Thuế bán (áp dụng) | ⬜ | [phase-5.md](./phase-5.md) |
 | 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
 
 ## Cách dùng
