@@ -26,7 +26,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
 
 ## Phase 3 — Snapshot tự động
 - Thêm model `Snapshot` (hoãn từ Phase 1) + migration
-- Cron: đóng băng snapshot cuối tháng, cuối năm (`frozen = true`)
+- Cron **GitHub Actions workflow** (không chạy hằng ngày): đóng băng snapshot định kỳ (`PERIODIC`) theo lịch cron (tháng → fire ngày 01 ghi cho cuối tháng trước; tuần → theo day-of-week) và cuối năm (`YEAR_END`), `frozen = true`
 - Snapshot thủ công khi có giao dịch hoặc bấm "chốt số liệu hôm nay"
 - Snapshot tổng danh mục (`holdingId = null`) để phục vụ biểu đồ NAV
 

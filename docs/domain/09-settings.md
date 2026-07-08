@@ -13,6 +13,8 @@ App **chỉ đọc / resolve** giá trị cấu hình (thuế bán, thuế cổ 
 | `DIVIDEND_TAX_RATE` | TAX | DECIMAL | thuế cổ tức tiền mặt (%), effective-dated |
 | `MAX_MEMBERS` | ACCESS | INT | số thành viên tối đa (đếm `AllowedUser` chưa thu hồi); resolve với `atDate = hôm nay`, không cần effective dating — xem `08-users-access-and-privacy.md` |
 
+> **Không đưa vào `Setting`:** tần suất/ngày chốt NAV — nằm ở **cron của GitHub Actions workflow** (committed config), không phải cấu hình runtime. Xem `06-snapshots.md`.
+
 ## Resolution — cách app lấy giá trị
 
 ```

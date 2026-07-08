@@ -17,6 +17,7 @@
   - BOND: trái phiếu (theo mệnh giá).
 - **`symbol`** ở Phase 1 là **nhập tay tự do** (chưa validate với danh sách vnstock, chưa autocomplete). Chỉ là nhãn cho tới khi tích hợp giá (Phase 2).
 - Số lượng nắm giữ **không lưu trực tiếp** trên `Holding` — nó là **kết quả suy ra** từ chuỗi giao dịch + cổ tức cổ phiếu (xem `02-transactions-and-cost-basis.md`).
+- **Vị thế đóng (SL = 0):** khi bán hết, `Holding` **vẫn giữ lại** (không xóa) — lãi/lỗ đã hiện thực hóa, NAV = 0. Vị thế đóng **ẩn khỏi dashboard chính**, hiện ở tab **"Đã đóng"**; nhưng **vẫn tính vào tổng hiệu quả danh mục** (XIRR + tổng lãi/lỗ) vì là lợi nhuận thật đã thu. Trạng thái "đóng/mở" là **suy ra từ SL**, không phải cột lưu sẵn.
 
 ## Cách tính
 - **Số lượng hiện tại** = Σ(BUY.quantity) − Σ(SELL.quantity) + Σ(dividend STOCK.stockQuantity).
@@ -24,8 +25,9 @@
 
 ## Ca biên
 - **Vàng đổi đơn vị:** không tự quy đổi chỉ↔lượng; giữ nhất quán một `unit` cho mỗi `Holding`. Nếu người dùng nhập lẫn, coi là dữ liệu sai — validate ở form.
-- **Trùng mã khác loại:** về lý thuyết một `symbol` có thể xuất hiện ở loại khác; khóa định danh là `Holding.id`, không phải `symbol`. Không giả định `symbol` là duy nhất.
-- **Cùng mã, hai lần tạo Holding:** cho phép nhưng nên gộp về một `Holding` để bình quân gia quyền đúng; UI nên cảnh báo nếu tạo trùng mã đang có.
+- **Một vị thế cho mỗi `(userId, symbol, type)`** — ràng buộc `@@unique([userId, symbol, type])`. **Mua mã đã giữ → tự gộp** (find-or-create): giao dịch gắn vào `Holding` sẵn có, không tạo Holding trùng. Nhờ vậy bình quân gia quyền luôn đúng và vị thế không bị phân mảnh.
+- **Trùng mã khác loại:** cùng `symbol` nhưng khác `type` (vd hiếm gặp) là **hai Holding riêng** — được phép vì khóa duy nhất gồm cả `type`. Khóa định danh vẫn là `Holding.id`.
+- **Bán hết rồi mua lại:** dùng lại **chính `Holding` đó** (SL về 0 rồi tăng); giá vốn bình quân bắt đầu lại từ lần mua mới.
 
 ## Ví dụ
 - Mua 100 cổ phần `FPT` → `Holding{ type: STOCK, symbol: "FPT", unit: "cổ phần" }`.

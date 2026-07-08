@@ -26,7 +26,7 @@ enum SnapshotSource {
 }
 
 enum SnapshotPeriod {
-  MONTH_END
+  PERIODIC  // snapshot định kỳ (tháng/tuần) — lịch nằm trong cron workflow, không phải Setting
   YEAR_END
   MANUAL
   TODAY
@@ -73,6 +73,7 @@ model Holding {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
+  @@unique([userId, symbol, type]) // một vị thế/user cho mỗi (mã, loại) — mua trùng mã tự gộp
   @@index([userId])
 }
 
@@ -186,6 +187,7 @@ model Setting {
 
 - **Một bảng `Holding` cho cả 4 loại tài sản**, phân biệt bằng `AssetType` (STOCK/FUND/BOND/GOLD). Không tách bảng riêng theo loại — vì mục tiêu là phân tích *toàn danh mục* (tổng NAV, XIRR, phân bổ), tách bảng sẽ buộc `UNION` khắp nơi và quan hệ đa hình cho `Cashflow`/`Dividend`/`Snapshot`. Khác biệt giữa các loại xử lý bằng field, không bằng bảng: `unit` (vàng chỉ/lượng), `NavOverride` (nhập tay cho vàng/trái phiếu), và (nếu cần) vài cột nullable cho chi tiết trái phiếu — thêm sau khi thật cần.
 - **CCQ (chứng chỉ quỹ) đều là `AssetType = FUND`** bất kể là quỹ cổ phiếu hay quỹ trái phiếu — phân loại "theo vỏ" sản phẩm, không theo phơi nhiễm kinh tế. Biểu đồ phân bổ giữ 4 nhóm; không có field `fundKind`.
+- **Một vị thế cho mỗi `(userId, symbol, type)`** — ràng buộc `@@unique([userId, symbol, type])`. Khi mua mã đã giữ, hệ thống **find-or-create**: gắn `Cashflow` BUY vào `Holding` sẵn có (không tạo Holding trùng) → giá vốn bình quân gia quyền luôn đúng. Cùng `symbol` khác `type` vẫn là hai Holding (được phép). Bán hết rồi mua lại dùng lại chính Holding đó (SL về 0 rồi tăng).
 - **`User`** tách dữ liệu theo từng người: mỗi `Holding` gắn với đúng một `userId`, mọi bảng con (`Cashflow`, `Dividend`, `Snapshot`, `NavOverride`) đi theo qua quan hệ với `Holding` nên không cần lặp lại `userId`. Snapshot tổng danh mục (`holdingId = null`) sẽ cần thêm `userId` riêng khi triển khai để biết thuộc về ai. Tài khoản do quản trị tạo/mời (không mở đăng ký công khai) — phù hợp tính chất phi thương mại.
 - **`User.hideAmountsByDefault`** lưu trạng thái mặc định của chế độ ẩn số tiền trên dashboard theo từng người. Đây là che ở tầng hiển thị: chỉ ẩn giá trị tiền tuyệt đối (NAV, lãi/lỗ bằng đồng → `••••••`), **giữ nguyên** XIRR và các phần trăm. Trên dashboard có nút bật/tắt nhanh; giá trị này chỉ quyết định trạng thái khi mở app.
 - **Vị thế mở ban đầu** (khi khởi tạo, không import lịch sử) được mô hình hóa như **một `Cashflow` kiểu BUY** đặt tại ngày mốc: `quantity` = số lượng đang giữ, `pricePerUnit` = giá vốn bình quân, `amount` = số âm tương ứng. Không cần model riêng — XIRR tính từ mốc này trở đi.

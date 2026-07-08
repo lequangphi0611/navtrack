@@ -1,6 +1,6 @@
 # Python job (GitHub Actions)
 
-Quy tắc cho **các job Python** chạy trên GitHub Actions, ghi vào Postgres. Job chính là **lấy giá** bằng `vnstock`; các job Python khác (chốt snapshot cuối tháng/năm, nạp danh sách mã cho autocomplete) **tuân theo cùng các rule dưới đây**. Ranh giới tổng thể: xem `project-structure.md`.
+Quy tắc cho **các job Python** chạy trên GitHub Actions, ghi vào Postgres. Job chính là **lấy giá** bằng `vnstock`; các job Python khác (chốt snapshot định kỳ, nạp danh sách mã cho autocomplete) **tuân theo cùng các rule dưới đây**. Lịch chạy mỗi job nằm trong **cron của workflow** (vd snapshot tháng fire ngày 01) — không tự kiểm ngày trong code. Ranh giới tổng thể: xem `project-structure.md`.
 
 ## Vị trí & ranh giới
 - Đặt ở thư mục **tách riêng ngoài app Next**, vd `jobs/price-fetcher/`, có `requirements.txt` + README riêng.

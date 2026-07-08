@@ -47,7 +47,7 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 ### Job Python (GitHub Actions)
 - Kết nối Neon qua connection string, lưu trong **GitHub Secrets** (không hardcode).
 - Chạy theo lịch (cron của GitHub Actions) — lưu ý lịch này lệch vài phút, không chính xác từng phút, nhưng không sao với snapshot ngày/tháng/năm.
-- Nhiệm vụ: lấy giá hằng ngày cho cổ phiếu/quỹ; chốt snapshot cuối tháng/năm. Vàng/trái phiếu chủ yếu nhập tay (xem `02-data-model.md`).
+- Nhiệm vụ: lấy giá hằng ngày cho cổ phiếu/quỹ; chốt snapshot định kỳ. **Lịch chốt snapshot nằm trong cron của workflow** (không chạy hằng ngày): tháng → fire ngày 01 ghi cho cuối tháng trước; năm → 01/01 ghi cho 31/12 trước (xem `domain/06-snapshots.md`). Vàng/trái phiếu chủ yếu nhập tay.
 
 ### XIRR (lớp bọc kiểm tra)
 - Trước khi tính: kiểm tra chuỗi dòng tiền có ít nhất một giá trị âm và một dương — nếu không, trả về trạng thái "không tính được" rõ ràng, **không** trả -100% hay NaN âm thầm.

@@ -5,13 +5,13 @@ Chụp và **đóng băng** giá trị danh mục tại các mốc (tháng/năm)
 
 ## Công việc cần làm
 - [ ] Model `Snapshot` (`holdingId?`, `date`, `value`, `source`, `period`, `frozen`) + enum `SnapshotSource`, `SnapshotPeriod` + migration
-- [ ] Cron (GitHub Actions) đóng băng snapshot **cuối tháng** (`MONTH_END`) và **cuối năm** (`YEAR_END`), `frozen = true`
+- [ ] Cron **GitHub Actions workflow** (không chạy hằng ngày): lịch nằm trong cron expression. Tháng → fire ngày 01, ghi snapshot `PERIODIC` cho **cuối tháng liền trước**; tuần → theo day-of-week; cuối năm → `YEAR_END` (01/01 ghi cho 31/12 trước). `frozen = true`
 - [ ] Snapshot thủ công: khi có giao dịch mua/bán; nút **"Chốt số liệu hôm nay"** (`MANUAL`)
 - [ ] Snapshot **tổng danh mục** (`holdingId = null`) theo từng user
 - [ ] Mốc "hôm nay" tính động, **không lưu**
 
 ## Tiêu chí hoàn thành
-- [ ] Cuối tháng/năm tự tạo snapshot đóng băng đúng NAV thời điểm đó
+- [ ] Snapshot định kỳ chạy đúng theo tần suất/ngày cấu hình (đổi setting → đổi lịch chốt); cuối năm vẫn chốt
 - [ ] Số liệu đã đóng băng **không đổi** khi giá cập nhật sau này
 - [ ] Có chuỗi snapshot tổng danh mục đủ để vẽ biểu đồ NAV (Phase 6)
 
