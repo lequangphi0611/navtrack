@@ -1,6 +1,6 @@
 # Roadmap theo phase
 
-Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisions.md`: import dữ liệu cũ trước (để không phải nhập tay lại), sau đó lõi XIRR, rồi tới cổ tức/thuế, cuối cùng là biểu đồ.
+Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.md`](./business-overview.md) và [`domain/`](./domain/README.md): nền tảng + nhập vị thế trước, sau đó lõi XIRR + giá, rồi snapshot, cổ tức/thuế, cuối cùng là biểu đồ.
 
 ## Phase 1 — Nền tảng + đăng nhập + nhập vị thế ban đầu
 - Scaffold Next.js + TypeScript + Prisma + PostgreSQL
@@ -17,7 +17,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong `01-business-decisio
 
 > **Đã hoãn:** import CSV/Excel từ Google Sheets — dữ liệu cũ không tách chi tiết từng mã nên không dựng lại lịch sử được, tạm thời nhập tay. Xem Backlog.
 
-## Phase 2 — Lõi tính XIRR
+## Phase 2 — Lõi XIRR + giá tự động
 - Ghép dòng tiền giả định (NAV hiện tại) vào cuối chuỗi khi tính, không lưu DB
 - Hỗ trợ chọn mốc chốt: hôm nay / cuối tháng / cuối năm / tùy chỉnh
 - Hiển thị song song: XIRR (theo năm) + lãi/lỗ tuyệt đối trong kỳ

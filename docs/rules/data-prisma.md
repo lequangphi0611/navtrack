@@ -1,6 +1,6 @@
 # Data & Prisma
 
-Quy tắc schema và truy cập dữ liệu cho Navtrack. Ưu tiên **đúng về tiền** và **tách dữ liệu theo user**.
+Quy tắc **truy vấn Prisma, tiền tệ, và tách dữ liệu theo user**. Cách *định nghĩa* model/schema (đặt tên, enum, quan hệ, timestamps, index, migration...) ở [`schema.md`](./schema.md).
 
 ## Tiền & số học
 
@@ -26,42 +26,6 @@ const total = cashflows.reduce((s, c) => s.plus(c.amount), new Decimal(0));
 
 - `Cashflow.amount` mang dấu sẵn (âm = mua, dương = bán). Ghi rõ quy ước này trong comment của schema.
 
-## Đặt tên
-
-- Model **PascalCase số ít** (`Holding`); field **camelCase**; enum value **UPPER_SNAKE**.
-- Dùng **enum** trong schema cho tập giá trị cố định thay vì string tự do.
-
-```prisma
-// ❌ Bad — string tự do dễ sai chính tả, không ràng buộc
-model Holding { type String }
-
-// ✅ Good — enum
-enum AssetType { STOCK FUND BOND GOLD }
-model Holding { type AssetType }
-```
-
-## Quy ước model
-
-- Mỗi model có `id String @id @default(cuid())` và `createdAt`. Thêm `updatedAt @updatedAt` ở model có sửa đổi.
-- `DateTime` lưu **UTC**; xử lý timezone ở tầng hiển thị.
-- Thêm `@@index([userId])` cho bảng thuộc user; index field hay truy vấn (vd `holdingId + date`).
-- Quy định `onDelete` rõ ràng cho quan hệ.
-
-```prisma
-// ✅ Good
-model Cashflow {
-  id        String   @id @default(cuid())
-  holdingId String
-  holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
-  date      DateTime
-  amount    Decimal  @db.Decimal(20, 4)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([holdingId, date])
-}
-```
-
 ## Bảo mật / tách dữ liệu theo user
 
 - **Mọi truy vấn dữ liệu user PHẢI filter theo `userId` của phiên đăng nhập.**
@@ -86,9 +50,10 @@ export async function getHoldings() {
 }
 ```
 
+- Với model **soft-delete** (vd `AllowedUser`), truy vấn phải lọc `revokedAt = null` (định nghĩa cột: xem `schema.md`).
 - Gom truy vấn có kiểm soát quyền vào `queries.ts` của feature, không rải Prisma khắp nơi.
 
-## Migration & client
+## Prisma client & serialization
 
 - Prisma client **singleton** ở `lib/db.ts` (tránh cạn connection khi hot reload dev).
 
@@ -103,7 +68,6 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
 export const db = new PrismaClient();
 ```
 
-- Commit file migration. **Không sửa migration đã áp dụng** — tạo migration mới. Dev dùng `migrate dev`, prod dùng `migrate deploy`.
 - `prisma/seed.ts` để seed giá trị mặc định (vd các dòng `Setting` cho thuế bán/cổ tức với `effectiveFrom` ban đầu).
 - **Không truyền thẳng model Prisma ra client.** Convert `Decimal` → **`string`** (không phải `number`) tại biên server; **mọi toán tiền chỉ làm ở server bằng `Decimal`**, client chỉ hiển thị.
 
@@ -115,3 +79,5 @@ return { marketValue: holding.marketValue.toNumber() }; // number
 // ✅ Good — string
 return { marketValue: holding.marketValue.toString() };
 ```
+
+> Migration discipline (mỗi thay đổi một migration, không sửa migration đã áp, commit file): xem [`schema.md`](./schema.md).

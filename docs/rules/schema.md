@@ -49,7 +49,7 @@ model Cashflow { holding Holding @relation(fields: [holdingId], references: [id]
 - Thêm `@@index([userId])` cho bảng thuộc user; index field truy vấn thường (vd `[holdingId, date]`, `[key, effectiveFrom]`).
 
 ## Soft-delete & audit
-- Dữ liệu cần **giữ lịch sử/audit** (vd `AllowedUser`) dùng **soft-delete** bằng cột nullable (`revokedAt`), **không xóa cứng**. Truy vấn phải lọc `revokedAt = null`.
+- Dữ liệu cần **giữ lịch sử/audit** (vd `AllowedUser`) dùng **soft-delete** bằng cột nullable (`revokedAt`), **không xóa cứng**. (Quy tắc *truy vấn* phải lọc `revokedAt = null` nằm ở `data-prisma.md`.)
 - Thêm `updatedBy String?` khi cần biết ai đổi (config, quyền).
 
 ```prisma

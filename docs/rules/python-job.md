@@ -1,6 +1,6 @@
-# Python job (lấy giá)
+# Python job (GitHub Actions)
 
-Quy tắc cho job Python lấy giá bằng `vnstock`, chạy trên GitHub Actions và ghi vào Postgres. Ranh giới tổng thể: xem `project-structure.md`.
+Quy tắc cho **các job Python** chạy trên GitHub Actions, ghi vào Postgres. Job chính là **lấy giá** bằng `vnstock`; các job Python khác (chốt snapshot cuối tháng/năm, nạp danh sách mã cho autocomplete) **tuân theo cùng các rule dưới đây**. Ranh giới tổng thể: xem `project-structure.md`.
 
 ## Vị trí & ranh giới
 - Đặt ở thư mục **tách riêng ngoài app Next**, vd `jobs/price-fetcher/`, có `requirements.txt` + README riêng.
@@ -22,7 +22,7 @@ with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
 ```
 
 ## Idempotent (chạy lại an toàn)
-- Ghi giá phải **upsert theo `(symbol, date)`** — chạy lại cùng ngày không tạo bản ghi trùng.
+- Ghi giá phải **upsert theo `(symbol, date)`** — chạy lại cùng ngày không tạo bản ghi trùng. `date` phải là **date-only** (chuẩn hóa về nửa đêm UTC / cột `@db.Date`) để unique đảm bảo đúng 1 giá/mã/ngày.
 
 ```python
 # ✅ Good — upsert
