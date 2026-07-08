@@ -26,7 +26,7 @@ enum SnapshotSource {
 }
 
 enum SnapshotPeriod {
-  MONTH_END
+  PERIODIC  // snapshot định kỳ theo tần suất cấu hình (tháng/tuần) trong Setting
   YEAR_END
   MANUAL
   TODAY
