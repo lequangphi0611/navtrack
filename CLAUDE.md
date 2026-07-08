@@ -13,6 +13,12 @@ Hướng dẫn cho Claude khi làm việc trên **Navtrack** — web app quản 
 - **Theo dõi tại [`process/PROCESS.md`](./process/PROCESS.md)** — trỏ tới chi tiết từng phase (`process/phase-x.md`).
 - **QUAN TRỌNG:** mỗi khi hoàn thành một phase, **cập nhật `process/PROCESS.md`** (đổi trạng thái) và tick tiêu chí trong `process/phase-x.md`.
 
+## Đồng bộ tài liệu khi có quyết định quan trọng
+- **BẮT BUỘC:** mỗi khi có quyết định quan trọng làm thay đổi **business / domain / spec / data model / rules**, phải **phản ánh đầy đủ vào TẤT CẢ tài liệu liên quan** trong cùng lần thay đổi — không chỉ sửa một chỗ.
+- Rà các nơi có thể bị ảnh hưởng và cập nhật cho nhất quán: `docs/business-overview.md`, `docs/domain/*`, `docs/02-data-model.md`, `docs/04-tech-stack.md`, `docs/03-roadmap.md`, `docs/rules/*` (+ index), `process/PROCESS.md` & `process/phase-x.md`.
+- Giữ **cross-reference đồng bộ**: đổi tên/khái niệm ở một file thì cập nhật mọi chỗ tham chiếu (dùng grep để tìm hết). Ghi rõ **lý do** quyết định để sau này còn hiểu.
+- Commit riêng cho thay đổi tài liệu với message mô tả quyết định.
+
 ## Tech stack (tóm tắt)
 - Next.js + TypeScript (App Router), Prisma + PostgreSQL (Neon), Auth.js + Google OAuth (database sessions).
 - Tailwind + shadcn/ui, Recharts. XIRR: thư viện + lớp bọc kiểm tra.
