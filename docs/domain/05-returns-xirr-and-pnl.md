@@ -12,6 +12,7 @@
 - **Chưa bán vẫn tính được:** ghép thêm **một dòng tiền dương giả định = NAV hiện tại** vào cuối chuỗi khi tính.
   - Dòng tiền giả định **không lưu DB** — chỉ ghép runtime lúc tính, để không làm bẩn lịch sử giao dịch.
   - Mốc chốt chọn được: **hôm nay / cuối tháng / cuối năm / tùy chỉnh**; mỗi mốc → NAV khác → XIRR khác.
+- **Vị thế đã đóng (bán hết, SL = 0):** XIRR là **"chốt" — KHÔNG ghép NAV giả định** (NAV = 0), vì dòng tiền bán cuối là dòng tiền dương thật đã đủ cho công thức. Kết quả không còn phụ thuộc giá thị trường. Vị thế đóng **vẫn tính vào XIRR & lãi/lỗ toàn danh mục**.
 - **"Không tính được" là kết quả nghiệp vụ, KHÔNG phải lỗi** — trả status rõ ràng (`NO_POSITIVE_FLOW`, `NO_CONVERGE`), **không âm thầm trả -100%** hay `NaN` (xem `rules/error-handling.md`).
 - Hiển thị **song song hai chỉ số**, không lẫn lộn.
 

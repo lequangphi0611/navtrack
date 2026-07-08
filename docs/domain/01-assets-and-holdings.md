@@ -17,6 +17,7 @@
   - BOND: trái phiếu (theo mệnh giá).
 - **`symbol`** ở Phase 1 là **nhập tay tự do** (chưa validate với danh sách vnstock, chưa autocomplete). Chỉ là nhãn cho tới khi tích hợp giá (Phase 2).
 - Số lượng nắm giữ **không lưu trực tiếp** trên `Holding` — nó là **kết quả suy ra** từ chuỗi giao dịch + cổ tức cổ phiếu (xem `02-transactions-and-cost-basis.md`).
+- **Vị thế đóng (SL = 0):** khi bán hết, `Holding` **vẫn giữ lại** (không xóa) — lãi/lỗ đã hiện thực hóa, NAV = 0. Vị thế đóng **ẩn khỏi dashboard chính**, hiện ở tab **"Đã đóng"**; nhưng **vẫn tính vào tổng hiệu quả danh mục** (XIRR + tổng lãi/lỗ) vì là lợi nhuận thật đã thu. Trạng thái "đóng/mở" là **suy ra từ SL**, không phải cột lưu sẵn.
 
 ## Cách tính
 - **Số lượng hiện tại** = Σ(BUY.quantity) − Σ(SELL.quantity) + Σ(dividend STOCK.stockQuantity).
