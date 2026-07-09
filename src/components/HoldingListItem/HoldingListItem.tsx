@@ -2,13 +2,15 @@ import { type AssetType, AssetTypeBadge } from "@/components/AssetTypeBadge";
 import { MoneyValue } from "@/components/MoneyValue";
 import { PercentChange } from "@/components/PercentChange";
 import { SymbolAvatar } from "@/components/SymbolAvatar";
+import { formatQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type HoldingListItemProps = {
   symbol: string;
   name: string;
   assetType: AssetType;
-  quantity: number;
+  // Decimal đã serialize thành string ở biên server (xem docs/rules/data-prisma.md).
+  quantity: string;
   // Đơn vị số lượng — lấy trực tiếp từ Holding.unit (Prisma), không suy ra từ assetType
   // để tránh hai nguồn dữ liệu lệch nhau (xem prisma/schema.prisma Holding.unit).
   unit: string;
@@ -29,7 +31,7 @@ function HoldingListItem({
   hidden = false,
   className,
 }: HoldingListItemProps) {
-  const quantityLabel = `${new Intl.NumberFormat("vi-VN").format(quantity)} ${unit}`;
+  const quantityLabel = formatQuantity(quantity, unit);
 
   return (
     <div

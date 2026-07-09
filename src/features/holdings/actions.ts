@@ -3,6 +3,7 @@
 import Decimal from "decimal.js";
 import { revalidatePath } from "next/cache";
 
+import { Prisma } from "@prisma/client";
 import type { Cashflow } from "@prisma/client";
 import type { ActionResult } from "@/lib/action-result";
 import { toFieldErrors } from "@/lib/action-result";
@@ -61,35 +62,35 @@ export async function createHolding(
   } = parsed.data;
 
   try {
-    const existing = await db.holding.findUnique({
-      where: { userId_symbol_type: { userId, symbol, type } },
-      include: { cashflows: true },
-    });
+    const result = await db.$transaction(async (tx) => {
+      const existing = await tx.holding.findUnique({
+        where: { userId_symbol_type: { userId, symbol, type } },
+        include: { cashflows: true },
+      });
 
-    const candidate: CashflowInput = {
-      type: cashflowType,
-      date,
-      quantity: new Decimal(quantity),
-      pricePerUnit: new Decimal(pricePerUnit),
-    };
+      const candidate: CashflowInput = {
+        type: cashflowType,
+        date,
+        quantity: new Decimal(quantity),
+        pricePerUnit: new Decimal(pricePerUnit),
+      };
 
-    const position = derivePosition([
-      ...(existing?.cashflows.map(toCashflowInput) ?? []),
-      candidate,
-    ]);
-    if (position.wentNegative) {
-      return { ok: false, error: "Bán vượt quá số lượng đang giữ" };
-    }
+      const position = derivePosition([
+        ...(existing?.cashflows.map(toCashflowInput) ?? []),
+        candidate,
+      ]);
+      if (position.wentNegative) {
+        return { ok: false as const, error: "Bán vượt quá số lượng đang giữ" };
+      }
 
-    const amount = computeCashflowAmount({
-      type: cashflowType,
-      quantity: candidate.quantity,
-      pricePerUnit: candidate.pricePerUnit,
-      feeAmount: new Decimal(feeAmount),
-      taxAmount: new Decimal(taxAmount),
-    });
+      const amount = computeCashflowAmount({
+        type: cashflowType,
+        quantity: candidate.quantity,
+        pricePerUnit: candidate.pricePerUnit,
+        feeAmount: new Decimal(feeAmount),
+        taxAmount: new Decimal(taxAmount),
+      });
 
-    const holdingId = await db.$transaction(async (tx) => {
       // Mua trùng mã đang giữ tự gộp vào Holding đã có, không tạo bản ghi thứ hai
       // (docs/domain/02-transactions-and-cost-basis.md).
       const holding =
@@ -112,12 +113,26 @@ export async function createHolding(
         },
       });
 
-      return holding.id;
+      return { ok: true as const, holdingId: holding.id };
     });
 
+    if (!result.ok) return result;
+
     revalidatePath("/holdings");
-    return { ok: true, data: { holdingId } };
+    return { ok: true, data: { holdingId: result.holdingId } };
   } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      // Hai request tạo đồng thời cùng (userId, symbol, type) — request thua
+      // trong đua tranh gặp lỗi ràng buộc unique, không phải bug.
+      logger.warn({ symbol, type }, "createHolding race on unique constraint");
+      return {
+        ok: false,
+        error: "Có giao dịch trùng đang được xử lý, vui lòng thử lại",
+      };
+    }
     logger.error({ err, symbol, type }, "createHolding failed");
     throw err;
   }
