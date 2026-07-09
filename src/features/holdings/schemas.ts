@@ -1,0 +1,64 @@
+import Decimal from "decimal.js";
+import { z } from "zod";
+
+export const assetTypeEnum = z.enum(["STOCK", "FUND", "BOND", "GOLD"]);
+export const cashflowTypeEnum = z.enum(["BUY", "SELL"]);
+
+function decimalString(message: string) {
+  return z
+    .string()
+    .trim()
+    .refine((value) => {
+      try {
+        return new Decimal(value).isFinite();
+      } catch {
+        return false;
+      }
+    }, message);
+}
+
+function positiveDecimal(message: string) {
+  return decimalString(message).refine(
+    (value) => new Decimal(value).gt(0),
+    message,
+  );
+}
+
+function nonNegativeDecimal(message: string) {
+  return decimalString(message).refine(
+    (value) => new Decimal(value).gte(0),
+    message,
+  );
+}
+
+const transactionFields = {
+  cashflowType: cashflowTypeEnum,
+  date: z.coerce.date({ error: "Ngày không hợp lệ" }),
+  quantity: positiveDecimal("Số lượng phải lớn hơn 0"),
+  pricePerUnit: positiveDecimal("Giá phải lớn hơn 0"),
+  feeAmount: nonNegativeDecimal("Phí không hợp lệ").default("0"),
+  taxAmount: nonNegativeDecimal("Thuế không hợp lệ").default("0"),
+  note: z.string().trim().optional(),
+};
+
+export const newHoldingSchema = z.object({
+  symbol: z.string().trim().min(1, "Nhập mã"),
+  type: assetTypeEnum,
+  unit: z.string().trim().min(1, "Nhập đơn vị"),
+  name: z.string().trim().optional(),
+  ...transactionFields,
+});
+
+export const addTransactionSchema = z.object({
+  holdingId: z.string().min(1, "Thiếu mã danh mục"),
+  ...transactionFields,
+});
+
+export const updateTransactionSchema = z.object({
+  cashflowId: z.string().min(1, "Thiếu giao dịch"),
+  ...transactionFields,
+});
+
+export const deleteTransactionSchema = z.object({
+  cashflowId: z.string().min(1, "Thiếu giao dịch"),
+});

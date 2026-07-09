@@ -13,15 +13,19 @@ export default async function DashboardHomePage() {
         Xin chào, {session?.user?.name ?? session?.user?.email}
       </h2>
       <p className="max-w-md text-muted-foreground">
-        Danh mục đầu tư (nhập vị thế, giao dịch mua/bán) sẽ có ở bước tiếp theo
-        của Phase 1 — xem <code className="font-mono">process/PROCESS.md</code>.
+        Theo dõi danh mục đầu tư của bạn — cổ phiếu, quỹ, trái phiếu, vàng.
       </p>
-      <Link
-        href="/settings/members"
-        className={cn(buttonVariants({ variant: "outline" }), "mt-2")}
-      >
-        Quản lý thành viên
-      </Link>
+      <div className="mt-2 flex gap-2">
+        <Link href="/holdings" className={cn(buttonVariants())}>
+          Xem danh mục
+        </Link>
+        <Link
+          href="/settings/members"
+          className={cn(buttonVariants({ variant: "outline" }))}
+        >
+          Quản lý thành viên
+        </Link>
+      </div>
     </div>
   );
 }

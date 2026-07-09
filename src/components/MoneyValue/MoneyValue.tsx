@@ -1,3 +1,4 @@
+import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { MoneyValueToggleButton } from "./MoneyValueToggleButton";
@@ -15,13 +16,6 @@ function MoneyValue({
   onToggleHidden,
   className,
 }: MoneyValueProps) {
-  // TODO(format): chuyển sang lib/format.ts formatMoney() khi helper chung được tạo
-  // (xem docs/rules/component-architecture.md#format-locale). lib/format.ts chưa tồn tại.
-  const formatted = new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(Number(value));
-
   return (
     <div className="flex items-center gap-2">
       <span
@@ -30,7 +24,7 @@ function MoneyValue({
           className,
         )}
       >
-        {hidden ? "••••••" : formatted}
+        {formatMoney(value, { hidden })}
       </span>
       {onToggleHidden ? (
         <MoneyValueToggleButton
