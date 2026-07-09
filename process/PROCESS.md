@@ -6,7 +6,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 
 | Phase | Tên | Trạng thái | Chi tiết |
 |---|---|---|---|
-| 1 | Nền tảng + đăng nhập + nhập vị thế | ⬜ | [phase-1.md](./phase-1.md) |
+| 1 | Nền tảng + đăng nhập + nhập vị thế | 🟨 | [phase-1.md](./phase-1.md) |
 | 2 | Lõi XIRR + giá tự động | ⬜ | [phase-2.md](./phase-2.md) |
 | 3 | Snapshot tự động | ⬜ | [phase-3.md](./phase-3.md) |
 | 4 | Cổ tức | ⬜ | [phase-4.md](./phase-4.md) |
@@ -19,4 +19,4 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 - Nếu phạm vi phase thay đổi, cập nhật cả `docs/03-roadmap.md` lẫn `phase-x.md` cho nhất quán.
 
 ## Nhật ký
-- *(chưa có)*
+- 2026-07-09: Phase 1 — xong Auth.js + Google OAuth + allowlist gate, `resolveSetting`, mời thành viên (`MAX_MEMBERS`). Còn lại: nhập vị thế + CRUD giao dịch mua/bán (Holdings/Cashflow).
