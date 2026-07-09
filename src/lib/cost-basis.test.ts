@@ -136,6 +136,48 @@ describe("derivePosition", () => {
     expect(position.wentNegative).toBe(false);
   });
 
+  test("bán đúng hết số lượng đang giữ -> quantity và avgCost về 0", () => {
+    const position = derivePosition([
+      {
+        type: "BUY",
+        date: new Date("2026-01-01"),
+        quantity: new Decimal(100),
+        pricePerUnit: new Decimal(100_000),
+      },
+      {
+        type: "SELL",
+        date: new Date("2026-02-01"),
+        quantity: new Decimal(100),
+        pricePerUnit: new Decimal(120_000),
+      },
+    ]);
+
+    expect(position.quantity.toString()).toBe("0");
+    expect(position.avgCost.toString()).toBe("0");
+    expect(position.wentNegative).toBe(false);
+  });
+
+  test("số lượng thập phân (vàng tính theo chỉ) tính giá vốn bình quân đúng", () => {
+    const position = derivePosition([
+      {
+        type: "BUY",
+        date: new Date("2026-01-01"),
+        quantity: new Decimal("0.5"),
+        pricePerUnit: new Decimal(6_000_000),
+      },
+      {
+        type: "BUY",
+        date: new Date("2026-02-01"),
+        quantity: new Decimal("0.25"),
+        pricePerUnit: new Decimal(6_400_000),
+      },
+    ]);
+
+    expect(position.quantity.toString()).toBe("0.75");
+    // (0.5*6,000,000 + 0.25*6,400,000) / 0.75 = 6,133,333.33...
+    expect(position.avgCost.toFixed(2)).toBe("6133333.33");
+  });
+
   test("không có giao dịch nào -> vị thế rỗng", () => {
     const position = derivePosition([]);
 

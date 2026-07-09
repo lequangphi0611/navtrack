@@ -18,17 +18,23 @@ function decimalString(message: string) {
 }
 
 function positiveDecimal(message: string) {
-  return decimalString(message).refine(
-    (value) => new Decimal(value).gt(0),
-    message,
-  );
+  return decimalString(message).refine((value) => {
+    try {
+      return new Decimal(value).gt(0);
+    } catch {
+      return false;
+    }
+  }, message);
 }
 
 function nonNegativeDecimal(message: string) {
-  return decimalString(message).refine(
-    (value) => new Decimal(value).gte(0),
-    message,
-  );
+  return decimalString(message).refine((value) => {
+    try {
+      return new Decimal(value).gte(0);
+    } catch {
+      return false;
+    }
+  }, message);
 }
 
 const transactionFields = {
