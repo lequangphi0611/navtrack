@@ -26,7 +26,13 @@ def to_libpq_url(database_url: str) -> str:
 
 def main() -> None:
     load_dotenv()
-    database_url = to_libpq_url(os.environ["DATABASE_URL"])
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise SystemExit(
+            "DATABASE_URL is not set. Copy .env.example to .env (local) "
+            "or set the DATABASE_URL secret (GitHub Actions)."
+        )
+    database_url = to_libpq_url(database_url)
     with psycopg.connect(database_url) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT 1")

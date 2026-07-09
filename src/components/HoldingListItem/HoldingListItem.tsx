@@ -9,17 +9,13 @@ type HoldingListItemProps = {
   name: string;
   assetType: AssetType;
   quantity: number;
+  // Đơn vị số lượng — lấy trực tiếp từ Holding.unit (Prisma), không suy ra từ assetType
+  // để tránh hai nguồn dữ liệu lệch nhau (xem prisma/schema.prisma Holding.unit).
+  unit: string;
   marketValue: string;
   annualReturnPercent?: number;
   hidden?: boolean;
   className?: string;
-};
-
-const QUANTITY_UNIT: Record<AssetType, string> = {
-  STOCK: "CP",
-  FUND: "CCQ",
-  BOND: "trái phiếu",
-  GOLD: "chỉ",
 };
 
 function HoldingListItem({
@@ -27,12 +23,13 @@ function HoldingListItem({
   name,
   assetType,
   quantity,
+  unit,
   marketValue,
   annualReturnPercent,
   hidden = false,
   className,
 }: HoldingListItemProps) {
-  const quantityLabel = `${new Intl.NumberFormat("vi-VN").format(quantity)} ${QUANTITY_UNIT[assetType]}`;
+  const quantityLabel = `${new Intl.NumberFormat("vi-VN").format(quantity)} ${unit}`;
 
   return (
     <div

@@ -1,4 +1,4 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -13,8 +13,10 @@ function PercentChange({
   variant = "gain-loss",
   className,
 }: PercentChangeProps) {
+  // value === 0 khớp cả +0 lẫn -0 — coi cả hai là trung tính, không phải "gain".
+  const isZero = value === 0;
   const isNegative = value < 0;
-  const Icon = isNegative ? TrendingDown : TrendingUp;
+  const Icon = isZero ? Minus : isNegative ? TrendingDown : TrendingUp;
 
   // TODO(format): chuyển sang lib/format.ts formatPercent() khi helper chung được tạo
   // (xem docs/rules/component-architecture.md#format-locale).
@@ -28,9 +30,11 @@ function PercentChange({
   const colorClass =
     variant === "xirr"
       ? "bg-primary/13 text-primary"
-      : isNegative
-        ? "bg-destructive/12 text-destructive"
-        : "bg-gain/12 text-gain";
+      : isZero
+        ? "bg-muted text-muted-foreground"
+        : isNegative
+          ? "bg-destructive/12 text-destructive"
+          : "bg-gain/12 text-gain";
 
   return (
     <span

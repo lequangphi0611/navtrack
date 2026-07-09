@@ -16,19 +16,20 @@ const ASSET_TYPE_LABEL: Record<AssetType, string> = {
   GOLD: "Vàng",
 };
 
-const ASSET_TYPE_COLOR_VAR: Record<AssetType, string> = {
-  STOCK: "var(--color-asset-stock)",
-  FUND: "var(--color-asset-fund)",
-  BOND: "var(--color-asset-bond)",
-  GOLD: "var(--color-asset-gold)",
+// Class Tailwind ánh xạ token (giống pattern src/components/SymbolAvatar/symbol-color.ts)
+// thay vì inline style + raw var() — để dùng được modifier như opacity/dark:.
+const ASSET_TYPE_DOT_CLASS: Record<AssetType, string> = {
+  STOCK: "bg-asset-stock",
+  FUND: "bg-asset-fund",
+  BOND: "bg-asset-bond",
+  GOLD: "bg-asset-gold",
 };
 
 function AssetTypeBadge({ assetType, className }: AssetTypeBadgeProps) {
   return (
     <Badge variant="neutral" className={cn("gap-1.5", className)}>
       <span
-        className="size-1.5 rounded-sm"
-        style={{ backgroundColor: ASSET_TYPE_COLOR_VAR[assetType] }}
+        className={cn("size-1.5 rounded-sm", ASSET_TYPE_DOT_CLASS[assetType])}
       />
       <span className="text-foreground-soft">
         {ASSET_TYPE_LABEL[assetType]}

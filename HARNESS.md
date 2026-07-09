@@ -35,22 +35,27 @@ người khác, tạo nhánh mới không ảnh hưởng nhánh khác).
 
 ## Deny — lệnh nguy hiểm, chặn cứng
 
-| Lệnh                                                                                | Vì sao chặn                                                     |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `rm -rf` / `rm -fr` (Bash), `Remove-Item -Recurse -Force` / `rd /s /q` (PowerShell) | Xóa file/thư mục đệ quy, không hoàn tác được                    |
-| `git reset --hard`                                                                  | Xóa vĩnh viễn thay đổi chưa commit trong working tree           |
-| `git rebase`                                                                        | Viết lại lịch sử commit — dễ mất commit, xung đột khó xử lý sai |
-| `git push --force`, `-f`, `--force-with-lease`                                      | Ghi đè lịch sử trên remote, có thể mất commit của người khác    |
-| `git clean -f`                                                                      | Xóa vĩnh viễn file chưa track                                   |
-| `git checkout -- .` / `git checkout .` / `git restore .`                            | Bỏ hết thay đổi chưa commit trong working tree                  |
-| `git branch -D` / `--delete --force`                                                | Xóa nhánh kể cả khi chưa merge, mất commit chưa đẩy lên remote  |
+| Lệnh                                                                                                                  | Vì sao chặn                                                     |
+| --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `rm -rf` / `rm -fr` (Bash), `Remove-Item -Recurse -Force` / `rd /s /q` (PowerShell)                                   | Xóa file/thư mục đệ quy, không hoàn tác được                    |
+| `git reset --hard`                                                                                                    | Xóa vĩnh viễn thay đổi chưa commit trong working tree           |
+| `git rebase`                                                                                                          | Viết lại lịch sử commit — dễ mất commit, xung đột khó xử lý sai |
+| `git push --force`, `-f`, `--force-with-lease` (kể cả dạng `git push origin <ref> --force`/`-f`/`--force-with-lease`) | Ghi đè lịch sử trên remote, có thể mất commit của người khác    |
+| `git clean -f`                                                                                                        | Xóa vĩnh viễn file chưa track                                   |
+| `git checkout -- .` / `git checkout .` / `git restore .`                                                              | Bỏ hết thay đổi chưa commit trong working tree                  |
+| `git branch -D` / `--delete --force`                                                                                  | Xóa nhánh kể cả khi chưa merge, mất commit chưa đẩy lên remote  |
 
 **Giới hạn của cơ chế match theo prefix:** rule khớp theo _tiền tố chuỗi lệnh_, nên viết
 lại tham số theo thứ tự khác (vd `Remove-Item -Force -Recurse` thay vì
-`-Recurse -Force`) có thể lách qua rule deny cụ thể. Danh sách deny ở trên chặn các cách
-viết phổ biến nhất; với các lệnh xóa file không nằm trong danh sách allow, hành vi mặc định
-vẫn là **hỏi xác nhận** trước khi chạy — đây là lớp bảo vệ dự phòng cho các biến thể chưa
-liệt kê.
+`-Recurse -Force`) có thể lách qua rule deny cụ thể. Ví dụ cụ thể đã gặp: rule allow
+`git push origin *` khớp cả `git push origin <ref> --force` (vì `*` khớp mọi thứ sau
+`origin `), trong khi các rule deny gốc chỉ khớp khi `--force`/`-f`/`--force-with-lease`
+đứng ngay sau `git push` — nên lệnh force-push gắn sau `origin <ref>` lọt qua deny và bị
+allow duyệt thẳng. Đã vá bằng cách thêm rule deny riêng cho dạng
+`git push origin * --force*`/`-f*`/`--force-with-lease*`. Danh sách deny ở trên chặn các
+cách viết phổ biến nhất; với các lệnh xóa file không nằm trong danh sách allow, hành vi mặc
+định vẫn là **hỏi xác nhận** trước khi chạy — đây là lớp bảo vệ dự phòng cho các biến thể
+chưa liệt kê.
 
 ## Khi cần lệnh không có trong allow
 
