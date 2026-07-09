@@ -20,3 +20,4 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 
 ## Nhật ký
 - 2026-07-09: Phase 1 — xong Auth.js + Google OAuth + allowlist gate, `resolveSetting`, mời thành viên (`MAX_MEMBERS`). Còn lại: nhập vị thế + CRUD giao dịch mua/bán (Holdings/Cashflow).
+- 2026-07-09: Phase 1 — xong `lib/format.ts`, `lib/cost-basis.ts` (giá vốn bình quân gia quyền), tính năng `features/holdings` (nhập vị thế ban đầu, CRUD giao dịch mua/bán, trang danh sách vị thế mở). Kiểm chứng bằng unit test + e2e (`e2e/holdings.spec.ts`) và cách ly 2 tài khoản. Còn lại duy nhất tiêu chí "Deploy lên Vercel + Neon" — chưa làm trong lần này.
