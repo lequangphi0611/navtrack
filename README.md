@@ -4,9 +4,10 @@ Web app quản lý danh mục đầu tư cá nhân (cổ phiếu, quỹ, trái p
 XIRR. Phi thương mại, nhiều user riêng tư. Xem bối cảnh đầy đủ ở [`CLAUDE.md`](./CLAUDE.md) và
 [`docs/`](./docs/).
 
-> **Trạng thái hiện tại:** mới dựng khung hạ tầng (Next.js, Prisma, tooling, test runner). Các
-> tính năng nghiệp vụ (đăng nhập, nhập vị thế, XIRR...) chưa được implement — xem
-> [`process/PROCESS.md`](./process/PROCESS.md) để biết phase đang làm.
+> **Trạng thái hiện tại:** Phase 1 (đăng nhập, tách dữ liệu theo user, nhập vị thế, CRUD giao
+> dịch mua/bán, mời thành viên) đã implement, còn thiếu bước deploy lên Vercel + Neon. **Chưa
+> có định giá thị trường / XIRR / biểu đồ** (thuộc Phase 2+) — xem
+> [`process/PROCESS.md`](./process/PROCESS.md) để biết chi tiết.
 
 ## Yêu cầu môi trường
 
@@ -18,18 +19,22 @@ XIRR. Phi thương mại, nhiều user riêng tư. Xem bối cảnh đầy đủ
 ## Chạy app local
 
 ```bash
-pnpm install
-
 # 1. Bật Postgres local (port host 5433 để tránh đụng Postgres cài sẵn trên máy, nếu có)
-docker compose up -d
+#    --wait để chờ healthcheck pass trước khi migrate, tránh race lúc DB chưa sẵn sàng
+docker compose up -d --wait
 
 # 2. Copy .env.example -> .env (giá trị mặc định đã khớp docker-compose.yml)
+#    Điền AUTH_SECRET (openssl rand -base64 32), AUTH_GOOGLE_ID/SECRET, SEED_ADMIN_EMAIL
 cp .env.example .env
 
-# 3. Áp schema Prisma vào DB
-pnpm db:migrate
+# 3. Cài dependency (postinstall tự chạy `prisma generate`)
+pnpm install
 
-# 4. Chạy dev server
+# 4. Áp schema Prisma vào DB rồi seed dữ liệu mặc định
+pnpm db:migrate
+pnpm db:seed
+
+# 5. Chạy dev server
 pnpm dev
 ```
 
@@ -37,22 +42,23 @@ Mở http://localhost:3000.
 
 ## Lệnh thường dùng
 
-| Lệnh                        | Mục đích                                                               |
-| --------------------------- | ---------------------------------------------------------------------- |
-| `pnpm dev`                  | Chạy Next.js dev server                                                |
-| `pnpm build` / `pnpm start` | Build & chạy bản production                                            |
-| `pnpm lint`                 | ESLint                                                                 |
-| `pnpm typecheck`            | `tsc --noEmit`                                                         |
-| `pnpm format`               | Prettier ghi đè                                                        |
-| `pnpm test`                 | Unit test (Vitest) — chỉ test logic thuần, xem `docs/rules/testing.md` |
-| `pnpm e2e`                  | E2e test (Playwright) — tự khởi động dev server nếu chưa chạy          |
-| `pnpm db:migrate`           | Tạo/áp migration Prisma (`prisma migrate dev`)                         |
-| `pnpm db:seed`              | Seed dữ liệu mặc định (`prisma/seed.ts`)                               |
+| Lệnh                        | Mục đích                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `pnpm dev`                  | Chạy Next.js dev server                                                              |
+| `pnpm build` / `pnpm start` | Build & chạy bản production                                                          |
+| `pnpm lint`                 | ESLint                                                                               |
+| `pnpm typecheck`            | `tsc --noEmit`                                                                       |
+| `pnpm format`               | Prettier ghi đè                                                                      |
+| `pnpm test`                 | Unit test (Vitest) — chỉ test logic thuần, xem `docs/rules/testing.md`               |
+| `pnpm e2e`                  | E2e test (Playwright) — tự khởi động dev server nếu chưa chạy                        |
+| `pnpm db:migrate`           | Tạo/áp migration Prisma lúc dev (`prisma migrate dev`)                               |
+| `pnpm db:migrate:deploy`    | Áp migration đã có, không tạo mới — dùng cho CI/production (`prisma migrate deploy`) |
+| `pnpm db:seed`              | Seed dữ liệu mặc định (`prisma/seed.ts`) — cần `SEED_ADMIN_EMAIL`                    |
 
 ## Chạy e2e (Playwright)
 
 ```bash
-docker compose up -d   # DB phải đang chạy — một số luồng e2e sau này sẽ cần ghi/đọc DB
+docker compose up -d --wait   # DB phải đang chạy — một số luồng e2e sau này sẽ cần ghi/đọc DB
 pnpm e2e
 ```
 
