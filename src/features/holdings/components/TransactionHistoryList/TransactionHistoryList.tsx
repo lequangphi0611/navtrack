@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
+import { ROUTES } from "@/lib/routes";
 
 import { deleteTransaction } from "../../actions";
 import type { CashflowRow } from "../../types";
@@ -54,7 +55,7 @@ function TransactionHistoryList({
           key={cf.id}
           className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5"
         >
-          <Badge variant={cf.type === "BUY" ? "default" : "gain"}>
+          <Badge variant={cf.type === "BUY" ? "gain" : "destructive"}>
             {cf.type === "BUY" ? "Mua" : "Bán"}
           </Badge>
           <div className="min-w-0 flex-1">
@@ -69,7 +70,7 @@ function TransactionHistoryList({
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href={`/holdings/${holdingId}/transactions/${cf.id}/edit`}
+              href={ROUTES.editTransaction(holdingId, cf.id)}
               className="text-xs font-medium text-primary hover:underline"
             >
               Sửa

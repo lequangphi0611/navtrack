@@ -7,6 +7,8 @@ type StatCardProps = {
   value: string;
   percentChange?: number;
   percentVariant?: "gain-loss" | "xirr";
+  // Ghi chú phụ mờ dưới giá trị (vd "Chưa có giá thị trường — lãi/lỗ & XIRR sẽ có ở bản sau.")
+  note?: string;
   hidden?: boolean;
   className?: string;
 };
@@ -16,6 +18,7 @@ function StatCard({
   value,
   percentChange,
   percentVariant = "gain-loss",
+  note,
   hidden = false,
   className,
 }: StatCardProps) {
@@ -33,6 +36,11 @@ function StatCard({
           variant={percentVariant}
           className="mt-0.5 bg-transparent px-0 py-0"
         />
+      ) : null}
+      {note ? (
+        <div className="mt-1.5 text-[11.5px] leading-normal text-muted-faint">
+          {note}
+        </div>
       ) : null}
     </div>
   );

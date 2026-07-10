@@ -54,6 +54,10 @@ model User {
   id                   String     @id @default(cuid())
   email                String     @unique
   name                 String?
+  // emailVerified + image: field bắt buộc theo adapter model của Auth.js —
+  // PrismaAdapter.createUser luôn ghi chúng khi user đăng nhập Google lần đầu.
+  emailVerified        DateTime?
+  image                String?
   hideAmountsByDefault Boolean    @default(false) // trạng thái mặc định của chế độ ẩn số tiền trên dashboard
   holdings             Holding[]
   snapshots            Snapshot[]

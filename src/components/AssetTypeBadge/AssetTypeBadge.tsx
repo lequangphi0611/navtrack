@@ -25,15 +25,24 @@ const ASSET_TYPE_DOT_CLASS: Record<AssetType, string> = {
   GOLD: "bg-asset-gold",
 };
 
+// Pill tint theo màu asset (mockup 2d): nền màu asset mờ + chữ màu asset.
+const ASSET_TYPE_TINT_CLASS: Record<AssetType, string> = {
+  STOCK: "bg-asset-stock/12 text-asset-stock",
+  FUND: "bg-asset-fund/12 text-asset-fund",
+  BOND: "bg-asset-bond/16 text-asset-bond",
+  GOLD: "bg-asset-gold/14 text-asset-gold",
+};
+
 function AssetTypeBadge({ assetType, className }: AssetTypeBadgeProps) {
   return (
-    <Badge variant="neutral" className={cn("gap-1.5", className)}>
+    <Badge
+      variant="neutral"
+      className={cn("gap-1.5", ASSET_TYPE_TINT_CLASS[assetType], className)}
+    >
       <span
         className={cn("size-1.5 rounded-sm", ASSET_TYPE_DOT_CLASS[assetType])}
       />
-      <span className="text-foreground-soft">
-        {ASSET_TYPE_LABEL[assetType]}
-      </span>
+      {ASSET_TYPE_LABEL[assetType]}
     </Badge>
   );
 }

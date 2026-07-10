@@ -1,22 +1,22 @@
 import Link from "next/link";
 
 import { AssetTypeBadge } from "@/components/AssetTypeBadge";
-import { MoneyValue } from "@/components/MoneyValue";
 import { SymbolAvatar } from "@/components/SymbolAvatar";
 import { formatMoney, formatQuantity } from "@/lib/format";
+import { ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
-import type { OpenHolding } from "../../types";
+import type { HoldingSummary } from "../../types";
 
 type HoldingRowProps = {
-  holding: OpenHolding;
+  holding: HoldingSummary;
   className?: string;
 };
 
 function HoldingRow({ holding, className }: HoldingRowProps) {
   return (
     <Link
-      href={`/holdings/${holding.id}`}
+      href={ROUTES.holdingDetail(holding.id)}
       className={cn(
         "flex items-center gap-3.5 rounded-2xl border border-border bg-card p-3.5 transition-colors hover:bg-muted",
         className,
@@ -25,22 +25,28 @@ function HoldingRow({ holding, className }: HoldingRowProps) {
       <SymbolAvatar symbol={holding.symbol} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold text-foreground">
-          {holding.symbol}
+          {holding.name ?? holding.symbol}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <div className="mt-1 flex items-center gap-1.5">
           <AssetTypeBadge
             assetType={holding.type}
-            className="px-0 py-0 bg-transparent"
+            className="px-2 py-px text-[11px]"
           />
-          <span>·</span>
-          <span>{formatQuantity(holding.quantity, holding.unit)}</span>
+          <span className="font-mono text-xs text-muted-faint tabular-nums">
+            {formatQuantity(holding.quantity, holding.unit)}
+          </span>
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1">
-        <MoneyValue value={holding.totalCostBasis} className="text-sm" />
-        <span className="text-xs text-muted-foreground">
-          Giá vốn {formatMoney(holding.avgCost)}
-        </span>
+      <div className="text-right">
+        <div className="font-mono text-sm font-semibold text-foreground tabular-nums">
+          {formatMoney(holding.totalCostBasis)}
+        </div>
+        <div className="mt-0.5 text-[11px] font-medium text-muted-faint">
+          giá vốn TB{" "}
+          <span className="font-mono tabular-nums">
+            {formatMoney(holding.avgCost)}
+          </span>
+        </div>
       </div>
     </Link>
   );

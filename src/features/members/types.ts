@@ -9,3 +9,10 @@ export type InvitableStatus = {
   activeCount: number;
   maxMembers: number;
 };
+
+export type Member = {
+  id: string;
+  email: string;
+  canInvite: boolean;
+  revoked: boolean;
+};

@@ -13,7 +13,7 @@ export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type DeleteTransactionInput = z.infer<typeof deleteTransactionSchema>;
 
 // View models — Decimal đã serialize thành string ở biên server (không truyền Decimal ra client).
-export type OpenHolding = {
+export type HoldingSummary = {
   id: string;
   symbol: string;
   name: string | null;
@@ -22,6 +22,13 @@ export type OpenHolding = {
   quantity: string;
   avgCost: string;
   totalCostBasis: string;
+};
+
+export type HoldingsOverview = {
+  open: HoldingSummary[];
+  closed: HoldingSummary[];
+  // Tổng vốn đã bỏ vào các vị thế đang mở (chưa có giá thị trường ở Phase 1).
+  totalInvested: string;
 };
 
 export type CashflowRow = {

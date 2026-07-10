@@ -8,7 +8,8 @@ import { toFieldErrors } from "@/lib/action-result";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { resolveSetting } from "@/lib/settings";
+import { ROUTES } from "@/lib/routes";
+import { resolveSetting, SETTING_KEYS } from "@/lib/settings";
 
 import { inviteSchema } from "./schemas";
 
@@ -39,7 +40,10 @@ export async function inviteMember(
   const { email } = parsed.data;
 
   try {
-    const maxMembers = await resolveSetting("MAX_MEMBERS", new Date());
+    const maxMembers = await resolveSetting(
+      SETTING_KEYS.MAX_MEMBERS,
+      new Date(),
+    );
 
     const result = await db.$transaction(
       async (tx) => {
@@ -76,7 +80,7 @@ export async function inviteMember(
 
     if (!result.ok) return result;
 
-    revalidatePath("/settings/members");
+    revalidatePath(ROUTES.members);
     return { ok: true, data: { email } };
   } catch (err) {
     if (

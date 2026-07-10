@@ -3,6 +3,14 @@ import Decimal from "decimal.js";
 import type { SettingValueType } from "@prisma/client";
 import { db } from "@/lib/db";
 
+// Một nguồn sự thật cho mọi key của bảng Setting — không hardcode string key
+// rải rác ở seed/queries/actions (xem docs/rules/schema.md#key-value-config).
+export const SETTING_KEYS = {
+  MAX_MEMBERS: "MAX_MEMBERS",
+} as const;
+
+export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
+
 export class AppError extends Error {
   constructor(
     public code: string,
@@ -74,7 +82,7 @@ export function parseSettingValue(
 
 // Resolves the effective value of a Setting key at a given date. Throws AppError
 // if no row is eligible — never silently defaults (a missing config is a bug, not a zero).
-export async function resolveSetting(key: string, atDate: Date) {
+export async function resolveSetting(key: SettingKey, atDate: Date) {
   const rows = await db.setting.findMany({ where: { key } });
   const row = pickEffectiveSetting(rows, atDate);
   if (!row) {

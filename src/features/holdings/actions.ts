@@ -12,6 +12,7 @@ import { computeCashflowAmount, derivePosition } from "@/lib/cost-basis";
 import type { CashflowInput } from "@/lib/cost-basis";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { ROUTES } from "@/lib/routes";
 
 import {
   addTransactionSchema,
@@ -118,7 +119,7 @@ export async function createHolding(
 
     if (!result.ok) return result;
 
-    revalidatePath("/holdings");
+    revalidatePath(ROUTES.holdings);
     return { ok: true, data: { holdingId: result.holdingId } };
   } catch (err) {
     if (
@@ -214,8 +215,8 @@ export async function addTransaction(
       },
     });
 
-    revalidatePath(`/holdings/${holdingId}`);
-    revalidatePath("/holdings");
+    revalidatePath(ROUTES.holdingDetail(holdingId));
+    revalidatePath(ROUTES.holdings);
     return { ok: true, data: { holdingId } };
   } catch (err) {
     logger.error({ err, holdingId }, "addTransaction failed");
@@ -301,8 +302,8 @@ export async function updateTransaction(
       },
     });
 
-    revalidatePath(`/holdings/${cashflow.holdingId}`);
-    revalidatePath("/holdings");
+    revalidatePath(ROUTES.holdingDetail(cashflow.holdingId));
+    revalidatePath(ROUTES.holdings);
     return { ok: true, data: { holdingId: cashflow.holdingId } };
   } catch (err) {
     logger.error({ err, cashflowId }, "updateTransaction failed");
@@ -352,8 +353,8 @@ export async function deleteTransaction(
 
     await db.cashflow.delete({ where: { id: cashflowId } });
 
-    revalidatePath(`/holdings/${cashflow.holdingId}`);
-    revalidatePath("/holdings");
+    revalidatePath(ROUTES.holdingDetail(cashflow.holdingId));
+    revalidatePath(ROUTES.holdings);
     return { ok: true, data: { holdingId: cashflow.holdingId } };
   } catch (err) {
     logger.error({ err, cashflowId }, "deleteTransaction failed");

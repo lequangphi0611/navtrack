@@ -137,3 +137,21 @@ cashflows.push({ date: today, amount: currentNav });
 ```
 
 - Không để biến/import thừa (lint chặn).
+
+## Đường dẫn nội bộ (route) qua constants
+
+- Mọi route nội bộ (`Link href`, `redirect()`, `router.push()`, `revalidatePath()`, `backHref`...) phải lấy từ `ROUTES` (`src/lib/routes.ts`) — **không hardcode string route rải rác**. Route có tham số khai bằng hàm (`holdingDetail(id)`), route tĩnh khai string thường.
+- Thêm route mới (route Next.js mới, hoặc trang cũ đổi path) → thêm/sửa đúng một chỗ trong `ROUTES`, không tìm-thay thủ công khắp repo.
+
+```ts
+// ❌ Bad — string route rải rác, đổi path phải grep cả repo
+<Link href={`/holdings/${id}`}>...</Link>
+redirect("/sign-in");
+revalidatePath("/settings/members");
+
+// ✅ Good — một nguồn sự thật
+import { ROUTES } from "@/lib/routes";
+<Link href={ROUTES.holdingDetail(id)}>...</Link>
+redirect(ROUTES.signIn);
+revalidatePath(ROUTES.members);
+```

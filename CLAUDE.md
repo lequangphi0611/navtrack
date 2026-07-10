@@ -20,12 +20,13 @@ Chỉ cần mở khi việc đang làm chạm đúng phần liên quan:
 
 ## Tiến trình triển khai
 - **Theo dõi tại [`process/PROCESS.md`](./process/PROCESS.md)** — trỏ tới chi tiết từng phase (`process/phase-x.md`).
+- **Trước khi bắt đầu một phase mới, đọc [`process/DECISION.md`](./process/DECISION.md)** — quyết định quan trọng đã chốt ở các phase trước (đổi rule/schema/kiến trúc + lý do), tránh làm trái hoặc lặp lại tranh luận đã xong.
 - **QUAN TRỌNG:** mỗi khi hoàn thành một phase, **cập nhật `process/PROCESS.md`** (đổi trạng thái) và tick tiêu chí trong `process/phase-x.md`.
 
 ## Đồng bộ tài liệu khi có quyết định quan trọng
 - **BẮT BUỘC:** mỗi khi có quyết định quan trọng làm thay đổi **business / domain / spec / data model / rules**, phải **phản ánh đầy đủ vào TẤT CẢ tài liệu liên quan** trong cùng lần thay đổi — không chỉ sửa một chỗ.
-- Rà các nơi có thể bị ảnh hưởng và cập nhật cho nhất quán: `docs/business-overview.md`, `docs/domain/*`, `docs/02-data-model.md`, `docs/04-tech-stack.md`, `docs/03-roadmap.md`, `docs/rules/*` (+ index), `process/PROCESS.md` & `process/phase-x.md`.
-- Giữ **cross-reference đồng bộ**: đổi tên/khái niệm ở một file thì cập nhật mọi chỗ tham chiếu (dùng grep để tìm hết). Ghi rõ **lý do** quyết định để sau này còn hiểu.
+- Rà các nơi có thể bị ảnh hưởng và cập nhật cho nhất quán: `docs/business-overview.md`, `docs/domain/*`, `docs/02-data-model.md`, `docs/04-tech-stack.md`, `docs/03-roadmap.md`, `docs/rules/*` (+ index), `process/phase-x.md` (tiêu chí phase).
+- **Ghi lại quyết định + lý do vào [`process/DECISION.md`](./process/DECISION.md)** — không ghi vào `PROCESS.md`, file đó chỉ theo dõi tiến độ ngắn gọn (xem "Nhật ký" trong `PROCESS.md`). Giữ **cross-reference đồng bộ**: đổi tên/khái niệm ở một file thì cập nhật mọi chỗ tham chiếu (dùng grep để tìm hết).
 - Commit riêng cho thay đổi tài liệu với message mô tả quyết định.
 
 ## Tech stack (tóm tắt)

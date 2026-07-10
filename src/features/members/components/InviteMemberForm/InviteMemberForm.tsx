@@ -32,15 +32,20 @@ function InviteMemberForm({ disabled = false }: InviteMemberFormProps) {
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
-      <div className="flex gap-2">
+      <div className="flex gap-2.5">
         <Input
           name="email"
           type="email"
           placeholder="email@vidu.com"
+          className="h-11 rounded-xl"
           required
           disabled={disabled || isPending}
         />
-        <Button type="submit" disabled={disabled || isPending}>
+        <Button
+          type="submit"
+          disabled={disabled || isPending}
+          className="h-11 rounded-xl px-4.5 text-[13.5px] font-semibold"
+        >
           Mời
         </Button>
       </div>

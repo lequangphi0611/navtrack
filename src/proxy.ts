@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { ROUTES } from "@/lib/routes";
 
-const PUBLIC_PATH_PREFIXES = ["/sign-in", "/api/auth"];
+const PUBLIC_PATH_PREFIXES = [ROUTES.signIn, ROUTES.apiAuth];
 
 export default auth((req) => {
   const isPublic = PUBLIC_PATH_PREFIXES.some((prefix) =>
@@ -10,7 +11,7 @@ export default auth((req) => {
   );
 
   if (!req.auth && !isPublic) {
-    return NextResponse.redirect(new URL("/sign-in", req.nextUrl));
+    return NextResponse.redirect(new URL(ROUTES.signIn, req.nextUrl));
   }
 });
 

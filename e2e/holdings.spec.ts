@@ -26,11 +26,10 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
 
     // Nhập vị thế ban đầu: 100 FPT @ 100k
     await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT").fill("FPT");
-    await page.getByPlaceholder("cổ phần / chỉ / lượng...").fill("cổ phần");
+    await page.getByPlaceholder("VD: FPT", { exact: true }).fill("FPT");
     await page.locator('input[name="quantity"]').fill("100");
     await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await page.getByRole("button", { name: "Lưu", exact: true }).click();
+    await page.getByRole("button", { name: "Xong", exact: true }).click();
     await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
     await expect(page.getByRole("heading", { name: "FPT" })).toBeVisible();
     await expect(page.getByText("100 cổ phần", { exact: true })).toBeVisible();
@@ -45,7 +44,7 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     await page.goto(`${holdingUrl}/transactions/new`);
     await page.locator('input[name="quantity"]').fill("100");
     await page.locator('input[name="pricePerUnit"]').fill("120000");
-    await page.getByRole("button", { name: "Lưu giao dịch" }).click();
+    await page.getByRole("button", { name: "Ghi nhận giao dịch mua" }).click();
     await page.waitForURL(holdingUrl);
     await expect(page.getByText("200 cổ phần", { exact: true })).toBeVisible();
     const avgCostAfterBuy = await page
@@ -59,7 +58,7 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     await page.getByRole("button", { name: "Bán" }).click();
     await page.locator('input[name="quantity"]').fill("50");
     await page.locator('input[name="pricePerUnit"]').fill("130000");
-    await page.getByRole("button", { name: "Lưu giao dịch" }).click();
+    await page.getByRole("button", { name: "Ghi nhận giao dịch bán" }).click();
     await page.waitForURL(holdingUrl);
     await expect(page.getByText("150 cổ phần", { exact: true })).toBeVisible();
     const avgCostAfterSell = await page
@@ -73,16 +72,15 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     await page.getByRole("button", { name: "Bán" }).click();
     await page.locator('input[name="quantity"]').fill("999");
     await page.locator('input[name="pricePerUnit"]').fill("130000");
-    await page.getByRole("button", { name: "Lưu giao dịch" }).click();
+    await page.getByRole("button", { name: "Ghi nhận giao dịch bán" }).click();
     await expect(page.getByText(/Bán vượt quá số lượng/)).toBeVisible();
 
     // Mua trùng mã đang giữ -> tự gộp vào Holding cũ, không tạo bản ghi mới
     await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT").fill("FPT");
-    await page.getByPlaceholder("cổ phần / chỉ / lượng...").fill("cổ phần");
+    await page.getByPlaceholder("VD: FPT", { exact: true }).fill("FPT");
     await page.locator('input[name="quantity"]').fill("10");
     await page.locator('input[name="pricePerUnit"]').fill("140000");
-    await page.getByRole("button", { name: "Lưu", exact: true }).click();
+    await page.getByRole("button", { name: "Xong", exact: true }).click();
     await page.waitForURL(holdingUrl);
     await expect(page.getByText("160 cổ phần", { exact: true })).toBeVisible();
   } finally {
@@ -101,11 +99,10 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
 
   try {
     await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT").fill("VNM");
-    await page.getByPlaceholder("cổ phần / chỉ / lượng...").fill("cổ phần");
+    await page.getByPlaceholder("VD: FPT", { exact: true }).fill("VNM");
     await page.locator('input[name="quantity"]').fill("50");
     await page.locator('input[name="pricePerUnit"]').fill("80000");
-    await page.getByRole("button", { name: "Lưu", exact: true }).click();
+    await page.getByRole("button", { name: "Xong", exact: true }).click();
     await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
     const holdingUrl = page.url();
 
@@ -114,7 +111,7 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
     await page.getByRole("button", { name: "Bán" }).click();
     await page.locator('input[name="quantity"]').fill("50");
     await page.locator('input[name="pricePerUnit"]').fill("90000");
-    await page.getByRole("button", { name: "Lưu giao dịch" }).click();
+    await page.getByRole("button", { name: "Ghi nhận giao dịch bán" }).click();
     await page.waitForURL(holdingUrl);
     await expect(page.getByText("0 cổ phần", { exact: true })).toBeVisible();
 
@@ -160,11 +157,10 @@ test("cách ly dữ liệu giữa hai tài khoản", async ({ browser }) => {
 
   try {
     await pageA.goto("/holdings/new");
-    await pageA.getByPlaceholder("VD: FPT").fill("HPG");
-    await pageA.getByPlaceholder("cổ phần / chỉ / lượng...").fill("cổ phần");
+    await pageA.getByPlaceholder("VD: FPT", { exact: true }).fill("HPG");
     await pageA.locator('input[name="quantity"]').fill("20");
     await pageA.locator('input[name="pricePerUnit"]').fill("25000");
-    await pageA.getByRole("button", { name: "Lưu", exact: true }).click();
+    await pageA.getByRole("button", { name: "Xong", exact: true }).click();
     await pageA.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
     const holdingUrl = pageA.url();
 

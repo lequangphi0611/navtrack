@@ -4,12 +4,13 @@ import Google from "next-auth/providers/google";
 
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { ROUTES } from "@/lib/routes";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(db),
   session: { strategy: "database" },
   providers: [Google],
-  pages: { signIn: "/sign-in" },
+  pages: { signIn: ROUTES.signIn },
   callbacks: {
     async signIn({ user, profile }) {
       if (!profile?.email_verified || !user.email) return false;

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { SETTING_KEYS } from "@/lib/settings";
 
 const BASELINE_DATE = new Date("2020-01-01");
 
@@ -18,11 +19,14 @@ async function main() {
 
   await db.setting.upsert({
     where: {
-      key_effectiveFrom: { key: "MAX_MEMBERS", effectiveFrom: BASELINE_DATE },
+      key_effectiveFrom: {
+        key: SETTING_KEYS.MAX_MEMBERS,
+        effectiveFrom: BASELINE_DATE,
+      },
     },
     update: {},
     create: {
-      key: "MAX_MEMBERS",
+      key: SETTING_KEYS.MAX_MEMBERS,
       value: "10",
       valueType: "INT",
       label: "Số thành viên tối đa",

@@ -50,6 +50,12 @@ Quy tắc giao diện cho Navtrack: theme màu, typography, icon, và kho atoms/
 | `error` | `AlertTriangle` |
 | `info` | `Info` |
 | `receipt_long` | `ReceiptText` |
+| `account_balance_wallet` | `Wallet` |
+| `inventory_2` | `Archive` |
+| `add` | `Plus` |
+| `arrow_back` / `close` | `ArrowLeft` / `X` |
+| `lock` | `Lock` |
+| `logout` | `LogOut` |
 
 ## Primitives
 
@@ -67,8 +73,9 @@ Tái dùng trước khi tạo mới trùng lặp. Cấu trúc/pattern (thư mụ
 | `button.tsx` | variants: default/secondary/ghost/destructive/outline/link |
 | `badge.tsx` | variants: default/gain/destructive/neutral (dạng "tint": `bg-{color}/14` + `text-{color}`) |
 | `input.tsx` | bọc `@base-ui/react/input` |
+| `select.tsx` | **native `<select>`** styled + icon `ChevronDown` (không dùng `@base-ui/react/select` — listbox tuỳ biến quá nặng cho nhu cầu hiện tại); giữ form semantics `name`/`value` |
 | `avatar.tsx` | bọc `@base-ui/react/avatar`; **vuông bo góc** (`rounded-md`), không tròn |
-| `skeleton.tsx` | `animate-pulse bg-muted`, dùng cho `Suspense` fallback |
+| `skeleton.tsx` | `animate-pulse bg-muted`, dùng cho `Suspense`/`loading.tsx` fallback — quy tắc bắt buộc về loading/skeleton (checklist page, naming `ComponentNameSkeleton`, colocation) xem [`component-architecture.md`](./component-architecture.md#quy-tắc-bắt-buộc-khi-thêmsửa-page-checklist) |
 
 **Molecules** (`src/components/<Name>/`, dùng chung nhiều feature):
 
@@ -77,13 +84,24 @@ Tái dùng trước khi tạo mới trùng lặp. Cấu trúc/pattern (thư mụ
 | `Logo` (`LogoMark` + `Logo`) | Mark thương hiệu (gradient hardcode, không qua token — brand cố định không đổi theo theme) + lockup ngang/dọc |
 | `MoneyValue` | Hiển thị tiền VND, có cờ `hidden` (ẩn số tuyệt đối, xem quy tắc ẩn tiền ở `component-architecture.md`), toggle icon con mắt tách client leaf riêng (`MoneyValueToggleButton`, không export ra ngoài) |
 | `PercentChange` | Pill %, `variant: "gain-loss"` (xanh/đỏ theo dấu) hoặc `"xirr"` (luôn `primary`, hậu tố "/năm") |
-| `AssetTypeBadge` | Pill loại tài sản + chấm màu theo token `asset-*`; nguồn tạm cho union `AssetType` (thay bằng enum Prisma khi Phase 1 có schema thật) |
+| `AssetTypeBadge` | Pill tint theo màu asset (nền `asset-*` mờ + chữ màu asset, mockup 2d) + chấm màu; nguồn tạm cho union `AssetType` (thay bằng enum Prisma khi Phase 1 có schema thật) |
 | `SymbolAvatar` | Avatar chữ viết tắt mã, màu suy ra từ hash(mã) — khớp quyết định ở [`04-tech-stack.md`](../04-tech-stack.md) (không dùng logo ảnh) |
-| `SegmentedControl` | Control pill trượt nền, controlled (`value`/`onChange`) — không tự giữ state |
-| `StatCard` | Label + `MoneyValue` + `PercentChange` |
+| `UserAvatar` | Avatar initials người dùng/thành viên (bo `30%`, nền gradient secondary→card) — suy initials từ tên hoặc email |
+| `PageHeader` | Thanh đầu trang: nút back (`variant: "back"`) hoặc close (`"close"`) + tiêu đề render bằng `h1` |
+| `SegmentedControl` | Control pill trượt nền, controlled (`value`/`onChange`) — không tự giữ state; hỗ trợ `stretch` (full width), `thumbClassName` (đổi màu thumb, vd Mua/Bán → `gain`/`destructive`), `activeClassName` per-option |
+| `StatCard` | Label + `MoneyValue` + `PercentChange` + `note?` (ghi chú mờ dưới giá trị) |
 | `HoldingListItem` | Dòng danh mục: `SymbolAvatar` + `AssetTypeBadge` + `MoneyValue` + `PercentChange` |
 | `EmptyState` | Icon tròn + tiêu đề + mô tả + `action?: ReactNode` (composition slot, giữ Server Component thuần) |
 | `Alert` | 2 biến thể `info`/`error` |
+| `SettingsMenuItem` | Dòng menu điều hướng cho màn Cài đặt: icon + nhãn + chevron, dùng chung cho mọi mục settings (`/settings`) |
+
+## Chuyển động (animation)
+
+- Dùng **tw-animate-css** (đã import trong `globals.css`) — không thêm thư viện animation khác.
+- **Entrance của trang:** `motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300` trên wrapper nội dung. **Luôn prefix `motion-safe:`** để tôn trọng `prefers-reduced-motion`.
+- **Vùng xuất hiện có điều kiện** (info box, alert...): cùng pattern nhưng `slide-in-from-bottom-1 duration-200` — nhỏ và nhanh hơn entrance trang.
+- **Đổi tab:** re-mount nội dung bằng `key={tab}` để animation chạy lại (xem `HoldingsTabs`).
+- **Micro-interaction:** hover/active dùng `transition-*` (FAB `hover:scale-105 active:scale-95`, thumb `SegmentedControl` trượt bằng `transition-[left]`); chỉ fade/slide/scale nhẹ, không bounce/spin.
 
 ## Cập nhật thiết kế về sau
 

@@ -36,6 +36,8 @@ model User {
   id                  String    @id @default(cuid())
   email               String    @unique
   name                String?
+  emailVerified       DateTime? // bắt buộc theo adapter model Auth.js (PrismaAdapter.createUser ghi khi đăng nhập lần đầu)
+  image               String?   // avatar Google — bắt buộc theo adapter model Auth.js
   hideAmountsByDefault Boolean  @default(false) // trạng thái mặc định của chế độ ẩn số tiền trên dashboard
   holdings            Holding[]
   createdAt           DateTime  @default(now())

@@ -5,9 +5,14 @@ import { auth } from "@/lib/auth";
 import { derivePosition } from "@/lib/cost-basis";
 import { db } from "@/lib/db";
 
-import type { CashflowRow, HoldingDetail, OpenHolding } from "./types";
+import type {
+  CashflowRow,
+  HoldingDetail,
+  HoldingsOverview,
+  HoldingSummary,
+} from "./types";
 
-export async function getOpenHoldings(): Promise<OpenHolding[]> {
+export async function getHoldingsOverview(): Promise<HoldingsOverview> {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
@@ -17,38 +22,41 @@ export async function getOpenHoldings(): Promise<OpenHolding[]> {
     orderBy: { symbol: "asc" },
   });
 
-  return holdings
-    .map((holding) => {
-      const position = derivePosition(
-        holding.cashflows.map((cf) => ({
-          type: cf.type,
-          date: cf.date,
-          quantity: new Decimal(cf.quantity.toString()),
-          pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
-        })),
-      );
+  const open: HoldingSummary[] = [];
+  const closed: HoldingSummary[] = [];
+  let totalInvested = new Decimal(0);
 
-      return {
-        id: holding.id,
-        symbol: holding.symbol,
-        name: holding.name,
-        type: holding.type,
-        unit: holding.unit,
-        quantity: position.quantity,
-        avgCost: position.avgCost,
-      };
-    })
-    .filter((holding) => holding.quantity.gt(0))
-    .map((holding): OpenHolding => ({
+  for (const holding of holdings) {
+    const position = derivePosition(
+      holding.cashflows.map((cf) => ({
+        type: cf.type,
+        date: cf.date,
+        quantity: new Decimal(cf.quantity.toString()),
+        pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
+      })),
+    );
+
+    const totalCostBasis = position.quantity.mul(position.avgCost);
+    const summary: HoldingSummary = {
       id: holding.id,
       symbol: holding.symbol,
       name: holding.name,
       type: holding.type,
       unit: holding.unit,
-      quantity: holding.quantity.toString(),
-      avgCost: holding.avgCost.toString(),
-      totalCostBasis: holding.quantity.mul(holding.avgCost).toString(),
-    }));
+      quantity: position.quantity.toString(),
+      avgCost: position.avgCost.toString(),
+      totalCostBasis: totalCostBasis.toString(),
+    };
+
+    if (position.quantity.gt(0)) {
+      open.push(summary);
+      totalInvested = totalInvested.plus(totalCostBasis);
+    } else {
+      closed.push(summary);
+    }
+  }
+
+  return { open, closed, totalInvested: totalInvested.toString() };
 }
 
 export async function getHoldingDetail(
