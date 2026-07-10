@@ -167,58 +167,79 @@ export async function addTransaction(
   } = parsed.data;
 
   try {
-    const holding = await db.holding.findUnique({
-      where: { id: holdingId },
-      include: { cashflows: true },
-    });
-    if (!holding || holding.userId !== userId) {
-      return { ok: false, error: "Không tìm thấy danh mục" };
-    }
+    const result = await db.$transaction(
+      async (tx) => {
+        const holding = await tx.holding.findUnique({
+          where: { id: holdingId },
+          include: { cashflows: true },
+        });
+        if (!holding || holding.userId !== userId) {
+          return { ok: false as const, error: "Không tìm thấy danh mục" };
+        }
 
-    const candidate: CashflowInput = {
-      type: cashflowType,
-      date,
-      quantity: new Decimal(quantity),
-      pricePerUnit: new Decimal(pricePerUnit),
-    };
+        const candidate: CashflowInput = {
+          type: cashflowType,
+          date,
+          quantity: new Decimal(quantity),
+          pricePerUnit: new Decimal(pricePerUnit),
+        };
 
-    const position = derivePosition([
-      ...holding.cashflows.map(toCashflowInput),
-      candidate,
-    ]);
-    if (position.wentNegative) {
-      return {
-        ok: false,
-        error: "Bán vượt quá số lượng đang giữ tại thời điểm bán",
-      };
-    }
+        const position = derivePosition([
+          ...holding.cashflows.map(toCashflowInput),
+          candidate,
+        ]);
+        if (position.wentNegative) {
+          return {
+            ok: false as const,
+            error: "Bán vượt quá số lượng đang giữ tại thời điểm bán",
+          };
+        }
 
-    const amount = computeCashflowAmount({
-      type: cashflowType,
-      quantity: candidate.quantity,
-      pricePerUnit: candidate.pricePerUnit,
-      feeAmount: new Decimal(feeAmount),
-      taxAmount: new Decimal(taxAmount),
-    });
+        const amount = computeCashflowAmount({
+          type: cashflowType,
+          quantity: candidate.quantity,
+          pricePerUnit: candidate.pricePerUnit,
+          feeAmount: new Decimal(feeAmount),
+          taxAmount: new Decimal(taxAmount),
+        });
 
-    await db.cashflow.create({
-      data: {
-        holdingId,
-        type: cashflowType,
-        date,
-        quantity,
-        pricePerUnit,
-        amount: amount.toString(),
-        feeAmount,
-        taxAmount,
-        note,
+        await tx.cashflow.create({
+          data: {
+            holdingId,
+            type: cashflowType,
+            date,
+            quantity,
+            pricePerUnit,
+            amount: amount.toString(),
+            feeAmount,
+            taxAmount,
+            note,
+          },
+        });
+
+        return { ok: true as const };
       },
-    });
+      // Serializable — đọc cashflows để derive vị thế rồi ghi phải cùng transaction,
+      // tránh hai request đồng thời cùng thấy vị thế cũ rồi cùng bán vượt (docs/rules/data-prisma.md).
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    if (!result.ok) return result;
 
     revalidatePath(ROUTES.holdingDetail(holdingId));
     revalidatePath(ROUTES.holdings);
     return { ok: true, data: { holdingId } };
   } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2034"
+    ) {
+      logger.warn({ holdingId }, "addTransaction race, ask to retry");
+      return {
+        ok: false,
+        error: "Có giao dịch khác đang xử lý cùng lúc, vui lòng thử lại",
+      };
+    }
     logger.error({ err, holdingId }, "addTransaction failed");
     throw err;
   }
@@ -252,60 +273,82 @@ export async function updateTransaction(
   } = parsed.data;
 
   try {
-    const cashflow = await db.cashflow.findUnique({
-      where: { id: cashflowId },
-      include: { holding: { include: { cashflows: true } } },
-    });
-    if (!cashflow || cashflow.holding.userId !== userId) {
-      return { ok: false, error: "Không tìm thấy giao dịch" };
-    }
+    const result = await db.$transaction(
+      async (tx) => {
+        const cashflow = await tx.cashflow.findUnique({
+          where: { id: cashflowId },
+          include: { holding: { include: { cashflows: true } } },
+        });
+        if (!cashflow || cashflow.holding.userId !== userId) {
+          return { ok: false as const, error: "Không tìm thấy giao dịch" };
+        }
 
-    const candidate: CashflowInput = {
-      type: cashflowType,
-      date,
-      quantity: new Decimal(quantity),
-      pricePerUnit: new Decimal(pricePerUnit),
-    };
+        const candidate: CashflowInput = {
+          type: cashflowType,
+          date,
+          quantity: new Decimal(quantity),
+          pricePerUnit: new Decimal(pricePerUnit),
+        };
 
-    const position = derivePosition([
-      ...cashflow.holding.cashflows
-        .filter((cf) => cf.id !== cashflowId)
-        .map(toCashflowInput),
-      candidate,
-    ]);
-    if (position.wentNegative) {
+        const position = derivePosition([
+          ...cashflow.holding.cashflows
+            .filter((cf) => cf.id !== cashflowId)
+            .map(toCashflowInput),
+          candidate,
+        ]);
+        if (position.wentNegative) {
+          return {
+            ok: false as const,
+            error:
+              "Không thể sửa — số lượng sẽ âm tại một thời điểm trong lịch sử",
+          };
+        }
+
+        const amount = computeCashflowAmount({
+          type: cashflowType,
+          quantity: candidate.quantity,
+          pricePerUnit: candidate.pricePerUnit,
+          feeAmount: new Decimal(feeAmount),
+          taxAmount: new Decimal(taxAmount),
+        });
+
+        await tx.cashflow.update({
+          where: { id: cashflowId },
+          data: {
+            type: cashflowType,
+            date,
+            quantity,
+            pricePerUnit,
+            amount: amount.toString(),
+            feeAmount,
+            taxAmount,
+            note,
+          },
+        });
+
+        return { ok: true as const, holdingId: cashflow.holdingId };
+      },
+      // Serializable — cùng lý do với addTransaction: đọc lịch sử cashflow để
+      // derive vị thế rồi ghi phải atomic với đọc.
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    if (!result.ok) return result;
+
+    revalidatePath(ROUTES.holdingDetail(result.holdingId));
+    revalidatePath(ROUTES.holdings);
+    return { ok: true, data: { holdingId: result.holdingId } };
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2034"
+    ) {
+      logger.warn({ cashflowId }, "updateTransaction race, ask to retry");
       return {
         ok: false,
-        error: "Không thể sửa — số lượng sẽ âm tại một thời điểm trong lịch sử",
+        error: "Có giao dịch khác đang xử lý cùng lúc, vui lòng thử lại",
       };
     }
-
-    const amount = computeCashflowAmount({
-      type: cashflowType,
-      quantity: candidate.quantity,
-      pricePerUnit: candidate.pricePerUnit,
-      feeAmount: new Decimal(feeAmount),
-      taxAmount: new Decimal(taxAmount),
-    });
-
-    await db.cashflow.update({
-      where: { id: cashflowId },
-      data: {
-        type: cashflowType,
-        date,
-        quantity,
-        pricePerUnit,
-        amount: amount.toString(),
-        feeAmount,
-        taxAmount,
-        note,
-      },
-    });
-
-    revalidatePath(ROUTES.holdingDetail(cashflow.holdingId));
-    revalidatePath(ROUTES.holdings);
-    return { ok: true, data: { holdingId: cashflow.holdingId } };
-  } catch (err) {
     logger.error({ err, cashflowId }, "updateTransaction failed");
     throw err;
   }
@@ -330,33 +373,53 @@ export async function deleteTransaction(
   const { cashflowId } = parsed.data;
 
   try {
-    const cashflow = await db.cashflow.findUnique({
-      where: { id: cashflowId },
-      include: { holding: { include: { cashflows: true } } },
-    });
-    if (!cashflow || cashflow.holding.userId !== userId) {
-      return { ok: false, error: "Không tìm thấy giao dịch" };
-    }
+    const result = await db.$transaction(
+      async (tx) => {
+        const cashflow = await tx.cashflow.findUnique({
+          where: { id: cashflowId },
+          include: { holding: { include: { cashflows: true } } },
+        });
+        if (!cashflow || cashflow.holding.userId !== userId) {
+          return { ok: false as const, error: "Không tìm thấy giao dịch" };
+        }
 
-    const remaining = cashflow.holding.cashflows
-      .filter((cf) => cf.id !== cashflowId)
-      .map(toCashflowInput);
+        const remaining = cashflow.holding.cashflows
+          .filter((cf) => cf.id !== cashflowId)
+          .map(toCashflowInput);
 
-    const position = derivePosition(remaining);
-    if (position.wentNegative) {
+        const position = derivePosition(remaining);
+        if (position.wentNegative) {
+          return {
+            ok: false as const,
+            error:
+              "Không thể xóa — có giao dịch bán sau đó phụ thuộc vào số lượng này",
+          };
+        }
+
+        await tx.cashflow.delete({ where: { id: cashflowId } });
+
+        return { ok: true as const, holdingId: cashflow.holdingId };
+      },
+      // Serializable — cùng lý do với addTransaction/updateTransaction.
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    if (!result.ok) return result;
+
+    revalidatePath(ROUTES.holdingDetail(result.holdingId));
+    revalidatePath(ROUTES.holdings);
+    return { ok: true, data: { holdingId: result.holdingId } };
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2034"
+    ) {
+      logger.warn({ cashflowId }, "deleteTransaction race, ask to retry");
       return {
         ok: false,
-        error:
-          "Không thể xóa — có giao dịch bán sau đó phụ thuộc vào số lượng này",
+        error: "Có giao dịch khác đang xử lý cùng lúc, vui lòng thử lại",
       };
     }
-
-    await db.cashflow.delete({ where: { id: cashflowId } });
-
-    revalidatePath(ROUTES.holdingDetail(cashflow.holdingId));
-    revalidatePath(ROUTES.holdings);
-    return { ok: true, data: { holdingId: cashflow.holdingId } };
-  } catch (err) {
     logger.error({ err, cashflowId }, "deleteTransaction failed");
     throw err;
   }
