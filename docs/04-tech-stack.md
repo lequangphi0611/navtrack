@@ -37,7 +37,7 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 | App hosting | **Vercel** (free tier) | Chuẩn cho Next.js, $0 |
 | Nguồn giá | **Python + vnstock**, chạy trên **GitHub Actions** theo lịch | vnstock là thư viện Python; job chỉ chạy theo lịch nên không cần server thường trú → GitHub Actions free |
 | Đăng nhập | **Auth.js + Google OAuth** | Không mật khẩu, không cần dịch vụ email, ai cũng có Google |
-| Giao diện | **Tailwind CSS + shadcn/ui** | Tự sở hữu component, hiện đại, khớp Next App Router và Recharts |
+| Giao diện | **Tailwind CSS + shadcn/ui, chỉ dark mode** | Tự sở hữu component, hiện đại, khớp Next App Router và Recharts; app chỉ chạy dark mode — xem "Giao diện" bên dưới |
 | Biểu đồ | **Recharts** | Khớp liền shadcn/ui (component chart dựng trên Recharts), đủ cho NAV + phân bổ |
 | Tính XIRR | **Lai: thư viện npm + lớp bọc kiểm tra** | Thư viện làm lõi tính; tự bọc validate dấu dòng tiền, bắt ca không hội tụ, gắn nhãn "theo năm" |
 | Import dữ liệu cũ | **CSV + PapaParse** *(đã hoãn)* | Hoãn ở Phase 1: dữ liệu cũ không tách chi tiết từng mã nên nhập tay vị thế ban đầu thay vì import. Giữ lựa chọn này cho khi làm import sau (Backlog) |
@@ -62,6 +62,10 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 - **Bootstrap:** một admin email seed sẵn (`canInvite = true`) để tạo allowlist ban đầu.
 - **Mời có phân quyền:** user có cờ `AllowedUser.canInvite` mới mời được người khác; mời = insert `AllowedUser` (người mới `canInvite = false`). Cấp `canInvite` cho ai chỉ làm trực tiếp trên DB. Giới hạn số thành viên bằng `MAX_MEMBERS` trong `Setting` (đếm `AllowedUser` chưa thu hồi). Xem `domain/08-users-access-and-privacy.md`.
 - Mời/thu hồi không cần redeploy (thao tác trên DB). *(Quyết định GP2 sau khi cân nhắc so với ENV allowlist + JWT — xem lý do: revoke của JWT không tức thời.)*
+
+### Giao diện
+- **Chỉ dark mode, không có toggle:** `<html>` luôn gắn class `dark` (`src/app/layout.tsx`); `globals.css` chỉ định nghĩa token màu trong `.dark`, `:root` chỉ giữ `--radius` (token dùng chung, không phụ thuộc theme). Quyết định vì app cá nhân, không cần đầu tư bảng màu light song song khi chưa có nhu cầu — tránh token light "chết" (định nghĩa nhưng không bao giờ render) gây nhầm lẫn khi đọc code.
+- Nếu sau này cần light mode: thêm lại bảng màu light vào `:root`, bỏ hardcode class `dark` ở `<html>`, và làm cơ chế chọn theme (theo hệ điều hành hoặc toggle tay).
 
 ### Ảnh/logo mã cổ phiếu
 - **Chỉ dùng avatar chữ (monogram):** vẽ ô bo tròn màu, chữ là mã cổ phiếu, màu suy ra từ hash của mã. Không cần trường `logoUrl` trong DB, không phụ thuộc nguồn logo ngoài.

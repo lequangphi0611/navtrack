@@ -40,8 +40,55 @@ model User {
   image               String?   // avatar Google — bắt buộc theo adapter model Auth.js
   hideAmountsByDefault Boolean  @default(false) // trạng thái mặc định của chế độ ẩn số tiền trên dashboard
   holdings            Holding[]
+  snapshots           Snapshot[]
+  accounts            Account[]
+  sessions            Session[]
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+}
+
+// Auth.js (@auth/prisma-adapter) — database sessions để revoke được ngay lập tức
+// (xóa Session khi thu hồi AllowedUser, không cần đợi JWT hết hạn).
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, token])
 }
 
 // Allowlist "chỉ người được mời" — gate ở signIn callback của Auth.js.
@@ -56,10 +103,6 @@ model AllowedUser {
   revokedAt DateTime? // null = còn quyền; có giá trị = đã thu hồi
 }
 
-// Dùng database sessions (Prisma adapter) thay JWT để thu hồi quyền tức thời.
-// Auth.js cần thêm các model chuẩn của adapter: Account, Session, VerificationToken
-// (theo schema mẫu của @auth/prisma-adapter).
-
 model Holding {
   id           String        @id @default(cuid())
   userId       String        // mỗi danh mục thuộc về đúng một người dùng
@@ -67,7 +110,7 @@ model Holding {
   type         AssetType
   symbol       String        // mã CP/quỹ, loại vàng, mã trái phiếu
   name         String?
-  unit         String        @default("cổ phần") // "chỉ", "lượng", "trái phiếu"...
+  unit         String        // đơn vị số lượng theo loại tài sản — "cổ phần", "chỉ", "lượng", "trái phiếu"...; app phải set tường minh khi tạo Holding, không có default chung cho mọi loại
   cashflows    Cashflow[]
   dividends    Dividend[]
   snapshots    Snapshot[]
@@ -75,8 +118,7 @@ model Holding {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  @@unique([userId, symbol, type]) // một vị thế/user cho mỗi (mã, loại) — mua trùng mã tự gộp
-  @@index([userId])
+  @@unique([userId, symbol, type]) // một vị thế/user cho mỗi (mã, loại) — mua trùng mã tự gộp; cũng phục vụ lookup theo userId (leftmost prefix, không cần @@index([userId]) riêng)
 }
 
 model Cashflow {
@@ -116,6 +158,8 @@ model Dividend {
 
 model Snapshot {
   id        String          @id @default(cuid())
+  userId    String          // chủ sở hữu — luôn set, kể cả khi holdingId null (snapshot tổng danh mục), để mọi truy vấn filter được theo user
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   holdingId String?         // null = snapshot tổng cả danh mục
   holding   Holding?        @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   date      DateTime
@@ -125,6 +169,7 @@ model Snapshot {
   frozen    Boolean         @default(true) // false chỉ cho period = TODAY (tính động, không lưu thật)
   createdAt DateTime        @default(now())
 
+  @@index([userId, date])
   @@index([holdingId, date])
 }
 
@@ -151,8 +196,7 @@ model PriceQuote {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([symbol, date]) // 1 giá / mã / ngày — đích upsert idempotent của job
-  @@index([symbol, date])
+  @@unique([symbol, date]) // 1 giá / mã / ngày — đích upsert idempotent của job; cũng phục vụ lookup theo (symbol, date)
 }
 
 enum SettingValueType {
@@ -180,8 +224,7 @@ model Setting {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  @@unique([key, effectiveFrom])
-  @@index([key, effectiveFrom])
+  @@unique([key, effectiveFrom]) // cũng phục vụ lookup theo (key, effectiveFrom)
 }
 ```
 
@@ -190,7 +233,7 @@ model Setting {
 - **Một bảng `Holding` cho cả 4 loại tài sản**, phân biệt bằng `AssetType` (STOCK/FUND/BOND/GOLD). Không tách bảng riêng theo loại — vì mục tiêu là phân tích *toàn danh mục* (tổng NAV, XIRR, phân bổ), tách bảng sẽ buộc `UNION` khắp nơi và quan hệ đa hình cho `Cashflow`/`Dividend`/`Snapshot`. Khác biệt giữa các loại xử lý bằng field, không bằng bảng: `unit` (vàng chỉ/lượng), `NavOverride` (nhập tay cho vàng/trái phiếu), và (nếu cần) vài cột nullable cho chi tiết trái phiếu — thêm sau khi thật cần.
 - **CCQ (chứng chỉ quỹ) đều là `AssetType = FUND`** bất kể là quỹ cổ phiếu hay quỹ trái phiếu — phân loại "theo vỏ" sản phẩm, không theo phơi nhiễm kinh tế. Biểu đồ phân bổ giữ 4 nhóm; không có field `fundKind`.
 - **Một vị thế cho mỗi `(userId, symbol, type)`** — ràng buộc `@@unique([userId, symbol, type])`. Khi mua mã đã giữ, hệ thống **find-or-create**: gắn `Cashflow` BUY vào `Holding` sẵn có (không tạo Holding trùng) → giá vốn bình quân gia quyền luôn đúng. Cùng `symbol` khác `type` vẫn là hai Holding (được phép). Bán hết rồi mua lại dùng lại chính Holding đó (SL về 0 rồi tăng).
-- **`User`** tách dữ liệu theo từng người: mỗi `Holding` gắn với đúng một `userId`, mọi bảng con (`Cashflow`, `Dividend`, `Snapshot`, `NavOverride`) đi theo qua quan hệ với `Holding` nên không cần lặp lại `userId`. Snapshot tổng danh mục (`holdingId = null`) sẽ cần thêm `userId` riêng khi triển khai để biết thuộc về ai. Tài khoản do quản trị tạo/mời (không mở đăng ký công khai) — phù hợp tính chất phi thương mại.
+- **`User`** tách dữ liệu theo từng người: mỗi `Holding` gắn với đúng một `userId`, các bảng con (`Cashflow`, `Dividend`, `NavOverride`) đi theo qua quan hệ với `Holding` nên không cần lặp lại `userId`. **`Snapshot` có `userId` riêng** (không chỉ qua `Holding`) vì snapshot tổng danh mục (`holdingId = null`) vẫn cần biết thuộc về ai. Tài khoản do quản trị tạo/mời (không mở đăng ký công khai) — phù hợp tính chất phi thương mại.
 - **`User.hideAmountsByDefault`** lưu trạng thái mặc định của chế độ ẩn số tiền trên dashboard theo từng người. Đây là che ở tầng hiển thị: chỉ ẩn giá trị tiền tuyệt đối (NAV, lãi/lỗ bằng đồng → `••••••`), **giữ nguyên** XIRR và các phần trăm. Trên dashboard có nút bật/tắt nhanh; giá trị này chỉ quyết định trạng thái khi mở app.
 - **Vị thế mở ban đầu** (khi khởi tạo, không import lịch sử) được mô hình hóa như **một `Cashflow` kiểu BUY** đặt tại ngày mốc: `quantity` = số lượng đang giữ, `pricePerUnit` = giá vốn bình quân, `amount` = số âm tương ứng. Không cần model riêng — XIRR tính từ mốc này trở đi.
 - **`Cashflow.amount`** mang dấu sẵn (âm khi mua, dương khi bán) để dùng trực tiếp trong chuỗi dòng tiền XIRR, tránh phải suy luận dấu ở tầng tính toán.
