@@ -17,6 +17,7 @@ Chỉ cần mở khi việc đang làm chạm đúng phần liên quan:
 - **Từng file `docs/rules/*`:** đọc file tương ứng khi code phần đó (vd sửa Prisma schema → `docs/rules/schema.md` + `data-prisma.md`; sửa job Python → `python-job.md`; dựng component → `component-architecture.md`).
 - **`process/phase-x.md`:** đọc phase đang làm (xem `process/PROCESS.md` để biết đang ở phase nào).
 - **HARNESS.md:** [`HARNESS.md`](./HARNESS.md) — quyền hạn lệnh (`allow`/`deny`) cấu hình ở `.claude/settings.json`. Đọc khi cần chạy lệnh lạ chưa chắc được phép, hoặc khi sửa `.claude/settings.json`.
+- **Báo bug / đề xuất tính năng:** tạo GitHub issue bằng `gh issue create` theo template ở [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/) (repo bật `blank_issues_enabled: false` → **bắt buộc dùng template**; PR theo `.github/pull_request_template.md`). Lệnh `gh issue *` được auto-allow — xem HARNESS.md.
 
 ## Tiến trình triển khai
 - **Theo dõi tại [`process/PROCESS.md`](./process/PROCESS.md)** — trỏ tới chi tiết từng phase (`process/phase-x.md`).

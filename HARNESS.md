@@ -28,10 +28,13 @@ Lấy từ script trong [`package.json`](./package.json) + Docker Compose + git 
 | Docker             | `docker compose up`, `down`, `ps`, `logs`; `docker ps`                                                                                               |
 | Git (đọc)          | `status`, `diff`, `log`, `show`, `branch` (liệt kê/xem)                                                                                              |
 | Git (ghi, an toàn) | `checkout -b <tên nhánh mới>`, `add`, `commit`, `push` (không kèm `--force`), `push origin <ref>`, `pull`, `fetch`                                   |
+| GitHub CLI         | `gh issue *` — tạo/xem/sửa/comment issue (báo bug, đề xuất tính năng) theo template ở `.github/ISSUE_TEMPLATE/`                                      |
 
 Lý do các lệnh này an toàn để auto-allow: đều là lệnh **đọc**, hoặc lệnh **ghi nhưng dễ
 hoàn tác** (commit sai thì sửa/revert được, push thường (không force) không đè lịch sử
-người khác, tạo nhánh mới không ảnh hưởng nhánh khác).
+người khác, tạo nhánh mới không ảnh hưởng nhánh khác). `gh issue *` cũng thuộc nhóm dễ
+hoàn tác — issue tạo nhầm có thể đóng/xóa; riêng `gh issue delete` bản thân `gh` vẫn hỏi
+xác nhận nếu không kèm `--yes`, nên rủi ro thấp.
 
 ## Deny — lệnh nguy hiểm, chặn cứng
 
