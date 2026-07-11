@@ -94,7 +94,14 @@ export async function getHoldingDetail(
 
   const holding = await db.holding.findUnique({
     where: { id: holdingId },
-    include: { cashflows: { orderBy: { date: "desc" } } },
+    include: {
+      // Khớp thứ tự tie-break dùng ở actions.ts/migration backfill (date, createdAt, id) —
+      // derivePosition() chỉ sort theo date, cần thứ tự DB nhất quán khi trùng ngày để
+      // không lệch với Holding.quantity/avgCost đã materialize (docs/domain/02).
+      cashflows: {
+        orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      },
+    },
   });
 
   // Không tồn tại hoặc không thuộc user hiện tại: xử lý giống nhau, không lộ thông tin tồn tại.
@@ -109,17 +116,20 @@ export async function getHoldingDetail(
     })),
   );
 
-  const cashflows: CashflowRow[] = holding.cashflows.map((cf) => ({
-    id: cf.id,
-    type: cf.type,
-    date: cf.date.toISOString(),
-    quantity: cf.quantity.toString(),
-    pricePerUnit: cf.pricePerUnit.toString(),
-    amount: cf.amount.toString(),
-    feeAmount: cf.feeAmount.toString(),
-    taxAmount: cf.taxAmount.toString(),
-    note: cf.note,
-  }));
+  // Lịch sử giao dịch hiển thị mới nhất trước — đảo ngược mảng đã fetch theo thứ tự tăng dần.
+  const cashflows: CashflowRow[] = [...holding.cashflows]
+    .reverse()
+    .map((cf) => ({
+      id: cf.id,
+      type: cf.type,
+      date: cf.date.toISOString(),
+      quantity: cf.quantity.toString(),
+      pricePerUnit: cf.pricePerUnit.toString(),
+      amount: cf.amount.toString(),
+      feeAmount: cf.feeAmount.toString(),
+      taxAmount: cf.taxAmount.toString(),
+      note: cf.note,
+    }));
 
   return {
     id: holding.id,
