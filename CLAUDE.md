@@ -18,6 +18,11 @@ Chỉ cần mở khi việc đang làm chạm đúng phần liên quan:
 - **`process/phase-x.md`:** đọc phase đang làm (xem `process/PROCESS.md` để biết đang ở phase nào).
 - **HARNESS.md:** [`HARNESS.md`](./HARNESS.md) — quyền hạn lệnh (`allow`/`deny`) cấu hình ở `.claude/settings.json`. Đọc khi cần chạy lệnh lạ chưa chắc được phép, hoặc khi sửa `.claude/settings.json`.
 - **Báo bug / đề xuất tính năng:** tạo GitHub issue bằng `gh issue create` theo template ở [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/) (repo bật `blank_issues_enabled: false` → **bắt buộc dùng template**; PR theo `.github/pull_request_template.md`). Lệnh `gh issue *` được auto-allow — xem HARNESS.md.
+- **Custom agents:** [`.claude/agents/`](./.claude/agents/) — subagent chuyên trách, mỗi agent tự mô tả đầy đủ ở frontmatter (harness tự liệt kê khi cần, không cần chép lại). Hiện có:
+  - `business-implementer` — hiện thực lớp business/domain: Prisma schema & migration, `queries.ts`, Server Action, tính toán domain (XIRR, cost basis, thuế, dòng tiền).
+  - `design-implementer` — hiện thực lớp UI/Presentational: component hiển thị, styling theo token, animation, skeleton, empty/error state (kéo mockup thật qua DesignSync).
+  - `issuer` — thao tác GitHub issue + tạo PR (`gh issue *`, `gh pr create`); không merge/close PR.
+  - `curator` — làm gọn nhật ký `process/PROCESS.md` và rút gọn `process/DECISION.md`.
 
 ## Tiến trình triển khai
 - **Theo dõi tại [`process/PROCESS.md`](./process/PROCESS.md)** — trỏ tới chi tiết từng phase (`process/phase-x.md`).
