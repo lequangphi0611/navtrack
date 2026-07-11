@@ -30,3 +30,14 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 **Tách nhật ký `PROCESS.md` khỏi quyết định (`DECISION.md` — chính file này).**
 - Lý do: `PROCESS.md` phình dài vì mỗi dòng nhật ký vừa ghi tiến độ vừa giải thích lý do quyết định. Từ nay: `PROCESS.md` chỉ ghi 1 dòng ngắn "đã làm gì"; lý do/quyết định kỹ thuật quan trọng chuyển hết vào đây.
 - Docs đã sync: `CLAUDE.md` (mục "Tiến trình triển khai" + "Đồng bộ tài liệu khi có quyết định quan trọng").
+
+## 2026-07-11
+
+**Xây app như PWA (cài lên màn hình chính) — gộp vào Phase 1, phạm vi cố ý tối giản.**
+- Quyết định phạm vi (3 lựa chọn đã chốt qua trao đổi):
+  1. **Chỉ installable + cache tài nguyên tĩnh** — không cache số liệu tài chính offline, tránh rủi ro hiện số sai/cũ khi mất mạng cho app tài chính.
+  2. **Gộp vào Phase 1** (không tách phase riêng sau Phase 6) — vì Phase 1 đã có code chạy được, dễ làm đúng từ đầu hơn thêm sau.
+  3. **Không làm hạ tầng Web Push lần này** — cảnh báo giá vẫn ở Backlog, chưa cần VAPID/push subscription.
+- Hiện thực: `src/app/manifest.ts` (Next Metadata file convention), icon PNG sinh từ `scripts/generate-pwa-icons.mjs` (dùng `ImageResponse`/`next/og.js` vẽ lại đúng `LogoMark`, không cần thư viện ảnh ngoài như sharp/rsvg-convert), service worker viết tay `public/sw.js` (không dùng `next-pwa`/Serwist — tránh rủi ro tương thích với Next 16 + Turbopack), `public/offline.html` tĩnh làm fallback khi mất mạng, `ServiceWorkerRegister` chỉ đăng ký ở production (SW cache sẽ phá HMR nếu bật lúc `next dev`).
+- Kiểm chứng: `pnpm build` + `next start`, dùng Playwright xác nhận `link[rel=manifest]`, service worker `activated`, và điều hướng khi offline trả về `offline.html` thay vì lỗi trình duyệt.
+- Docs đã sync: `docs/04-tech-stack.md` (mục "PWA" mới), `docs/03-roadmap.md` (Phase 1), `docs/rules/project-structure.md` (thêm `scripts/`, `public/` vào cây thư mục), `docs/rules/ui-ux-design.md` (cross-reference icon PWA ↔ `LogoMark`), `docs/business-overview.md`, `process/phase-1.md`.

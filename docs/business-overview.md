@@ -48,6 +48,10 @@ Hai biểu đồ trả lời hai câu hỏi tôi hay hỏi nhất:
 
 Một nút để che nhanh các con số tiền trên dashboard — hữu ích khi tôi mở app nơi đông người hay chụp màn hình. Điểm khéo: nó chỉ giấu *số tiền* (tôi có bao nhiêu), còn giữ lại *phần trăm* hiệu suất — nên tôi vẫn xem được mình đầu tư tốt hay không mà không để lộ mình có bao nhiêu tiền.
 
+### 8. Cài lên màn hình chính như một app
+
+Navtrack là PWA (Progressive Web App) — "Thêm vào màn hình chính" từ trình duyệt là dùng được như app thật: icon riêng, mở toàn màn hình, không cần cài qua App Store/Play Store. Không xem được số liệu khi mất mạng (dữ liệu tài chính luôn phải mới), chỉ phần khung app (giao diện, icon) là cài sẵn.
+
 ## Ai dùng
 
 Nhiều người, nhưng mỗi người một cõi riêng. Tôi, người nhà, hay bạn bè — ai cũng có tài khoản đăng nhập riêng và một danh mục hoàn toàn tách biệt; tôi không nhìn thấy tiền của người khác và ngược lại. Đây vẫn là công cụ dùng chung trong nhóm quen, **không phải sản phẩm để bán** — không thu phí, không gói cước, không bán cho người lạ.
