@@ -39,6 +39,7 @@
       "Bash(git fetch*)",
 
       "Bash(gh issue *)",
+      "Bash(gh pr create*)",
 
       "PowerShell(pnpm install*)",
       "PowerShell(pnpm add *)",
@@ -76,7 +77,8 @@
       "PowerShell(git pull*)",
       "PowerShell(git fetch*)",
 
-      "PowerShell(gh issue *)"
+      "PowerShell(gh issue *)",
+      "PowerShell(gh pr create*)"
     ],
     "deny": [
       "Bash(rm -rf*)",
