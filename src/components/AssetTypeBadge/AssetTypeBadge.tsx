@@ -47,5 +47,10 @@ function AssetTypeBadge({ assetType, className }: AssetTypeBadgeProps) {
   );
 }
 
-export { AssetTypeBadge };
+export {
+  AssetTypeBadge,
+  ASSET_TYPE_DOT_CLASS,
+  ASSET_TYPE_LABEL,
+  ASSET_TYPE_TINT_CLASS,
+};
 export type { AssetType, AssetTypeBadgeProps };

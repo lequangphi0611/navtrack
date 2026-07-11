@@ -6,6 +6,8 @@ import { getSymbolColorClassName } from "./symbol-color";
 type SymbolAvatarProps = {
   symbol: string;
   size?: "sm" | "md" | "lg";
+  // Override màu hash-theo-symbol (vd tint theo loại tài sản khi đã gom nhóm theo AssetType).
+  colorClassName?: string;
   className?: string;
 };
 
@@ -15,14 +17,19 @@ const SIZE_CLASS: Record<NonNullable<SymbolAvatarProps["size"]>, string> = {
   lg: "size-11 text-sm",
 };
 
-function SymbolAvatar({ symbol, size = "md", className }: SymbolAvatarProps) {
+function SymbolAvatar({
+  symbol,
+  size = "md",
+  colorClassName,
+  className,
+}: SymbolAvatarProps) {
   const initials = symbol.slice(0, 4).toUpperCase();
 
   return (
     <Avatar
       className={cn(
         SIZE_CLASS[size],
-        getSymbolColorClassName(symbol),
+        colorClassName ?? getSymbolColorClassName(symbol),
         className,
       )}
     >
