@@ -4,7 +4,8 @@
 Định nghĩa các loại tài sản Navtrack theo dõi và cách một vị thế nắm giữ (`Holding`) được mô hình hóa.
 
 ## Entity / field
-- `Holding`: `userId`, `type` (`AssetType`), `symbol`, `name?`, `unit`, quan hệ tới `Cashflow`/`Dividend`/`NavOverride`/`Snapshot`.
+- `Holding`: `userId`, `type` (`AssetType`), `symbol`, `name?`, `unit`, `quantity`, `avgCost`, quan hệ tới `Cashflow`/`Dividend`/`NavOverride`/`Snapshot`.
+- `quantity`/`avgCost`: **materialized cache** của vị thế hiện tại (SL đang giữ + giá vốn bình quân) — dẫn xuất từ `Cashflow`, không phải nguồn độc lập; xem bất biến bên dưới và `02-transactions-and-cost-basis.md`.
 - `AssetType` enum: `STOCK`, `FUND`, `BOND`, `GOLD`.
 
 ## Quy tắc & bất biến
@@ -16,11 +17,11 @@
   - GOLD: chỉ hoặc lượng (1 lượng = 10 chỉ) — phải chọn rõ.
   - BOND: trái phiếu (theo mệnh giá).
 - **`symbol`** ở Phase 1 là **nhập tay tự do** (chưa validate với danh sách vnstock, chưa autocomplete). Chỉ là nhãn cho tới khi tích hợp giá (Phase 2).
-- Số lượng nắm giữ **không lưu trực tiếp** trên `Holding` — nó là **kết quả suy ra** từ chuỗi giao dịch + cổ tức cổ phiếu (xem `02-transactions-and-cost-basis.md`).
-- **Vị thế đóng (SL = 0):** khi bán hết, `Holding` **vẫn giữ lại** (không xóa) — lãi/lỗ đã hiện thực hóa, NAV = 0. Vị thế đóng **ẩn khỏi dashboard chính**, hiện ở tab **"Đã đóng"**; nhưng **vẫn tính vào tổng hiệu quả danh mục** (XIRR + tổng lãi/lỗ) vì là lợi nhuận thật đã thu. Trạng thái "đóng/mở" là **suy ra từ SL**, không phải cột lưu sẵn.
+- Số lượng nắm giữ (`quantity`) và giá vốn bình quân (`avgCost`) **dẫn xuất từ chuỗi giao dịch** (`Cashflow`) — **nguồn sự thật là `Cashflow`**. Hai cột này chỉ là **materialized cache**: được ghi lại bằng cách replay toàn bộ cashflow trong **cùng transaction** với mọi thay đổi cashflow (không cộng/trừ tay), nên luôn khớp nguồn (xem `02-transactions-and-cost-basis.md`). Materialize để màn Danh mục đọc thuần, không phải replay lịch sử mỗi lần.
+- **Vị thế đóng (SL = 0):** khi bán hết, `Holding` **vẫn giữ lại** (không xóa) — lãi/lỗ đã hiện thực hóa, NAV = 0. Vị thế đóng **ẩn khỏi dashboard chính**, hiện ở tab **"Đã đóng"**; nhưng **vẫn tính vào tổng hiệu quả danh mục** (XIRR + tổng lãi/lỗ) vì là lợi nhuận thật đã thu. Trạng thái "đóng/mở" **suy ra từ SL** (`quantity == 0` ⇒ đóng) — đọc trực tiếp từ cache `quantity`, không phải cột trạng thái lưu riêng.
 
 ## Cách tính
-- **Số lượng hiện tại** = Σ(BUY.quantity) − Σ(SELL.quantity) + Σ(dividend STOCK.stockQuantity).
+- **Số lượng hiện tại** = Σ(BUY.quantity) − Σ(SELL.quantity) + Σ(dividend STOCK.stockQuantity). Cache `Holding.quantity` hiện phản ánh phần **BUY/SELL** (`derivePosition`); cổ tức cổ phiếu chưa hiện thực (Phase 4). **Khi thêm cổ tức STOCK ở Phase 4, đường ghi đó phải cập nhật lại cache `quantity` trong cùng transaction** (cùng bất biến với 4 action mua/bán) — nếu không cache sẽ lệch công thức này.
 - Danh sách 4 nhóm dùng cho biểu đồ phân bổ chính là `AssetType`.
 
 ## Ca biên

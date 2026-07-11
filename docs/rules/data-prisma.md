@@ -44,7 +44,7 @@ export async function getHoldings() {
 
 // ✅ Good — lấy userId từ session, luôn filter
 export async function getHoldings() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
   return db.holding.findMany({ where: { userId: session.user.id } });
 }
@@ -52,6 +52,41 @@ export async function getHoldings() {
 
 - Với model **soft-delete** (vd `AllowedUser`), truy vấn phải lọc `revokedAt = null` (định nghĩa cột: xem `schema.md`).
 - Gom truy vấn có kiểm soát quyền vào `queries.ts` của feature, không rải Prisma khắp nơi.
+
+## Chọn `select` hẹp thay vì `include` full-row
+
+- Khi chỉ cần vài field của quan hệ (vd tính lại vị thế từ cashflow chỉ cần `type/date/quantity/pricePerUnit`, không cần `amount/feeAmount/taxAmount/note`), dùng `select` hẹp trong Prisma thay vì `include` (kéo **toàn bộ field** của model quan hệ).
+- Quan trọng nhất với quan hệ **1-nhiều tăng dần theo thời gian dùng app** (vd `Holding.cashflows`, lịch sử giao dịch) — `include` ở đây không chỉ dư field mà còn kéo payload phình vô hạn theo số giao dịch đã ghi, bất kể phía gọi có cần hiển thị hết hay không.
+- Áp dụng cả trong action đọc để validate rồi ghi (không chỉ query hiển thị) — dữ liệu không ra client không có nghĩa là fetch rộng vô hại, vẫn tốn round-trip/băng thông DB.
+
+```ts
+// ❌ Bad — include kéo toàn bộ field cashflow (amount, feeAmount, taxAmount, note, id,
+//          holdingId, createdAt, updatedAt...) chỉ để tính lại vị thế, phình theo lịch sử giao dịch
+const holding = await db.holding.findUnique({
+  where: { id: holdingId },
+  include: { cashflows: true },
+});
+const position = derivePosition(holding.cashflows.map(toCashflowInput));
+
+// ✅ Good — select đúng 4 field derivePosition cần
+const holding = await db.holding.findUnique({
+  where: { id: holdingId },
+  select: {
+    cashflows: {
+      select: { type: true, date: true, quantity: true, pricePerUnit: true },
+    },
+  },
+});
+const position = derivePosition(holding.cashflows.map(toCashflowInput));
+```
+
+- Nếu nhiều vùng UI/Suspense độc lập đều cần dữ liệu dẫn xuất từ cùng 1 fetch (vd tổng vốn + danh sách vị thế đều cần replay cashflow), bọc fetch gốc bằng React `cache()` (như `getSession = cache(auth)` ở `lib/auth.ts`) và export các hàm mỏng chiếu từ kết quả cache — tránh mỗi vùng tự gọi lại fetch gốc, nhân đôi round-trip trong cùng một request.
+
+## Materialized cache khi phải replay full history mỗi lần đọc
+
+- `select` hẹp giảm **bề rộng** payload nhưng không giảm **số dòng**: nếu một giá trị dẫn xuất bắt buộc replay **toàn bộ** lịch sử (vd giá vốn bình quân di động có reset — mỗi lần đọc màn Danh mục phải kéo hết cashflow của **mọi** holding chỉ để suy ra vài con số), thì kể cả `select` hẹp vẫn phình theo lịch sử. Khi đã đo được đây là nút thắt, **materialize** kết quả thành cột trên bảng cha.
+- **Bất biến bắt buộc (chống lệch dữ liệu):** cột materialized là **cache dẫn xuất**, không phải nguồn sự thật. Nó **chỉ** được ghi bằng cách **recompute lại từ nguồn** (không cộng/trừ tay) trong **cùng transaction** với **mọi** đường ghi làm đổi giá trị đó. Nguồn sự thật vẫn là bảng con (`Cashflow`). Ví dụ: `Holding.quantity`/`avgCost` được `persistPosition` ghi từ `derivePosition(toàn bộ cashflow)` trong cả 4 action mua/bán (`features/holdings/actions.ts`); màn Danh mục (`queries.ts`) đọc thuần 2 cột này, không kéo cashflow.
+- Rủi ro phải kiểm soát trước khi materialize: (1) **mọi** đường ghi ảnh hưởng giá trị phải đi qua chỗ recompute — quên một đường = lệch cache (vd khi thêm cổ tức cổ phiếu ở Phase 4, đường ghi đó cũng phải cập nhật `quantity`); (2) backfill dữ liệu cũ đúng 1 lần sau migration; (3) nếu backfill bằng SQL thuần là **bản sao** logic TS thì phải verify khớp và giữ đồng bộ khi logic đổi.
 
 ## Race condition khi check-rồi-ghi (TOCTOU)
 
