@@ -185,7 +185,7 @@ Dựng page mới (hoặc thêm data fetching vào page cũ) thì đi qua checkl
 
 1. **Page có `await` data (query/`auth()` chặn render)?** → route đó **bắt buộc có `loading.tsx`**, trừ khi page đã là sync và mọi vùng data đều nằm trong `Suspense` (khi đó shell tự hiện ngay, `loading.tsx` thừa).
 2. **Page có ≥ 2 query độc lập?** → **không** `await` tuần tự trong page. Page giữ **sync** (shell render ngay), mỗi query tách thành một **async section component** (container, đặt trong `features/<x>/components/`) bọc trong `Suspense` riêng với skeleton riêng. Ví dụ mẫu: `settings/members/page.tsx` (`MemberQuotaSection` + `InvitedMembersSection`).
-3. **Chỉ 1 query quyết định toàn bộ layout** (vd `/holdings` rẽ nhánh trống ↔ danh sách)? → giữ page async + `loading.tsx`; không cần tách Suspense vì không có vùng độc lập.
+3. **Chỉ 1 query quyết định toàn bộ layout** (vd rẽ nhánh trống ↔ có dữ liệu)? → đặt query đó ở cấp cao nhất chi phối nhánh — `page.tsx` nếu route đơn lẻ, hoặc `layout.tsx` nếu **dùng chung cho nhiều route con** (vd tab đã tách thành route — xem mục "Tab điều hướng" bên dưới); giữ async + `loading.tsx` riêng của cấp đó. Page con bên dưới vẫn tự tách `Suspense` cho vùng data riêng của nó (không lặp lại query quyết định nhánh).
 
 ```tsx
 // ❌ Bad — 2 query độc lập nhưng await tuần tự trong page, không loading.tsx
@@ -228,6 +228,27 @@ function HoldingRowSkeleton() {
 // ❌ Bad — spinner chung chung / khối xám không cùng hình dạng nội dung
 <div className="flex justify-center"><Spinner /></div>
 <Skeleton className="h-64" /> // một khối to thay cho cả danh sách card
+```
+
+### Tab điều hướng nội dung trang → tách route, không giữ state client
+
+- Khi 2 tab hiển thị **2 tập dữ liệu khác nhau** (không phải 2 view cùng 1 fetch), tách thành **2 route con** thay vì 1 client component giữ `useState` chọn nội dung — tab dạng state không đồng bộ URL (không back/refresh/deep-link đúng được) và ép cả 2 tập dữ liệu phải fetch/derive dù chỉ 1 tab đang hiển thị.
+- Dùng **route group** `(tênNhóm)` để 2 route con dùng chung 1 `layout.tsx` (chứa phần chung: header, stat tổng quan, thanh điều hướng) mà không ảnh hưởng route khác cùng cấp (route group không xuất hiện trong URL — xem `node_modules/next/dist/docs/.../file-conventions/route-groups.md`).
+- Thanh điều hướng là `<Link>` thật (không phải `<button onClick>` đổi state) để có URL/back/right-click-mở-tab-mới đúng nghĩa; xác định tab active bằng `usePathname()`. `<Link>` mặc định đã prefetch khi vào viewport — không cần tự xử lý prefetch-on-hover.
+- Nếu nhiều route con cùng cần dữ liệu dẫn xuất từ 1 fetch gốc (vd tổng vốn hiển thị ở cả 2 tab), bọc fetch gốc bằng `cache()` ở tầng `queries.ts` (xem [`data-prisma.md`](./data-prisma.md#chọn-select-hẹp-thay-vì-include-full-row)) để layout + page con không nhân đôi round-trip.
+
+```
+❌ Bad — HoldingsTabs (client, useState) chọn giữa 2 nội dung đã server-render sẵn cho CẢ 2 tab
+"use client";
+function HoldingsTabs({ openContent, closedContent }) {
+  const [tab, setTab] = useState("open");
+  return tab === "open" ? openContent : closedContent; // cả 2 đã derive+serialize từ trước
+}
+
+✅ Good — 2 route con dùng chung layout, mỗi route tự Suspense vùng data của nó
+holdings/(overview)/layout.tsx   // header + StatCard (Suspense riêng) + HoldingsSegmentedNav + children
+holdings/(overview)/page.tsx     // <Suspense><HoldingsPositionsSection status="open" /></Suspense>
+holdings/(overview)/closed/page.tsx // status="closed"
 ```
 
 ## Đặc thù Navtrack

@@ -25,7 +25,7 @@
   ```
 - **Khi BÁN một phần**, giá vốn bình quân **giữ nguyên**; chỉ giảm số lượng (phương pháp bình quân di động).
 - **Lãi/lỗ đã thực hiện** khi bán = `(giá bán − giá vốn bình quân) × SL bán − phí − thuế`.
-- Giá vốn bình quân là **chỉ số hiển thị, tính derived từ các `Cashflow` BUY**, không lưu cứng (tránh lệch dữ liệu). Nó **tách khỏi XIRR** — XIRR dùng chuỗi dòng tiền thật theo ngày, không dùng giá vốn.
+- Giá vốn bình quân **dẫn xuất từ chuỗi `Cashflow`** (replay `derivePosition`) — **nguồn sự thật là `Cashflow`**, không phải cột lưu. Để tránh replay toàn bộ lịch sử mỗi lần đọc màn Danh mục, giá trị này được **materialize** vào cột `Holding.avgCost` (kèm `Holding.quantity`) dưới dạng **cache dẫn xuất**, với bất biến: chỉ ghi lại bằng `derivePosition(toàn bộ cashflow của holding)` trong **cùng transaction** với mọi thay đổi cashflow (không cộng/trừ tay) → cache luôn khớp nguồn, không tự lệch. Xem `docs/rules/data-prisma.md` (mục "Materialized cache…") và `process/DECISION.md` (2026-07-11) cho lý do đảo hướng "không lưu cứng" ban đầu. Giá vốn **tách khỏi XIRR** — XIRR dùng chuỗi dòng tiền thật theo ngày, không dùng giá vốn.
 
 ## Vị thế mở ban đầu
 - Khi khai báo vị thế đang giữ (không import lịch sử), tạo `Holding` + **một `Cashflow` BUY tại ngày mốc**: `quantity` = SL đang giữ, `pricePerUnit` = giá vốn bình quân đã biết, `amount` = số âm tương ứng.

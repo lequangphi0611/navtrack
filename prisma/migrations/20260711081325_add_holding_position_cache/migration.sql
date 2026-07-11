@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Holding" ADD COLUMN     "avgCost" DECIMAL(20,4) NOT NULL DEFAULT 0,
+ADD COLUMN     "quantity" DECIMAL(20,4) NOT NULL DEFAULT 0;

@@ -119,6 +119,11 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
     await page.goto("/holdings");
     await expect(page.getByRole("link", { name: /VNM/ })).toHaveCount(0);
 
+    // Vị thế đóng xuất hiện đúng ở route "Đã đóng" (điều hướng qua segmented nav)
+    await page.getByRole("link", { name: "Đã đóng" }).click();
+    await page.waitForURL("/holdings/closed");
+    await expect(page.getByRole("link", { name: /VNM/ })).toBeVisible();
+
     // Xóa BUY khi vẫn còn SELL phụ thuộc -> bị chặn
     await page.goto(holdingUrl);
     page.once("dialog", (dialog) => dialog.accept());

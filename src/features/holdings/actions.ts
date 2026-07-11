@@ -32,6 +32,23 @@ function toCashflowInput(
   };
 }
 
+// Ghi lại materialized cache vị thế lên Holding từ kết quả derivePosition đã tính sẵn.
+// Gọi trong CÙNG transaction với mọi thay đổi cashflow — giữ cache luôn khớp nguồn sự thật
+// (Cashflow), không bao giờ cập nhật cộng/trừ tay (docs/domain/02-transactions-and-cost-basis.md).
+async function persistPosition(
+  tx: Prisma.TransactionClient,
+  holdingId: string,
+  position: { quantity: Decimal; avgCost: Decimal },
+): Promise<void> {
+  await tx.holding.update({
+    where: { id: holdingId },
+    data: {
+      quantity: position.quantity.toString(),
+      avgCost: position.avgCost.toString(),
+    },
+  });
+}
+
 export async function createHolding(
   input: unknown,
 ): Promise<ActionResult<{ holdingId: string }>> {
@@ -63,76 +80,114 @@ export async function createHolding(
   } = parsed.data;
 
   try {
-    const result = await db.$transaction(async (tx) => {
-      const existing = await tx.holding.findUnique({
-        where: { userId_symbol_type: { userId, symbol, type } },
-        include: { cashflows: true },
-      });
+    const result = await db.$transaction(
+      async (tx) => {
+        const existing = await tx.holding.findUnique({
+          where: { userId_symbol_type: { userId, symbol, type } },
+          select: {
+            id: true,
+            cashflows: {
+              select: {
+                type: true,
+                date: true,
+                quantity: true,
+                pricePerUnit: true,
+              },
+              // Khớp thứ tự tie-break của migration backfill (date, createdAt, id) —
+              // derivePosition() chỉ sort theo date, dựa vào thứ tự DB trả về để
+              // phá vỡ trùng ngày một cách nhất quán giữa các lần ghi cache.
+              orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+            },
+          },
+        });
 
-      const candidate: CashflowInput = {
-        type: cashflowType,
-        date,
-        quantity: new Decimal(quantity),
-        pricePerUnit: new Decimal(pricePerUnit),
-      };
-
-      const position = derivePosition([
-        ...(existing?.cashflows.map(toCashflowInput) ?? []),
-        candidate,
-      ]);
-      if (position.wentNegative) {
-        return { ok: false as const, error: "Bán vượt quá số lượng đang giữ" };
-      }
-
-      const amount = computeCashflowAmount({
-        type: cashflowType,
-        quantity: candidate.quantity,
-        pricePerUnit: candidate.pricePerUnit,
-        feeAmount: new Decimal(feeAmount),
-        taxAmount: new Decimal(taxAmount),
-      });
-
-      // Mua trùng mã đang giữ tự gộp vào Holding đã có, không tạo bản ghi thứ hai
-      // (docs/domain/02-transactions-and-cost-basis.md).
-      const holding =
-        existing ??
-        (await tx.holding.create({
-          data: { userId, symbol, type, unit, name },
-        }));
-
-      await tx.cashflow.create({
-        data: {
-          holdingId: holding.id,
+        const candidate: CashflowInput = {
           type: cashflowType,
           date,
-          quantity,
-          pricePerUnit,
-          amount: amount.toString(),
-          feeAmount,
-          taxAmount,
-          note,
-        },
-      });
+          quantity: new Decimal(quantity),
+          pricePerUnit: new Decimal(pricePerUnit),
+        };
 
-      return { ok: true as const, holdingId: holding.id };
-    });
+        const position = derivePosition([
+          ...(existing?.cashflows.map(toCashflowInput) ?? []),
+          candidate,
+        ]);
+        if (position.wentNegative) {
+          return {
+            ok: false as const,
+            error: "Bán vượt quá số lượng đang giữ",
+          };
+        }
+
+        const amount = computeCashflowAmount({
+          type: cashflowType,
+          quantity: candidate.quantity,
+          pricePerUnit: candidate.pricePerUnit,
+          feeAmount: new Decimal(feeAmount),
+          taxAmount: new Decimal(taxAmount),
+        });
+
+        // Mua trùng mã đang giữ tự gộp vào Holding đã có, không tạo bản ghi thứ hai
+        // (docs/domain/02-transactions-and-cost-basis.md).
+        const holding =
+          existing ??
+          (await tx.holding.create({
+            data: { userId, symbol, type, unit, name },
+          }));
+
+        await tx.cashflow.create({
+          data: {
+            holdingId: holding.id,
+            type: cashflowType,
+            date,
+            quantity,
+            pricePerUnit,
+            amount: amount.toString(),
+            feeAmount,
+            taxAmount,
+            note,
+          },
+        });
+
+        await persistPosition(tx, holding.id, position);
+
+        return { ok: true as const, holdingId: holding.id };
+      },
+      // Serializable — cùng lý do với addTransaction: đọc cashflows để derive vị thế
+      // rồi ghi persistPosition phải atomic với đọc, kể cả khi merge vào holding đã có
+      // (không có unique constraint nào bảo vệ đường ghi này).
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
 
     if (!result.ok) return result;
 
+    revalidatePath(ROUTES.holdingDetail(result.holdingId));
     revalidatePath(ROUTES.holdings);
+    revalidatePath(ROUTES.holdingsClosed);
     return { ok: true, data: { holdingId: result.holdingId } };
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
-      // Hai request tạo đồng thời cùng (userId, symbol, type) — request thua
-      // trong đua tranh gặp lỗi ràng buộc unique, không phải bug.
-      logger.warn({ symbol, type }, "createHolding race on unique constraint");
-      return {
-        ok: false,
-        error: "Có giao dịch trùng đang được xử lý, vui lòng thử lại",
-      };
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (err.code === "P2002") {
+        // Hai request tạo đồng thời cùng (userId, symbol, type) — request thua
+        // trong đua tranh gặp lỗi ràng buộc unique, không phải bug.
+        logger.warn(
+          { symbol, type },
+          "createHolding race on unique constraint",
+        );
+        return {
+          ok: false,
+          error: "Có giao dịch trùng đang được xử lý, vui lòng thử lại",
+        };
+      }
+      if (err.code === "P2034") {
+        // Serializable — request thua trong đua tranh gặp serialization conflict,
+        // cùng lý do với addTransaction/updateTransaction/deleteTransaction.
+        logger.warn({ symbol, type }, "createHolding race, ask to retry");
+        return {
+          ok: false,
+          error: "Có giao dịch khác đang xử lý cùng lúc, vui lòng thử lại",
+        };
+      }
     }
     logger.error({ err, symbol, type }, "createHolding failed");
     throw err;
@@ -171,7 +226,19 @@ export async function addTransaction(
       async (tx) => {
         const holding = await tx.holding.findUnique({
           where: { id: holdingId },
-          include: { cashflows: true },
+          select: {
+            userId: true,
+            cashflows: {
+              select: {
+                type: true,
+                date: true,
+                quantity: true,
+                pricePerUnit: true,
+              },
+              // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
+              orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+            },
+          },
         });
         if (!holding || holding.userId !== userId) {
           return { ok: false as const, error: "Không tìm thấy danh mục" };
@@ -217,6 +284,8 @@ export async function addTransaction(
           },
         });
 
+        await persistPosition(tx, holdingId, position);
+
         return { ok: true as const };
       },
       // Serializable — đọc cashflows để derive vị thế rồi ghi phải cùng transaction,
@@ -228,6 +297,7 @@ export async function addTransaction(
 
     revalidatePath(ROUTES.holdingDetail(holdingId));
     revalidatePath(ROUTES.holdings);
+    revalidatePath(ROUTES.holdingsClosed);
     return { ok: true, data: { holdingId } };
   } catch (err) {
     if (
@@ -277,7 +347,29 @@ export async function updateTransaction(
       async (tx) => {
         const cashflow = await tx.cashflow.findUnique({
           where: { id: cashflowId },
-          include: { holding: { include: { cashflows: true } } },
+          select: {
+            holdingId: true,
+            holding: {
+              select: {
+                userId: true,
+                cashflows: {
+                  select: {
+                    id: true,
+                    type: true,
+                    date: true,
+                    quantity: true,
+                    pricePerUnit: true,
+                  },
+                  // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
+                  orderBy: [
+                    { date: "asc" },
+                    { createdAt: "asc" },
+                    { id: "asc" },
+                  ],
+                },
+              },
+            },
+          },
         });
         if (!cashflow || cashflow.holding.userId !== userId) {
           return { ok: false as const, error: "Không tìm thấy giao dịch" };
@@ -326,6 +418,8 @@ export async function updateTransaction(
           },
         });
 
+        await persistPosition(tx, cashflow.holdingId, position);
+
         return { ok: true as const, holdingId: cashflow.holdingId };
       },
       // Serializable — cùng lý do với addTransaction: đọc lịch sử cashflow để
@@ -337,6 +431,7 @@ export async function updateTransaction(
 
     revalidatePath(ROUTES.holdingDetail(result.holdingId));
     revalidatePath(ROUTES.holdings);
+    revalidatePath(ROUTES.holdingsClosed);
     return { ok: true, data: { holdingId: result.holdingId } };
   } catch (err) {
     if (
@@ -377,7 +472,29 @@ export async function deleteTransaction(
       async (tx) => {
         const cashflow = await tx.cashflow.findUnique({
           where: { id: cashflowId },
-          include: { holding: { include: { cashflows: true } } },
+          select: {
+            holdingId: true,
+            holding: {
+              select: {
+                userId: true,
+                cashflows: {
+                  select: {
+                    id: true,
+                    type: true,
+                    date: true,
+                    quantity: true,
+                    pricePerUnit: true,
+                  },
+                  // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
+                  orderBy: [
+                    { date: "asc" },
+                    { createdAt: "asc" },
+                    { id: "asc" },
+                  ],
+                },
+              },
+            },
+          },
         });
         if (!cashflow || cashflow.holding.userId !== userId) {
           return { ok: false as const, error: "Không tìm thấy giao dịch" };
@@ -398,6 +515,8 @@ export async function deleteTransaction(
 
         await tx.cashflow.delete({ where: { id: cashflowId } });
 
+        await persistPosition(tx, cashflow.holdingId, position);
+
         return { ok: true as const, holdingId: cashflow.holdingId };
       },
       // Serializable — cùng lý do với addTransaction/updateTransaction.
@@ -408,6 +527,7 @@ export async function deleteTransaction(
 
     revalidatePath(ROUTES.holdingDetail(result.holdingId));
     revalidatePath(ROUTES.holdings);
+    revalidatePath(ROUTES.holdingsClosed);
     return { ok: true, data: { holdingId: result.holdingId } };
   } catch (err) {
     if (

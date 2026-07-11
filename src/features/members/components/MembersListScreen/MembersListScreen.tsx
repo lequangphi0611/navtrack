@@ -2,7 +2,6 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
-import { PageHeader } from "@/components/PageHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { InvitedMembersSection } from "@/features/members/components/InvitedMembersSection";
 import { MemberListSkeleton } from "@/features/members/components/MemberList";
@@ -16,14 +15,13 @@ type MembersListScreenProps = {
 };
 
 // Có quyền mời: quota + danh sách (avatar/icon) + nút điều hướng sang trang mời riêng.
+// Shell (PageHeader + wrapper) do page.tsx sở hữu — component chỉ render phần nội dung.
 function MembersListScreen({
   activeCount,
   maxMembers,
 }: MembersListScreenProps) {
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4.5 p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
-      <PageHeader title="Thành viên" backHref={ROUTES.settings} />
-
+    <>
       <MemberQuotaCard activeCount={activeCount} maxMembers={maxMembers} />
 
       <div>
@@ -45,7 +43,7 @@ function MembersListScreen({
         <Plus className="size-4.5" />
         Mời thành viên
       </Link>
-    </div>
+    </>
   );
 }
 
