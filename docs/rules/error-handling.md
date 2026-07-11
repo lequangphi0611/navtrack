@@ -8,6 +8,7 @@ Cách xử lý lỗi và ghi log **thống nhất** cho Navtrack. Nguyên tắc:
 - **Lỗi lường trước:** trả qua `ActionResult` union — **không throw**.
 - **Lỗi bất ngờ:** cứ để throw → `error.tsx` của route bắt và hiển thị; đồng thời **log** lại.
 - Dùng lớp lỗi có mã `AppError { code, message }` cho lỗi nghiệp vụ.
+- **Race condition ở tầng DB khi ghi đồng thời** (vi phạm unique constraint — mã Prisma `P2002`, xung đột serializable transaction — mã `P2034`) **cũng là lỗi lường trước được**, không phải bug — catch theo mã lỗi và trả `ActionResult` yêu cầu thử lại thay vì để throw. Cách bọc transaction để tránh check-rồi-ghi (TOCTOU): xem [`data-prisma.md`](./data-prisma.md#race-condition-khi-check-rồi-ghi-toctou).
 
 ```ts
 // ✅ Good — lỗi nghiệp vụ có mã, trả qua result (không throw ra UI)

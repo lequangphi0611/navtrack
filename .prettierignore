@@ -1,0 +1,13 @@
+.next
+node_modules
+pnpm-lock.yaml
+jobs
+playwright-report
+test-results
+
+# Tài liệu tiếng Việt viết tay — không auto-format, tránh diff không liên quan
+docs
+process
+CLAUDE.md
+AGENTS.md
+.claude

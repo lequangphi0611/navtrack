@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: navtrack
+      POSTGRES_PASSWORD: navtrack
+      POSTGRES_DB: navtrack
+    ports:
+      - "5433:5432" # host 5433: tránh đụng cổng với PostgreSQL cài sẵn (nếu có) trên máy dùng 5432
+    volumes:
+      - navtrack-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U navtrack -d navtrack"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  navtrack-db-data:

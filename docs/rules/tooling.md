@@ -39,10 +39,11 @@ console.log(first.symbol);        // ❌ lỗi compile nếu chưa guard → tr�
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "lint": "next lint",
+    "lint": "eslint", // `next lint` deprecated từ Next 15+, dùng ESLint flat config trực tiếp
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy", // CI/production, không tạo migration mới
     "db:seed": "prisma db seed"
   }
 }

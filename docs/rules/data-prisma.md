@@ -53,6 +53,40 @@ export async function getHoldings() {
 - Với model **soft-delete** (vd `AllowedUser`), truy vấn phải lọc `revokedAt = null` (định nghĩa cột: xem `schema.md`).
 - Gom truy vấn có kiểm soát quyền vào `queries.ts` của feature, không rải Prisma khắp nơi.
 
+## Race condition khi check-rồi-ghi (TOCTOU)
+
+- Khi một action đọc dữ liệu để validate (vd "Holding đã tồn tại chưa", "còn slot mời không") rồi mới ghi, **đọc và ghi phải nằm trong cùng một `$transaction`**. Nếu tách rời, hai request đồng thời có thể cùng đọc thấy trạng thái cũ rồi cùng ghi, vi phạm bất biến (tạo trùng `Holding`, vượt `MAX_MEMBERS`).
+
+```ts
+// ❌ Bad — đọc để check nằm ngoài transaction: hai request đồng thời cùng thấy "chưa tồn tại"
+const existing = await db.holding.findUnique({ where: { userId_symbol_type } });
+const holdingId = await db.$transaction(async (tx) => {
+  const holding = existing ?? (await tx.holding.create({ data: { ... } }));
+  return holding.id;
+});
+
+// ✅ Good — đọc và ghi cùng một transaction
+const holdingId = await db.$transaction(async (tx) => {
+  const existing = await tx.holding.findUnique({ where: { userId_symbol_type } });
+  const holding = existing ?? (await tx.holding.create({ data: { ... } }));
+  return holding.id;
+});
+```
+
+- Với bất biến dựa trên **đếm số lượng** (vd `activeCount < MAX_MEMBERS`), transaction mặc định (Read Committed) không đủ ngăn hai transaction cùng đọc count cũ rồi cùng ghi — dùng `{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable }`.
+- Dù đã bọc transaction, request thua trong đua tranh vẫn có thể gặp lỗi ở tầng DB (vi phạm unique constraint — mã `P2002`, hoặc serialization conflict — mã `P2034`). Đây là **lỗi lường trước được**, không phải bug: catch theo mã lỗi Prisma và trả `ActionResult` yêu cầu thử lại (xem [`error-handling.md`](./error-handling.md#phân-loại-lỗi)), không để throw ra `error.tsx`.
+
+```ts
+// ✅ Good — map race condition ở tầng DB sang ActionResult, không rethrow như bug
+catch (err) {
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    return { ok: false, error: "Có giao dịch trùng đang được xử lý, vui lòng thử lại" };
+  }
+  logger.error({ err }, "createHolding failed");
+  throw err;
+}
+```
+
 ## Prisma client & serialization
 
 - Prisma client **singleton** ở `lib/db.ts` (tránh cạn connection khi hot reload dev).

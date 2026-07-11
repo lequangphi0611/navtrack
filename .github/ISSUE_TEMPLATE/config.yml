@@ -1,0 +1,2 @@
+# Tắt "blank issue" để ép dùng template — giữ issue nhất quán, dễ triage.
+blank_issues_enabled: false

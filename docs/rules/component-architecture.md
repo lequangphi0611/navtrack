@@ -20,6 +20,33 @@ features/holdings/components/Button/     (atom chung mà nhét vào feature)
 components/money-value.tsx               (component kebab, không có thư mục riêng)
 ```
 
+## Page (route file) phải mỏng
+
+- File `page.tsx`/`layout.tsx` chỉ **điều phối**: gọi `queries.ts` lấy data, `auth()` lấy session, rẽ nhánh trạng thái (empty/error/list...), rồi render xuống đúng **một** organism đã tách trong `features/<x>/components/`. Không nhồi JSX nhiều nhánh trạng thái hay nhiều màn hình khác nhau (mockup 2 màn trở lên) trực tiếp vào page.
+- **Không định nghĩa component (kể cả nhỏ, chưa export) ngay trong file `page.tsx`** — kể cả khi chỉ dùng nội bộ một lần. Tách ra `features/<x>/components/ComponentName/` như mọi component khác, vì nó vẫn là component thật (nhận props, tái dùng được), chỉ là đang bị đặt sai chỗ.
+- Dấu hiệu page đã phình quá mức cần tách ngay: **> ~40 dòng**, có **> 1 nhánh trạng thái return JSX riêng**, hoặc **định nghĩa function component cục bộ** trong cùng file.
+
+```tsx
+// ❌ Bad — page nhồi 2 màn hình (empty/list) + 1 component cục bộ, > 100 dòng
+function HoldingList({ holdings }: { holdings: HoldingSummary[] }) { /* ... */ }
+export default async function HoldingsPage() {
+  const { open, closed, totalInvested } = await getHoldingsOverview();
+  if (open.length === 0 && closed.length === 0) {
+    return <div>{/* ...50 dòng JSX màn trống... */}</div>;
+  }
+  return <div>{/* ...50 dòng JSX màn danh sách... */}</div>;
+}
+
+// ✅ Good — page chỉ fetch + rẽ nhánh + delegate, mỗi màn một organism riêng thư mục
+export default async function HoldingsPage() {
+  const { open, closed, totalInvested } = await getHoldingsOverview();
+  if (open.length === 0 && closed.length === 0) {
+    return <HoldingsEmptyState displayName={displayName} />;
+  }
+  return <HoldingsOverviewScreen open={open} closed={closed} totalInvested={totalInvested} />;
+}
+```
+
 ## Server Component & Container/Presentational
 
 - **Mặc định là Server Component.** Chỉ thêm `"use client"` khi cần: tương tác, hook state/effect, browser API.
@@ -151,6 +178,57 @@ export function MoneyValue({ amount, hidden }: Props) { /* ... */ }
 
 - Mỗi vùng Suspense có **`fallback` skeleton riêng** phản ánh đúng hình dạng nội dung; colocate skeleton cạnh component.
 - Trạng thái **empty** là lời mời hành động (vd "Chưa có giao dịch — thêm giao dịch đầu tiên"), không để trống trơn. Trạng thái **error** nói rõ chuyện gì và cách xử lý.
+
+### Quy tắc bắt buộc khi thêm/sửa page (checklist)
+
+Dựng page mới (hoặc thêm data fetching vào page cũ) thì đi qua checklist này — **không được bỏ qua**:
+
+1. **Page có `await` data (query/`auth()` chặn render)?** → route đó **bắt buộc có `loading.tsx`**, trừ khi page đã là sync và mọi vùng data đều nằm trong `Suspense` (khi đó shell tự hiện ngay, `loading.tsx` thừa).
+2. **Page có ≥ 2 query độc lập?** → **không** `await` tuần tự trong page. Page giữ **sync** (shell render ngay), mỗi query tách thành một **async section component** (container, đặt trong `features/<x>/components/`) bọc trong `Suspense` riêng với skeleton riêng. Ví dụ mẫu: `settings/members/page.tsx` (`MemberQuotaSection` + `InvitedMembersSection`).
+3. **Chỉ 1 query quyết định toàn bộ layout** (vd `/holdings` rẽ nhánh trống ↔ danh sách)? → giữ page async + `loading.tsx`; không cần tách Suspense vì không có vùng độc lập.
+
+```tsx
+// ❌ Bad — 2 query độc lập nhưng await tuần tự trong page, không loading.tsx
+export default async function MembersPage() {
+  const status = await getInvitableStatus();
+  const members = await getMembers(); // chờ nhau + user nhìn màn trắng
+  /* ... */
+}
+
+// ✅ Good — page sync, mỗi query một Suspense + skeleton riêng
+export default function MembersPage() {
+  return (
+    <>
+      <PageHeader title="Thành viên" backHref="/holdings" />
+      <Suspense fallback={<MemberQuotaSkeleton />}><MemberQuotaSection /></Suspense>
+      <Suspense fallback={<MemberListSkeleton />}><InvitedMembersSection /></Suspense>
+    </>
+  );
+}
+```
+
+### Quy ước skeleton
+
+- **Naming + vị trí:** `ComponentNameSkeleton.tsx` colocate **cùng thư mục** với component nó mô phỏng, re-export qua `index.ts` (vd `HoldingRow/HoldingRowSkeleton.tsx`, `TransactionForm/TransactionFormSkeleton.tsx`). `loading.tsx` của route **tái dùng** các skeleton này thay vì tự vẽ lại.
+- **Dựng từ atom `Skeleton`** (`components/ui/skeleton.tsx`) — không tự chế `animate-pulse` rời rạc, không spinner.
+- **Khớp hình dạng thật:** cùng khung card/border/padding với component thật, đúng số dòng chữ và vị trí trái/phải — mục tiêu là **không giật layout** khi data thay skeleton. Kích thước ước lượng (`h-3.5 w-24`) là đủ, không cần pixel-perfect.
+- Skeleton là **Server Component thuần** (không `"use client"`), không nhận data — cùng lắm nhận prop `rows` để lặp (vd `MemberListSkeleton`).
+
+```tsx
+// ✅ Good — khớp khung HoldingRow thật (card + avatar + 2 cột chữ)
+function HoldingRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3.5 rounded-2xl border border-border bg-card p-3.5">
+      <Skeleton className="size-10" />
+      {/* ...2 dòng trái + 2 dòng phải như component thật */}
+    </div>
+  );
+}
+
+// ❌ Bad — spinner chung chung / khối xám không cùng hình dạng nội dung
+<div className="flex justify-center"><Spinner /></div>
+<Skeleton className="h-64" /> // một khối to thay cho cả danh sách card
+```
 
 ## Đặc thù Navtrack
 

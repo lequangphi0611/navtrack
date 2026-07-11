@@ -78,6 +78,16 @@ model Setting {
 
 ## Key-value config
 - Cấu hình dạng key-value lưu `value String` + `valueType` (enum) để parse đúng — **không** ép mọi thứ vào Decimal/Int cột riêng.
+- **Key của `Setting`** khai tập trung ở `SETTING_KEYS` (`src/lib/settings.ts`) — mọi chỗ đọc/ghi (`resolveSetting`, `prisma/seed.ts`...) qua constant này, **không** hardcode string key (`"MAX_MEMBERS"`) rải rác; thêm key mới → thêm vào `SETTING_KEYS` trước.
+
+```ts
+// ❌ Bad — string key rải rác, gõ sai không ai bắt được lúc build
+await resolveSetting("MAX_MEMBERS", new Date());
+
+// ✅ Good — một nguồn sự thật, type-safe
+import { resolveSetting, SETTING_KEYS } from "@/lib/settings";
+await resolveSetting(SETTING_KEYS.MAX_MEMBERS, new Date());
+```
 
 ## Migration
 - Mỗi thay đổi schema = **một migration**, tên mô tả (`add_allowed_user_can_invite`). **Không sửa migration đã áp dụng** — tạo migration mới. Commit file migration (xem `data-prisma.md`).

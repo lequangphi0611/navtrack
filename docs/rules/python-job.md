@@ -67,6 +67,6 @@ price = Decimal(str(raw))
 - License `vnstock` bản miễn phí = dùng cá nhân, không thương mại (phù hợp Navtrack).
 
 ## Style
-- **PEP 8**, có **type hints**; format bằng **ruff/black**.
+- **PEP 8**, có **type hints**; lint + format bằng **ruff** (bao gồm `ruff format`, không dùng thêm black).
 - Tên biến/hàm tiếng Anh; comment giải thích "tại sao".
 - Hàm nhỏ, một việc; tách `fetch_*` và `save_*` để test được logic riêng.

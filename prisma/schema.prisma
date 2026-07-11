@@ -1,0 +1,240 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssetType {
+  STOCK
+  FUND
+  BOND
+  GOLD
+}
+
+enum CashflowType {
+  BUY
+  SELL
+}
+
+enum DividendType {
+  CASH
+  STOCK
+}
+
+enum SnapshotSource {
+  AUTO
+  MANUAL
+}
+
+enum SnapshotPeriod {
+  PERIODIC // snapshot định kỳ (tháng/tuần) — lịch nằm trong cron workflow, không phải Setting
+  YEAR_END
+  MANUAL
+  TODAY
+}
+
+enum SettingValueType {
+  DECIMAL
+  INT
+  STRING
+  BOOLEAN
+  DATE
+}
+
+model User {
+  id                   String     @id @default(cuid())
+  email                String     @unique
+  name                 String?
+  // emailVerified + image: field bắt buộc theo adapter model của Auth.js —
+  // PrismaAdapter.createUser luôn ghi chúng khi user đăng nhập Google lần đầu.
+  emailVerified        DateTime?
+  image                String?
+  hideAmountsByDefault Boolean    @default(false) // trạng thái mặc định của chế độ ẩn số tiền trên dashboard
+  holdings             Holding[]
+  snapshots            Snapshot[]
+  accounts             Account[]
+  sessions             Session[]
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+}
+
+// Auth.js (@auth/prisma-adapter) — database sessions để revoke được ngay lập tức
+// (xóa Session khi thu hồi AllowedUser, không cần đợi JWT hết hạn).
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, token])
+}
+
+// Allowlist "chỉ người được mời" — gate ở signIn callback của Auth.js.
+// Soft-delete bằng revokedAt để giữ audit; xóa cứng sẽ mất lịch sử.
+model AllowedUser {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  canInvite Boolean   @default(false) // true = được phép mời người khác (chỉ cấp qua DB)
+  invitedBy String? // email người đã mời (null nếu là admin seed)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  revokedAt DateTime? // null = còn quyền; có giá trị = đã thu hồi
+}
+
+model Holding {
+  id           String        @id @default(cuid())
+  userId       String // mỗi danh mục thuộc về đúng một người dùng
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         AssetType
+  symbol       String // mã CP/quỹ, loại vàng, mã trái phiếu
+  name         String?
+  unit         String // đơn vị số lượng theo loại tài sản — "cổ phần", "chỉ", "lượng", "trái phiếu"...; app phải set tường minh khi tạo Holding, không có default chung cho mọi loại
+  cashflows    Cashflow[]
+  dividends    Dividend[]
+  snapshots    Snapshot[]
+  navOverrides NavOverride[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([userId, symbol, type]) // một vị thế/user cho mỗi (mã, loại) — mua trùng mã tự gộp; cũng phục vụ lookup theo userId (leftmost prefix)
+}
+
+model Cashflow {
+  id           String       @id @default(cuid())
+  holdingId    String
+  holding      Holding      @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  type         CashflowType
+  date         DateTime
+  quantity     Decimal      @db.Decimal(20, 4)
+  pricePerUnit Decimal      @db.Decimal(20, 4)
+  amount       Decimal      @db.Decimal(20, 4) // dấu +/- dùng trực tiếp cho XIRR
+  taxAmount    Decimal      @default(0) @db.Decimal(20, 4)
+  feeAmount    Decimal      @default(0) @db.Decimal(20, 4)
+  note         String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([holdingId, date])
+}
+
+model Dividend {
+  id            String       @id @default(cuid())
+  holdingId     String
+  holding       Holding      @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  type          DividendType
+  date          DateTime
+  grossAmount   Decimal?     @db.Decimal(20, 4) // type = CASH: cổ tức gộp trước thuế
+  taxAmount     Decimal?     @db.Decimal(20, 4) // type = CASH: thuế TNCN tự khấu trừ (~5%)
+  netAmount     Decimal?     @db.Decimal(20, 4) // type = CASH: thực nhận sau thuế = dòng tiền dương cho XIRR
+  stockQuantity Decimal?     @db.Decimal(20, 4) // type = STOCK: cộng thêm số lượng nắm giữ (không phát sinh tiền)
+  note          String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([holdingId, date])
+}
+
+model Snapshot {
+  id        String         @id @default(cuid())
+  userId    String // chủ sở hữu — luôn set, kể cả khi holdingId null (snapshot tổng danh mục), để mọi truy vấn filter được theo user
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  holdingId String? // null = snapshot tổng cả danh mục
+  holding   Holding?       @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  date      DateTime
+  value     Decimal        @db.Decimal(20, 4)
+  source    SnapshotSource
+  period    SnapshotPeriod
+  frozen    Boolean        @default(true) // false chỉ cho period = TODAY (tính động, không lưu thật)
+  createdAt DateTime       @default(now())
+
+  @@index([userId, date])
+  @@index([holdingId, date])
+}
+
+model NavOverride {
+  id        String   @id @default(cuid())
+  holdingId String
+  holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  date      DateTime
+  price     Decimal  @db.Decimal(20, 4)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([holdingId, date])
+}
+
+// Giá tự động (EOD) — job Python ghi, app chỉ đọc. Dùng chung, không theo user.
+model PriceQuote {
+  id        String   @id @default(cuid())
+  symbol    String // mã theo vnstock (cổ phiếu/quỹ)
+  date      DateTime @db.Date // NGÀY (date-only, không phần giờ) — để @@unique đảm bảo 1 giá/mã/ngày
+  price     Decimal  @db.Decimal(20, 4) // VND / cổ phần
+  source    String // nguồn, vd "vnstock"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([symbol, date]) // 1 giá / mã / ngày — đích upsert idempotent của job; cũng phục vụ lookup theo (symbol, date)
+}
+
+// Bảng master cấu hình (thay TaxRule) — gom mọi tham số chính sách: thuế bán theo loại
+// (SALE_TAX_STOCK...), thuế cổ tức (DIVIDEND_TAX_RATE), MAX_MEMBERS, v.v.
+// Effective dating: mỗi key có nhiều dòng theo thời gian; giá trị áp dụng cho
+// một ngày = dòng có effectiveFrom lớn nhất mà <= ngày đó (không dùng effectiveTo).
+model Setting {
+  id            String           @id @default(cuid())
+  key           String // khóa máy, vd "SALE_TAX_STOCK", "DIVIDEND_TAX_RATE"
+  value         String // giá trị dạng chuỗi, parse theo valueType
+  valueType     SettingValueType
+  label         String // mô tả người đọc, vd "Thuế bán cổ phiếu (%)"
+  group         String // gom nhóm (ngữ cảnh cho người sửa DB), vd "TAX", "DISPLAY"
+  unit          String?
+  effectiveFrom DateTime
+  updatedBy     String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([key, effectiveFrom]) // cũng phục vụ lookup theo (key, effectiveFrom)
+}
