@@ -5,9 +5,9 @@ XIRR. Phi thương mại, nhiều user riêng tư. Xem bối cảnh đầy đủ
 [`docs/`](./docs/).
 
 > **Trạng thái hiện tại:** Phase 1 (đăng nhập, tách dữ liệu theo user, nhập vị thế, CRUD giao
-> dịch mua/bán, mời thành viên) đã implement, còn thiếu bước deploy lên Vercel + Neon. **Chưa
-> có định giá thị trường / XIRR / biểu đồ** (thuộc Phase 2+) — xem
-> [`process/PROCESS.md`](./process/PROCESS.md) để biết chi tiết.
+> dịch mua/bán, mời thành viên) đã implement. Cách đưa lên production xem
+> [`docs/05-deploy.md`](./docs/05-deploy.md) (Vercel + Neon). **Chưa có định giá thị trường / XIRR
+> / biểu đồ** (thuộc Phase 2+) — xem [`process/PROCESS.md`](./process/PROCESS.md) để biết chi tiết.
 
 ## Yêu cầu môi trường
 
@@ -70,6 +70,11 @@ pnpm exec playwright install chromium
 
 Test đặt trong [`e2e/`](./e2e/). Xem báo cáo HTML sau khi chạy: `pnpm exec playwright show-report`.
 
+## Deploy lên production
+
+Xem [`docs/05-deploy.md`](./docs/05-deploy.md) — deploy lên Vercel + Neon: connection string
+pooled/direct, biến môi trường, tự áp migration khi deploy, seed admin lần đầu, Google OAuth.
+
 ## Job giá tự động (Python)
 
 `jobs/price-fetcher/` là job Python tách riêng (chạy trên GitHub Actions theo lịch), ghi giá EOD
@@ -98,4 +103,5 @@ e2e/             # test Playwright
 - [`docs/coding-rules.md`](./docs/coding-rules.md) — index coding rules
 - [`docs/domain/README.md`](./docs/domain/README.md) — domain spec (XIRR, cost basis, thuế...)
 - [`docs/04-tech-stack.md`](./docs/04-tech-stack.md) — quyết định tech stack + lý do
+- [`docs/05-deploy.md`](./docs/05-deploy.md) — hướng dẫn deploy lên Vercel + Neon
 - [`process/PROCESS.md`](./process/PROCESS.md) — tiến trình triển khai theo phase
