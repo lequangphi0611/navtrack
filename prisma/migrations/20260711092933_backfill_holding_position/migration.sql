@@ -1,16 +1,14 @@
--- One-off backfill for Holding.quantity / Holding.avgCost (materialized position cache),
--- introduced by migration 20260711081325_add_holding_position_cache.
---
--- Run ONCE per database (local + production) right after applying that migration, to seed
--- pre-existing Holding rows whose new columns defaulted to 0. Idempotent: it recomputes the
--- values from Cashflow, so re-running is safe. From here on the app keeps these columns
--- correct in-transaction (src/features/holdings/actions.ts -> persistPosition), so this
--- script is only needed for rows that existed before the migration.
+-- Data migration: backfill Holding.quantity / Holding.avgCost (materialized position cache)
+-- for rows that existed before 20260711081325_add_holding_position_cache, whose new columns
+-- defaulted to 0. Runs once per database via `migrate deploy` (tracked in _prisma_migrations);
+-- idempotent (recomputes from Cashflow) so re-running by hand is harmless. From here on the
+-- app keeps these columns correct in-transaction (features/holdings/actions.ts ->
+-- persistPosition).
 --
 -- WARNING: this is a hand-written SQL REPLICA of derivePosition() in src/lib/cost-basis.ts
 -- (moving-average cost basis, resetting avg cost to 0 when the position closes exactly at 0).
--- If that logic ever changes, update this file too. See process/DECISION.md for why the
--- position is materialized despite the "derived, not stored" domain note.
+-- This migration is immutable once applied; if that logic changes, add a NEW migration rather
+-- than editing this one. See process/DECISION.md for why the position is materialized.
 
 WITH RECURSIVE ordered AS (
   SELECT
