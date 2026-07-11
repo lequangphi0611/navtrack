@@ -1,6 +1,7 @@
 import { Plus, Wallet } from "lucide-react";
 import Link from "next/link";
 
+import { BottomNav } from "@/components/BottomNav";
 import { buttonVariants } from "@/components/ui/button";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ROUTES } from "@/lib/routes";
@@ -10,10 +11,11 @@ type HoldingsEmptyStateProps = {
   displayName: string;
 };
 
-// Màn 2b (mockup): chưa có vị thế nào — kể cả đã đóng.
+// Màn 2b (mockup): chưa có vị thế nào — kể cả đã đóng. Vẫn là route /holdings
+// (nhánh rỗng) nên giữ BottomNav như HoldingsOverviewScreen (process/UI_phase_2.md).
 function HoldingsEmptyState({ displayName }: HoldingsEmptyStateProps) {
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col p-5 pb-28 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[13px] font-medium text-muted-foreground">
@@ -50,6 +52,8 @@ function HoldingsEmptyState({ displayName }: HoldingsEmptyStateProps) {
           Khai báo vị thế đầu tiên
         </Link>
       </div>
+
+      <BottomNav active="holdings" />
     </div>
   );
 }

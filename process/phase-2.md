@@ -3,6 +3,9 @@
 ## Mục tiêu
 Có định giá thị trường (NAV) và hai chỉ số hiệu quả: **XIRR (theo năm)** + **lãi/lỗ tuyệt đối**. Tích hợp giá tự động từ vnstock.
 
+## UI (đã hiện thực — design-implementer)
+Lớp Presentational của phase này (6 màn 2a–2f + BottomNav dùng chung) đã xong, xem **[`process/UI_phase_2.md`](./UI_phase_2.md)** — Props-contract từng component + query/Server Action còn thiếu (đọc trước khi code phần business bên dưới, khỏi phải hỏi lại design-implementer).
+
 ## Công việc cần làm
 - [ ] Model `PriceQuote` (`symbol`, `date`, `price`, `source`, `@@unique([symbol, date])`) + migration
 - [ ] Job **Python + vnstock** (`jobs/price-fetcher/`) chạy trên GitHub Actions, upsert `PriceQuote`; secrets ở GitHub Secrets

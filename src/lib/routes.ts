@@ -5,6 +5,9 @@ export const ROUTES = {
   // Prefix route handler Auth.js — không phải app route, nhưng vẫn qua đây để
   // proxy.ts (middleware) không hardcode string riêng.
   apiAuth: "/api/auth",
+  // Trang chủ (Tổng quan) — hiện `redirect(ROUTES.holdings)` (Phase 1, xem
+  // src/app/(dashboard)/page.tsx); vẫn khai ở đây để BottomNav không hardcode "/".
+  dashboard: "/",
   holdings: "/holdings",
   holdingsClosed: "/holdings/closed",
   newHolding: "/holdings/new",
