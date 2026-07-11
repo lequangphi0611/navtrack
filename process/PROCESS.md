@@ -6,7 +6,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 
 | Phase | Tên | Trạng thái | Chi tiết |
 |---|---|---|---|
-| 1 | Nền tảng + đăng nhập + nhập vị thế | 🟨 | [phase-1.md](./phase-1.md) |
+| 1 | Nền tảng + đăng nhập + nhập vị thế | ✅ | [phase-1.md](./phase-1.md) |
 | 2 | Lõi XIRR + giá tự động | ⬜ | [phase-2.md](./phase-2.md) |
 | 3 | Snapshot tự động | ⬜ | [phase-3.md](./phase-3.md) |
 | 4 | Cổ tức | ⬜ | [phase-4.md](./phase-4.md) |
@@ -34,3 +34,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-11: Phase 1 — issue #18: đổi `include`→`select` hẹp, tách route `/holdings` ↔ `/holdings/closed` (route group `(overview)`, xóa `HoldingsTabs`) — xem [DECISION.md](./DECISION.md).
 - 2026-07-11: Phase 1 — issue #18: materialize vị thế (`Holding.quantity`/`avgCost`), overview đọc thẳng cache + migration/backfill — xem [DECISION.md](./DECISION.md).
 - 2026-07-11: Phase 1 — issue #12: hết full-page skeleton khi chuyển trang ở 2 route (`transactions/new`, `transactions/[cashflowId]/edit`) — tách section async + `Suspense`, xoá `loading.tsx` cấp route thừa; `settings/members`/`settings/members/invite` giữ nguyên async page + `loading.tsx` riêng sau code review — xem [DECISION.md](./DECISION.md).
+- 2026-07-11: **Phase 1 hoàn thành** — toàn bộ tiêu chí ở [phase-1.md](./phase-1.md) đạt.
