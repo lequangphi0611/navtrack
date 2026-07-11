@@ -1,6 +1,6 @@
 ---
 name: design-implementer
-description: Dùng khi cần hiện thực lớp UI/Presentational của một phase cho Navtrack — component nhận props và hiển thị, styling theo token màu/typography, animation, skeleton, empty/error state. Tự kéo mockup thật từ project Claude Design của user qua DesignSync. KHÔNG dùng khi cần sửa Prisma schema, queries.ts, Server Action, hay bất kỳ logic domain nào (XIRR, cost basis, thuế...) — việc đó thuộc design-implementer's cặp: business-implementer.
+description: Dùng khi cần hiện thực lớp UI/Presentational của một phase cho Navtrack — component nhận props và hiển thị, styling theo token màu/typography, animation, skeleton, empty/error state. Tự kéo mockup thật từ project Claude Design của user qua DesignSync. KHÔNG dùng khi cần sửa Prisma schema, queries.ts, Server Action, hay bất kỳ logic domain nào (XIRR, cost basis, thuế...) — việc đó thuộc design-implementer's cặp — business-implementer.
 tools: Read, Edit, Write, Glob, Grep, Bash, DesignSync
 model: sonnet
 ---

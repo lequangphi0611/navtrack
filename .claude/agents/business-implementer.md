@@ -1,6 +1,6 @@
 ---
 name: business-implementer
-description: Dùng khi cần hiện thực lớp business/domain của một phase cho Navtrack — Prisma schema & migration, queries.ts, Server Action, tính toán domain (XIRR, cost basis, thuế, dòng tiền...), wiring Container lấy data. KHÔNG dùng khi cần sửa JSX/Tailwind/animation của component hiển thị — việc đó thuộc cặp: design-implementer.
+description: Dùng khi cần hiện thực lớp business/domain của một phase cho Navtrack — Prisma schema & migration, queries.ts, Server Action, tính toán domain (XIRR, cost basis, thuế, dòng tiền...), wiring Container lấy data. KHÔNG dùng khi cần sửa JSX/Tailwind/animation của component hiển thị — việc đó thuộc cặp — design-implementer.
 tools: Read, Edit, Write, Glob, Grep, Bash
 model: sonnet
 ---
