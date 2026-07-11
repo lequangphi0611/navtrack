@@ -24,6 +24,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
 - Hiển thị song song: XIRR (theo năm) + lãi/lỗ tuyệt đối trong kỳ
 - Thêm model `PriceQuote` (giá tự động EOD) + job Python ghi qua vnstock; app đọc để định giá
 - Tích hợp `vnstock` cho giá tự động (cổ phiếu, quỹ mở); `NavOverride` cho vàng/trái phiếu nhập tay
+- Áp **cache có chọn lọc** cho `PriceQuote` (dùng chung theo `symbol`, `revalidate` khớp cadence job) — bắt đầu áp dụng chiến lược cache tầng server đã chốt ([`rules/performance.md`](./rules/performance.md)); Phase 1 cố ý chưa cache
 
 ## Phase 3 — Snapshot tự động
 - Thêm model `Snapshot` (hoãn từ Phase 1) + migration

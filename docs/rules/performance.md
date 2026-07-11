@@ -2,32 +2,64 @@
 
 App dùng chủ yếu trên **mobile** (màn hình nhỏ, mạng/CPU yếu hơn desktop). Ưu tiên: **ít JS tải về ban đầu**, **không tính toán lặp lại lãng phí trên client**, **không giật layout**. Không tối ưu sớm khi chưa có dấu hiệu chậm thật — trừ các rule cụ thể bên dưới đã được chốt trước.
 
-## Data fetching — không cache tầng server
+## Data fetching — cache có chọn lọc theo loại dữ liệu
 
-- **Không** dùng `unstable_cache`, `fetch` cache, hay bất kỳ cơ chế cache dữ liệu nào ở tầng server cho `queries.ts` (holdings, giá, snapshot...). Mọi query gọi thẳng Prisma mỗi request.
-- **Lý do:** dữ liệu tài chính (số dư, lãi/lỗ, giá) phải luôn là số **mới nhất** — đã chốt nguyên tắc này khi làm PWA (`04-tech-stack.md`, mục PWA: "không cache số liệu tài chính offline"). Cache tầng server thêm một lớp "có thể stale" phải quản lý (nhớ `revalidateTag` đúng chỗ mỗi mutation) trong khi Neon đủ nhanh cho quy mô dữ liệu hiện tại — độ phức tạp không đáng so với lợi ích.
-- Đây là **tầng khác** với service worker cache đã có: SW chỉ cache **asset tĩnh** (`/_next/static/*`, icon), chưa từng và sẽ không cache response API/RSC. Rule này nói về tầng Next.js Data Cache/Prisma, không mâu thuẫn mà nhất quán với quyết định PWA.
-- **Ngoại lệ được phép:** dùng React `cache()` để **dedupe trong cùng một lượt render** (vd `auth()` hoặc một query bị gọi từ nhiều Server Component con trong cùng cây) — đây không phải cache xuyên request, chỉ tránh gọi DB trùng lặp trong một request, không có rủi ro stale.
+Nguyên tắc: **cache khi không làm số liệu tài chính kém tươi và không rò dữ liệu giữa user**; query thẳng Prisma khi caching chỉ thêm rủi ro stale/phức tạp mà lợi ích không đáng. Không cache cả nắm, cũng không cấm cache cả nắm — quyết theo **bản chất từng loại dữ liệu**. (Bối cảnh + lý do đổi hướng: [`process/DECISION.md`](../../process/DECISION.md), mục 2026-07-11.)
+
+### Bất biến — không được vi phạm ở bất kỳ phase nào
+
+- **Session/quyền truy cập KHÔNG BAO GIỜ cache xuyên request.** Thu hồi quyền phải có hiệu lực **tức thời** (`domain/08`). `getSession = cache(auth)` chỉ dedupe **trong một lượt render** và tự reset mỗi request — tuyệt đối không `unstable_cache`/`'use cache'` cho `auth()`/allowlist.
+- **Cache key phải gồm `userId` cho mọi dữ liệu scoped-theo-user.** Cache key sai/thiếu `userId` = user này thấy số của user khác — đây là lỗi **bảo mật**, không phải hiệu năng. Footgun cụ thể: `unstable_cache` chỉ đưa **tham số của hàm** vào cache key; `userId` đọc từ `auth()` **bên trong** hàm cache thì cache **không thấy** → mọi user chung một entry. Luôn lấy session **ngoài** hàm cache rồi **truyền `userId` vào như tham số**. Dữ liệu dùng chung (vd `PriceQuote` theo `symbol`, không theo user — `domain/04`) thì key theo `symbol`, không cần `userId`.
+
+### Phân loại (áp dụng khi dữ liệu tương ứng xuất hiện ở Phase 2–3)
+
+| Loại dữ liệu | Writer | Đổi khi nào | Chiến lược cache |
+|---|---|---|---|
+| `PriceQuote` (giá EOD — Phase 2) | Job Python (ngoài app) | Theo cadence job (EOD) | Cache theo `symbol`; `revalidate` theo thời gian khớp cadence job. Job ghi thẳng Postgres nên app **không** nhận được `revalidateTag` từ job → dùng time-based `revalidate` (hoặc để job ping một route revalidate tag sau khi ghi). Không kém tươi hơn thực tế vì giá vốn chỉ mới đến lần job chạy gần nhất. |
+| Snapshot **đã đóng băng** (`frozen=true` — Phase 3) | Job/app | **Không bao giờ** (bất biến — `domain/06`) | Cache mạnh, tag theo `userId`+mốc. Chỉ snapshot "live" (chưa đóng băng) mới cần tươi. |
+| Holdings / Cashflows của user | Chính app (mutation của user đó) | Chỉ khi user sửa | Có thể `unstable_cache` (key gồm `userId`) + `revalidateTag` trong Server Action. Writer chính là app nên không stale nếu revalidate đúng chỗ. |
+
+### Hiện trạng Phase 1 & lộ trình
+
+- **Phase 1 hiện chưa cache gì ở tầng server** — mọi `queries.ts` (holdings, cashflows) query thẳng Prisma mỗi request. Đây là **chủ đích cho quy mô Phase 1** (dữ liệu nhỏ, Neon đủ nhanh, cache chỉ thêm rủi ro key-scoping mà lợi ích ~0), **không phải** vì cache bị cấm về nguyên tắc.
+- **Đưa cache vào thực sự hoãn tới Phase 2–3** — khi có `PriceQuote` (đọc nhiều theo `symbol`) và snapshot bất biến (chart đọc dày), cache mới có lý do đo được. Task cụ thể + hiện trạng cần fix: [`process/phase-2.md`](../../process/phase-2.md).
+- **Ngoại lệ đang dùng:** React `cache()` để **dedupe trong cùng một lượt render** (vd `getSession`) — không phải cache xuyên request, không rủi ro stale.
+- **Tầng khác với service worker:** SW chỉ cache **asset tĩnh** (`/_next/static/*`, icon), chưa từng và sẽ không cache response API/RSC/số liệu tài chính (`04-tech-stack.md`, mục PWA). Rule này nói về tầng Next.js Data Cache/Full Route Cache, nhất quán với quyết định PWA.
 
 ```ts
-// ❌ Bad — cache xuyên request cho dữ liệu tài chính, có thể hiện số cũ
-export const getHoldings = unstable_cache(
-  async (userId: string) => db.holding.findMany({ where: { userId } }),
-  ["holdings"],
-  { revalidate: 60 },
-);
+// ❌ Bad — đọc userId TỪ auth() BÊN TRONG hàm cache: unstable_cache không thấy giá trị này,
+//          mọi user chia sẻ chung 1 entry → user A thấy số của user B (lỗ hổng bảo mật)
+export const getHoldings = unstable_cache(async () => {
+  const session = await auth();                          // ⚠️ ngoài tầm nhìn của cache key
+  return db.holding.findMany({ where: { userId: session!.user.id } });
+}, ["holdings"], { revalidate: 60 });
 
-// ✅ Good — query thẳng, luôn tươi
+// ❌ Bad — cache auth/quyền xuyên request → thu hồi quyền không có hiệu lực tức thời
+export const getSessionCached = unstable_cache(auth, ["session"], { revalidate: 300 });
+
+// ✅ Good (Phase 1, mặc định) — query thẳng, luôn tươi; scope userId lấy từ session
 export async function getHoldings() {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
   return db.holding.findMany({ where: { userId: session.user.id } });
+}
+
+// ✅ Good (Phase 2+, nếu cache) — userId là THAM SỐ (được đưa vào cache key), session lấy ngoài
+const getHoldingsCached = unstable_cache(
+  async (userId: string) => db.holding.findMany({ where: { userId } }),
+  ["holdings"],
+  { revalidate: 60, tags: ["holdings"] }, // revalidateTag("holdings") trong action sau mutation
+);
+export async function getHoldings() {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+  return getHoldingsCached(session.user.id); // userId vào key → cách ly đúng giữa user
 }
 
 // ✅ Good — React cache() chỉ dedupe trong 1 request, không phải cache xuyên request
 import { cache } from "react";
 export const getCurrentUserId = cache(async () => {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
   return session.user.id;
 });
