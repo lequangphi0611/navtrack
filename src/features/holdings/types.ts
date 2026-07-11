@@ -31,6 +31,14 @@ export type HoldingsOverview = {
   totalInvested: string;
 };
 
+// Danh sách vị thế gom nhóm theo loại tài sản (mockup 2d cập nhật: card theo AssetType).
+export type HoldingsGroup = {
+  type: HoldingSummary["type"];
+  holdings: HoldingSummary[];
+  // Tổng totalCostBasis của các holding trong nhóm.
+  totalCostBasis: string;
+};
+
 export type CashflowRow = {
   id: string;
   type: "BUY" | "SELL";

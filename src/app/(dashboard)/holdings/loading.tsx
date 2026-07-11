@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { HoldingRowSkeleton } from "@/features/holdings/components/HoldingRow";
+import { HoldingsGroupCardSkeleton } from "@/features/holdings/components/HoldingsGroupCard";
 
 // Khung skeleton khớp layout 2d: header + card tổng vốn + tabs + danh sách vị thế.
 export default function HoldingsLoading() {
@@ -16,10 +16,8 @@ export default function HoldingsLoading() {
       </div>
       <Skeleton className="h-9 w-44 rounded-xl" />
       <div className="flex flex-col gap-2.5">
-        <HoldingRowSkeleton />
-        <HoldingRowSkeleton />
-        <HoldingRowSkeleton />
-        <HoldingRowSkeleton />
+        <HoldingsGroupCardSkeleton />
+        <HoldingsGroupCardSkeleton />
       </div>
     </div>
   );
