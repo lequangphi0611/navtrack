@@ -28,3 +28,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-10: Phase 1 — thêm loading/skeleton, animation, dropdown đơn vị theo loại tài sản; fix schema `User` (AdapterError khi login Google thật) — xem [DECISION.md](./DECISION.md).
 - 2026-07-10: Phase 1 — tách màn Cài đặt/Thành viên thành `/settings`, `/settings/members`, `/settings/members/invite` — xem [DECISION.md](./DECISION.md).
 - 2026-07-10: Phase 1 — route/Setting key qua constants (`ROUTES`, `SETTING_KEYS`); tách nhật ký khỏi quyết định — xem [DECISION.md](./DECISION.md).
+- 2026-07-11: Phase 1 — thêm PWA (manifest, icon, service worker, offline fallback) — xem [DECISION.md](./DECISION.md).

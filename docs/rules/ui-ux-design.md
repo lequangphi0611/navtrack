@@ -81,7 +81,7 @@ Tái dùng trước khi tạo mới trùng lặp. Cấu trúc/pattern (thư mụ
 
 | Molecule | Mô tả |
 |---|---|
-| `Logo` (`LogoMark` + `Logo`) | Mark thương hiệu (gradient hardcode, không qua token — brand cố định không đổi theo theme) + lockup ngang/dọc |
+| `Logo` (`LogoMark` + `Logo`) | Mark thương hiệu (gradient hardcode, không qua token — brand cố định không đổi theo theme) + lockup ngang/dọc. Icon PWA (`public/icons/*.png`, xem [`04-tech-stack.md`](../04-tech-stack.md#pwa-cài-lên-màn-hình-chính)) vẽ lại đúng mark này — đổi màu/hình ở `LogoMark.tsx` thì chạy lại `pnpm icons:generate` để đồng bộ |
 | `MoneyValue` | Hiển thị tiền VND, có cờ `hidden` (ẩn số tuyệt đối, xem quy tắc ẩn tiền ở `component-architecture.md`), toggle icon con mắt tách client leaf riêng (`MoneyValueToggleButton`, không export ra ngoài) |
 | `PercentChange` | Pill %, `variant: "gain-loss"` (xanh/đỏ theo dấu) hoặc `"xirr"` (luôn `primary`, hậu tố "/năm") |
 | `AssetTypeBadge` | Pill tint theo màu asset (nền `asset-*` mờ + chữ màu asset, mockup 2d) + chấm màu; nguồn tạm cho union `AssetType` (thay bằng enum Prisma khi Phase 1 có schema thật) |

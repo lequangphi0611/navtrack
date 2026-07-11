@@ -13,6 +13,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
   - **Luồng lần đầu:** vào thẳng màn chính; khi trống hiện empty state ("Chưa có gì — thêm vị thế đầu tiên") + nút Thêm mã. Form có nút **"Lưu & thêm mã khác"** để nhập liên tiếp nhiều mã. Không có wizard onboarding riêng.
 - **Mã cổ phiếu gõ tự do** ở Phase 1 (chưa fetch giá nên mã chỉ là nhãn; autocomplete từ vnstock để sau).
 - CRUD cơ bản cho giao dịch mua/bán
+- **PWA — cài lên màn hình chính:** manifest (`app/manifest.ts`) + icon (sinh từ `LogoMark`) + service worker viết tay cache tài nguyên tĩnh + trang offline tĩnh. **Không** cache số liệu tài chính (luôn lấy mới từ mạng) — xem chi tiết [`04-tech-stack.md`](./04-tech-stack.md#pwa-cài-lên-màn-hình-chính). Push notification (cảnh báo giá) vẫn ở Backlog.
 - Lưu ý: cuối Phase 1 **chưa có định giá thị trường / XIRR / biểu đồ** (cần vnstock ở Phase 2). Phase 1 chỉ nhập–lưu–xem số lượng + tổng vốn.
 
 > **Đã hoãn:** import CSV/Excel từ Google Sheets — dữ liệu cũ không tách chi tiết từng mã nên không dựng lại lịch sử được, tạm thời nhập tay. Xem Backlog.

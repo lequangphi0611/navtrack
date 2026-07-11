@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#07080b" />
+    <title>Navtrack — Ngoại tuyến</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        background: #07080b;
+        color: #e9ebef;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+        padding: 24px;
+      }
+      .mark {
+        width: 56px;
+        height: 56px;
+        border-radius: 30%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(150deg, #8b9bff, #2fc6ad);
+      }
+      h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+      }
+      p {
+        font-size: 14px;
+        color: #868d9b;
+        margin: 0;
+        max-width: 280px;
+      }
+      button {
+        margin-top: 8px;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #0b0d14;
+        background: #7c8cf8;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mark" aria-hidden="true">
+      <svg width="32" height="32" viewBox="0 0 100 100">
+        <path d="M50 16 L27 82 L50 67 Z" fill="#07080b" fill-opacity="0.92" />
+        <path d="M50 16 L73 82 L50 67 Z" fill="#07080b" fill-opacity="0.6" />
+      </svg>
+    </div>
+    <h1>Bạn đang ngoại tuyến</h1>
+    <p>
+      Navtrack cần kết nối mạng để tải dữ liệu danh mục. Kiểm tra lại kết nối
+      rồi thử lại.
+    </p>
+    <button type="button" onclick="location.reload()">Thử lại</button>
+  </body>
+</html>

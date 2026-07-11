@@ -41,6 +41,7 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 | Biểu đồ | **Recharts** | Khớp liền shadcn/ui (component chart dựng trên Recharts), đủ cho NAV + phân bổ |
 | Tính XIRR | **Lai: thư viện npm + lớp bọc kiểm tra** | Thư viện làm lõi tính; tự bọc validate dấu dòng tiền, bắt ca không hội tụ, gắn nhãn "theo năm" |
 | Import dữ liệu cũ | **CSV + PapaParse** *(đã hoãn)* | Hoãn ở Phase 1: dữ liệu cũ không tách chi tiết từng mã nên nhập tay vị thế ban đầu thay vì import. Giữ lựa chọn này cho khi làm import sau (Backlog) |
+| PWA | **Cài lên màn hình chính (installable), không offline dữ liệu** — Next.js Metadata API (`app/manifest.ts`) + service worker tự viết tay (không dùng `next-pwa`/Serwist) | App cá nhân, dữ liệu tài chính luôn cần mới — không cache số liệu offline để tránh hiện sai. Next 16 + Turbopack còn rủi ro tương thích với plugin SW bên thứ ba nên tự viết service worker tối giản thay vì phụ thuộc thư viện |
 
 ## Ghi chú triển khai
 
@@ -71,6 +72,17 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 - **Chỉ dùng avatar chữ (monogram):** vẽ ô bo tròn màu, chữ là mã cổ phiếu, màu suy ra từ hash của mã. Không cần trường `logoUrl` trong DB, không phụ thuộc nguồn logo ngoài.
 - Lý do: vnstock **không** cung cấp logo đáng tin cho cổ phiếu VN, và không có API logo miễn phí chuẩn cho thị trường VN. Avatar chữ phủ 100% mọi mã, đồng bộ, không vướng bản quyền.
 - Danh sách *mã* (để autocomplete khi thêm cổ phiếu) lấy được từ vnstock (`listing.all_symbols()`), khác với chuyện logo. **Hoãn cùng autocomplete** (Phase 1 gõ tự do): bảng lưu danh sách mã sẽ định nghĩa khi làm tính năng này (Backlog).
+
+### PWA (cài lên màn hình chính)
+- **Phạm vi cố ý tối giản:** chỉ installable shell (manifest + icon) + cache tài nguyên tĩnh (`/_next/static/*`, `/icons/*`, favicon). **Không cache API/HTML render động** — số dư, XIRR, giá luôn phải lấy mới từ mạng, không bao giờ hiện số liệu tài chính cũ khi mất mạng.
+- **Manifest:** `src/app/manifest.ts` (Next.js Metadata file convention, tự sinh route `/manifest.webmanifest` + tự chèn `<link rel="manifest">`) — `background_color`/`theme_color` = `#07080b` khớp token `--background` (dark-only).
+- **Icon:** sinh PNG (192/512 "any" + 512 maskable) từ `scripts/generate-pwa-icons.mjs` bằng `ImageResponse` (`next/og.js`) — vẽ lại đúng mark trong `LogoMark.tsx` (gradient `#8b9bff → #2fc6ad` + 2 tam giác), không dùng ảnh thiết kế rời để tránh lệch khi đổi brand. Maskable thu nhỏ glyph còn ~34% canvas để nằm trong safe-zone hình tròn của Android. Chạy lại `pnpm icons:generate` mỗi khi đổi màu/mark trong `LogoMark.tsx`. Icon PNG (`public/icons/*.png`) **commit vào repo**, không sinh lại lúc build.
+- **Service worker viết tay** (`public/sw.js`, đăng ký qua `ServiceWorkerRegister` — client component mount ở `layout.tsx`, **chỉ đăng ký khi `NODE_ENV=production`** vì `next dev`/Turbopack đổi chunk liên tục, SW cache sẽ phục vụ chunk cũ nếu bật lúc dev):
+  - Cache-first cho asset tĩnh (`/_next/static/*`, `/icons/*`, `favicon.ico`).
+  - Navigation request lỗi mạng → fallback `public/offline.html` (trang tĩnh không qua Next, không cần DB/auth).
+  - Không đụng tới request API/RSC — để mặc định qua mạng.
+  - Đổi `CACHE_VERSION` trong `sw.js` khi thay đổi chiến lược cache tĩnh (activate tự xoá cache cũ).
+- **Không làm ở lần này (Backlog):** cache-first/stale-while-revalidate cho dữ liệu portfolio (xem offline được số liệu gần nhất), Web Push (hạ tầng cho cảnh báo giá).
 
 ## Chi phí
 
