@@ -1,11 +1,11 @@
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { resolveSetting, SETTING_KEYS } from "@/lib/settings";
 
 import type { InvitableStatus, Member } from "./types";
 
 export async function getInvitableStatus(): Promise<InvitableStatus> {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.email) throw new Error("Unauthorized");
 
   const [me, activeCount, maxMembers] = await Promise.all([
@@ -24,7 +24,7 @@ export async function getInvitableStatus(): Promise<InvitableStatus> {
 // Danh sách allowlist là dữ liệu chung của cả nhóm (không tách theo userId) —
 // mọi thành viên đã đăng nhập đều xem được (mockup 2f).
 export async function getMembers(): Promise<Member[]> {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.email) throw new Error("Unauthorized");
 
   const members = await db.allowedUser.findMany({

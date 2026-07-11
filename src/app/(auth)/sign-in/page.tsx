@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Alert } from "@/components/Alert";
 import { LogoMark } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import { auth, signIn } from "@/lib/auth";
+import { getSession, signIn } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 
 type SignInPageProps = {
@@ -37,7 +37,7 @@ function GoogleLogo() {
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   // Đã đăng nhập rồi thì không hiện lại màn sign-in (vd bấm back, hoặc gõ thẳng URL).
-  const session = await auth();
+  const session = await getSession();
   if (session?.user) redirect(ROUTES.holdings);
 
   const { error } = await searchParams;

@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client";
 import type { Cashflow } from "@prisma/client";
 import type { ActionResult } from "@/lib/action-result";
 import { toFieldErrors } from "@/lib/action-result";
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { computeCashflowAmount, derivePosition } from "@/lib/cost-basis";
 import type { CashflowInput } from "@/lib/cost-basis";
 import { db } from "@/lib/db";
@@ -44,7 +44,7 @@ export async function createHolding(
     };
   }
 
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
   const userId = session.user.id;
 
@@ -151,7 +151,7 @@ export async function addTransaction(
     };
   }
 
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
   const userId = session.user.id;
 
@@ -257,7 +257,7 @@ export async function updateTransaction(
     };
   }
 
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
   const userId = session.user.id;
 
@@ -366,7 +366,7 @@ export async function deleteTransaction(
     };
   }
 
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
   const userId = session.user.id;
 
