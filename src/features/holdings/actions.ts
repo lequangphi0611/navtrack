@@ -32,6 +32,23 @@ function toCashflowInput(
   };
 }
 
+// Ghi lại materialized cache vị thế lên Holding từ kết quả derivePosition đã tính sẵn.
+// Gọi trong CÙNG transaction với mọi thay đổi cashflow — giữ cache luôn khớp nguồn sự thật
+// (Cashflow), không bao giờ cập nhật cộng/trừ tay (docs/domain/02-transactions-and-cost-basis.md).
+async function persistPosition(
+  tx: Prisma.TransactionClient,
+  holdingId: string,
+  position: { quantity: Decimal; avgCost: Decimal },
+): Promise<void> {
+  await tx.holding.update({
+    where: { id: holdingId },
+    data: {
+      quantity: position.quantity.toString(),
+      avgCost: position.avgCost.toString(),
+    },
+  });
+}
+
 export async function createHolding(
   input: unknown,
 ): Promise<ActionResult<{ holdingId: string }>> {
@@ -66,7 +83,17 @@ export async function createHolding(
     const result = await db.$transaction(async (tx) => {
       const existing = await tx.holding.findUnique({
         where: { userId_symbol_type: { userId, symbol, type } },
-        include: { cashflows: true },
+        select: {
+          id: true,
+          cashflows: {
+            select: {
+              type: true,
+              date: true,
+              quantity: true,
+              pricePerUnit: true,
+            },
+          },
+        },
       });
 
       const candidate: CashflowInput = {
@@ -113,6 +140,8 @@ export async function createHolding(
           note,
         },
       });
+
+      await persistPosition(tx, holding.id, position);
 
       return { ok: true as const, holdingId: holding.id };
     });
@@ -171,7 +200,17 @@ export async function addTransaction(
       async (tx) => {
         const holding = await tx.holding.findUnique({
           where: { id: holdingId },
-          include: { cashflows: true },
+          select: {
+            userId: true,
+            cashflows: {
+              select: {
+                type: true,
+                date: true,
+                quantity: true,
+                pricePerUnit: true,
+              },
+            },
+          },
         });
         if (!holding || holding.userId !== userId) {
           return { ok: false as const, error: "Không tìm thấy danh mục" };
@@ -216,6 +255,8 @@ export async function addTransaction(
             note,
           },
         });
+
+        await persistPosition(tx, holdingId, position);
 
         return { ok: true as const };
       },
@@ -277,7 +318,23 @@ export async function updateTransaction(
       async (tx) => {
         const cashflow = await tx.cashflow.findUnique({
           where: { id: cashflowId },
-          include: { holding: { include: { cashflows: true } } },
+          select: {
+            holdingId: true,
+            holding: {
+              select: {
+                userId: true,
+                cashflows: {
+                  select: {
+                    id: true,
+                    type: true,
+                    date: true,
+                    quantity: true,
+                    pricePerUnit: true,
+                  },
+                },
+              },
+            },
+          },
         });
         if (!cashflow || cashflow.holding.userId !== userId) {
           return { ok: false as const, error: "Không tìm thấy giao dịch" };
@@ -325,6 +382,8 @@ export async function updateTransaction(
             note,
           },
         });
+
+        await persistPosition(tx, cashflow.holdingId, position);
 
         return { ok: true as const, holdingId: cashflow.holdingId };
       },
@@ -377,7 +436,23 @@ export async function deleteTransaction(
       async (tx) => {
         const cashflow = await tx.cashflow.findUnique({
           where: { id: cashflowId },
-          include: { holding: { include: { cashflows: true } } },
+          select: {
+            holdingId: true,
+            holding: {
+              select: {
+                userId: true,
+                cashflows: {
+                  select: {
+                    id: true,
+                    type: true,
+                    date: true,
+                    quantity: true,
+                    pricePerUnit: true,
+                  },
+                },
+              },
+            },
+          },
         });
         if (!cashflow || cashflow.holding.userId !== userId) {
           return { ok: false as const, error: "Không tìm thấy giao dịch" };
@@ -397,6 +472,8 @@ export async function deleteTransaction(
         }
 
         await tx.cashflow.delete({ where: { id: cashflowId } });
+
+        await persistPosition(tx, cashflow.holdingId, position);
 
         return { ok: true as const, holdingId: cashflow.holdingId };
       },

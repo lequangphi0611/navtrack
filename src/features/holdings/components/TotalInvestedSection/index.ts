@@ -1,0 +1,1 @@
+export { TotalInvestedSection } from "./TotalInvestedSection";

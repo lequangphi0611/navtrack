@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { getSession } from "@/lib/auth";
 import { derivePosition } from "@/lib/cost-basis";
@@ -12,13 +13,28 @@ import type {
   HoldingSummary,
 } from "./types";
 
-export async function getHoldingsOverview(): Promise<HoldingsOverview> {
+// Memo theo request (như getSession) — nhiều Suspense region (StatCard tổng vốn,
+// danh sách vị thế open/closed) gọi độc lập vẫn chỉ tốn 1 DB round-trip/request.
+//
+// Đọc thuần materialized cache (quantity/avgCost) trên Holding — KHÔNG kéo cashflow.
+// Cache được 4 action ghi cashflow recompute-in-transaction nên luôn khớp nguồn sự thật
+// (docs/domain/02-transactions-and-cost-basis.md). Chi phí O(số holding), không phình
+// theo lịch sử giao dịch.
+const getHoldingsRaw = cache(async (): Promise<HoldingsOverview> => {
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
   const holdings = await db.holding.findMany({
     where: { userId: session.user.id },
-    include: { cashflows: true },
+    select: {
+      id: true,
+      symbol: true,
+      name: true,
+      type: true,
+      unit: true,
+      quantity: true,
+      avgCost: true,
+    },
     orderBy: { symbol: "asc" },
   });
 
@@ -27,28 +43,22 @@ export async function getHoldingsOverview(): Promise<HoldingsOverview> {
   let totalInvested = new Decimal(0);
 
   for (const holding of holdings) {
-    const position = derivePosition(
-      holding.cashflows.map((cf) => ({
-        type: cf.type,
-        date: cf.date,
-        quantity: new Decimal(cf.quantity.toString()),
-        pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
-      })),
-    );
+    const quantity = new Decimal(holding.quantity.toString());
+    const avgCost = new Decimal(holding.avgCost.toString());
+    const totalCostBasis = quantity.mul(avgCost);
 
-    const totalCostBasis = position.quantity.mul(position.avgCost);
     const summary: HoldingSummary = {
       id: holding.id,
       symbol: holding.symbol,
       name: holding.name,
       type: holding.type,
       unit: holding.unit,
-      quantity: position.quantity.toString(),
-      avgCost: position.avgCost.toString(),
+      quantity: quantity.toString(),
+      avgCost: avgCost.toString(),
       totalCostBasis: totalCostBasis.toString(),
     };
 
-    if (position.quantity.gt(0)) {
+    if (quantity.gt(0)) {
       open.push(summary);
       totalInvested = totalInvested.plus(totalCostBasis);
     } else {
@@ -57,6 +67,23 @@ export async function getHoldingsOverview(): Promise<HoldingsOverview> {
   }
 
   return { open, closed, totalInvested: totalInvested.toString() };
+});
+
+export async function getOpenHoldings(): Promise<HoldingSummary[]> {
+  return (await getHoldingsRaw()).open;
+}
+
+export async function getClosedHoldings(): Promise<HoldingSummary[]> {
+  return (await getHoldingsRaw()).closed;
+}
+
+export async function getTotalInvested(): Promise<string> {
+  return (await getHoldingsRaw()).totalInvested;
+}
+
+export async function hasAnyHolding(): Promise<boolean> {
+  const { open, closed } = await getHoldingsRaw();
+  return open.length > 0 || closed.length > 0;
 }
 
 export async function getHoldingDetail(

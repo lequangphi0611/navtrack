@@ -1,28 +1,25 @@
-import { Archive, Plus, Wallet } from "lucide-react";
+import { Plus } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
-import { EmptyState } from "@/components/EmptyState";
-import { StatCard } from "@/components/StatCard";
+import { StatCardSkeleton } from "@/components/StatCard";
 import { UserAvatar } from "@/components/UserAvatar";
-import { HoldingsList } from "@/features/holdings/components/HoldingsList";
-import { HoldingsTabs } from "@/features/holdings/components/HoldingsTabs";
+import { HoldingsSegmentedNav } from "@/features/holdings/components/HoldingsSegmentedNav";
+import { TotalInvestedSection } from "@/features/holdings/components/TotalInvestedSection";
 import { ROUTES } from "@/lib/routes";
-
-import type { HoldingSummary } from "../../types";
 
 type HoldingsOverviewScreenProps = {
   displayName: string;
-  open: HoldingSummary[];
-  closed: HoldingSummary[];
-  totalInvested: string;
+  children: React.ReactNode;
 };
 
-// Màn 2d (mockup): tổng vốn + tab Đang mở/Đã đóng + FAB.
+// Shell dùng chung cho /holdings + /holdings/closed (khai báo ở layout.tsx của route
+// group (overview)): header + StatCard tổng vốn (vùng data riêng) + segmented nav
+// (điều hướng route, không phải tab client) + FAB. Danh sách vị thế của route con
+// nào truyền vào qua children, tự lo Suspense/skeleton riêng của nó.
 function HoldingsOverviewScreen({
   displayName,
-  open,
-  closed,
-  totalInvested,
+  children,
 }: HoldingsOverviewScreenProps) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4.5 p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
@@ -35,36 +32,13 @@ function HoldingsOverviewScreen({
         </Link>
       </div>
 
-      <StatCard
-        label="Tổng vốn đã bỏ vào"
-        value={totalInvested}
-        note="Chưa có giá thị trường — lãi/lỗ & XIRR sẽ có ở bản sau."
-      />
+      <Suspense fallback={<StatCardSkeleton />}>
+        <TotalInvestedSection />
+      </Suspense>
 
-      <HoldingsTabs
-        openContent={
-          open.length > 0 ? (
-            <HoldingsList holdings={open} />
-          ) : (
-            <EmptyState
-              icon={Wallet}
-              title="Chưa có vị thế nào đang mở"
-              description="Thêm giao dịch mua để mở lại vị thế."
-            />
-          )
-        }
-        closedContent={
-          closed.length > 0 ? (
-            <HoldingsList holdings={closed} />
-          ) : (
-            <EmptyState
-              icon={Archive}
-              title="Chưa có vị thế nào đã đóng"
-              description="Vị thế đóng khi bạn bán hết số lượng đang giữ."
-            />
-          )
-        }
-      />
+      <HoldingsSegmentedNav />
+
+      {children}
 
       <Link
         href={ROUTES.newHolding}

@@ -6,6 +6,7 @@ export const ROUTES = {
   // proxy.ts (middleware) không hardcode string riêng.
   apiAuth: "/api/auth",
   holdings: "/holdings",
+  holdingsClosed: "/holdings/closed",
   newHolding: "/holdings/new",
   holdingDetail: (holdingId: string) => `/holdings/${holdingId}`,
   newTransaction: (holdingId: string) =>

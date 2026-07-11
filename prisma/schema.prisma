@@ -131,6 +131,11 @@ model Holding {
   symbol       String // mã CP/quỹ, loại vàng, mã trái phiếu
   name         String?
   unit         String // đơn vị số lượng theo loại tài sản — "cổ phần", "chỉ", "lượng", "trái phiếu"...; app phải set tường minh khi tạo Holding, không có default chung cho mọi loại
+  // Materialized cache của vị thế hiện tại — nguồn sự thật vẫn là Cashflow. BẤT BIẾN:
+  // chỉ được ghi bằng derivePosition(toàn bộ cashflow của holding) trong CÙNG transaction
+  // với mọi thay đổi cashflow, không bao giờ cộng/trừ tay (xem docs/domain/02).
+  quantity     Decimal       @default(0) @db.Decimal(20, 4) // số lượng đang giữ hiện tại
+  avgCost      Decimal       @default(0) @db.Decimal(20, 4) // giá vốn bình quân di động hiện tại
   cashflows    Cashflow[]
   dividends    Dividend[]
   snapshots    Snapshot[]
