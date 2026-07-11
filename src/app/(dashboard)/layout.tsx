@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { ROUTES } from "@/lib/routes";
 
 // Không có header chrome riêng — điều hướng nằm trong từng màn (avatar, back)
@@ -10,7 +10,7 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user) redirect(ROUTES.signIn);
 
   return <main className="flex min-h-full flex-1 flex-col">{children}</main>;

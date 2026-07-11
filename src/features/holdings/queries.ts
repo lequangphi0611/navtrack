@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { notFound } from "next/navigation";
 
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { derivePosition } from "@/lib/cost-basis";
 import { db } from "@/lib/db";
 
@@ -13,7 +13,7 @@ import type {
 } from "./types";
 
 export async function getHoldingsOverview(): Promise<HoldingsOverview> {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
   const holdings = await db.holding.findMany({
@@ -62,7 +62,7 @@ export async function getHoldingsOverview(): Promise<HoldingsOverview> {
 export async function getHoldingDetail(
   holdingId: string,
 ): Promise<HoldingDetail> {
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
   const holding = await db.holding.findUnique({

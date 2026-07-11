@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import type { ActionResult } from "@/lib/action-result";
 import { toFieldErrors } from "@/lib/action-result";
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { ROUTES } from "@/lib/routes";
@@ -25,7 +25,7 @@ export async function inviteMember(
     };
   }
 
-  const session = await auth();
+  const session = await getSession();
   if (!session?.user?.email) {
     return { ok: false, error: "Chưa đăng nhập" };
   }
