@@ -14,5 +14,6 @@ Bộ quy tắc coding cho Navtrack, tách theo từng mảng. File này là **ch
 | Package manager, TS config, ESLint/Prettier | [`rules/tooling.md`](./rules/tooling.md) |
 | Test: unit (logic), end-to-end (Playwright) | [`rules/testing.md`](./rules/testing.md) |
 | Xử lý lỗi, phân loại lỗi, ghi log (pino) | [`rules/error-handling.md`](./rules/error-handling.md) |
+| Cache dữ liệu, memoization, code splitting, danh sách dài (ưu tiên mobile) | [`rules/performance.md`](./rules/performance.md) |
 
 Xem thêm: [`04-tech-stack.md`](./04-tech-stack.md) (công nghệ), [`02-data-model.md`](./02-data-model.md) (schema).
