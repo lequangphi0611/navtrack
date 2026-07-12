@@ -23,6 +23,7 @@ Chỉ cần mở khi việc đang làm chạm đúng phần liên quan:
   - `design-implementer` — hiện thực lớp UI/Presentational: component hiển thị, styling theo token, animation, skeleton, empty/error state (kéo mockup thật qua DesignSync).
   - `issuer` — thao tác GitHub issue + tạo PR (`gh issue *`, `gh pr create`); không merge/close PR.
   - `curator` — làm gọn nhật ký `process/PROCESS.md` và rút gọn `process/DECISION.md`.
+  - `planner` — lên kế hoạch triển khai (implementation plan) cho một task, dùng ở Phase 2 (Design) của Plan Mode thay cho Plan agent mặc định; viết dễ hiểu, plan luôn kết thúc bằng verify (`HARNESS.md`) → commit → push → tạo PR qua `issuer`.
 
 ## Tiến trình triển khai
 - **Theo dõi tại [`process/PROCESS.md`](./process/PROCESS.md)** — trỏ tới chi tiết từng phase (`process/phase-x.md`).
