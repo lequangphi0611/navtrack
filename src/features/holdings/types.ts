@@ -1,5 +1,7 @@
 import type { z } from "zod";
 
+import type { XirrResult } from "@/lib/xirr";
+
 import type {
   addTransactionSchema,
   deleteTransactionSchema,
@@ -70,4 +72,8 @@ export type HoldingDetail = {
   avgCost: string;
   totalCostBasis: string;
   cashflows: CashflowRow[];
+  // Giữ nguyên shape business (ok/reason/Decimal) — CHƯA phải biên client
+  // cuối, adapter sang shape UI (status/percentPerYear/number) thuộc task kế
+  // tiếp "Dashboard hiển thị song song XIRR + lãi/lỗ tuyệt đối".
+  xirr: XirrResult;
 };
