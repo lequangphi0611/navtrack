@@ -16,6 +16,7 @@ export const ROUTES = {
     `/holdings/${holdingId}/transactions/new`,
   editTransaction: (holdingId: string, cashflowId: string) =>
     `/holdings/${holdingId}/transactions/${cashflowId}/edit`,
+  navOverrideNew: (holdingId: string) => `/holdings/${holdingId}/price`,
   settings: "/settings",
   members: "/settings/members",
   inviteMember: "/settings/members/invite",

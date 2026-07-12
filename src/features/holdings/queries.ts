@@ -143,3 +143,47 @@ export async function getHoldingDetail(
     cashflows,
   };
 }
+
+// Query hẹp riêng cho màn nhập giá tay (NavOverrideForm) — không kéo cashflows
+// như getHoldingDetail (màn này không cần lịch sử giao dịch), chỉ cần metadata
+// + số lượng/vốn để hiển thị preview NAV.
+export async function getHoldingForPricing(holdingId: string): Promise<{
+  id: string;
+  symbol: string;
+  name: string | null;
+  type: HoldingSummary["type"];
+  unit: string;
+  quantity: string;
+  totalCostBasis: string;
+}> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const holding = await db.holding.findUnique({
+    where: { id: holdingId },
+    select: {
+      userId: true,
+      symbol: true,
+      name: true,
+      type: true,
+      unit: true,
+      quantity: true,
+      avgCost: true,
+    },
+  });
+
+  if (!holding || holding.userId !== session.user.id) notFound();
+
+  const quantity = new Decimal(holding.quantity.toString());
+  const avgCost = new Decimal(holding.avgCost.toString());
+
+  return {
+    id: holdingId,
+    symbol: holding.symbol,
+    name: holding.name,
+    type: holding.type,
+    unit: holding.unit,
+    quantity: quantity.toString(),
+    totalCostBasis: quantity.mul(avgCost).toString(),
+  };
+}

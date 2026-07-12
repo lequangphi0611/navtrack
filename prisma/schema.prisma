@@ -202,12 +202,13 @@ model NavOverride {
   id        String   @id @default(cuid())
   holdingId String
   holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
-  date      DateTime
+  date      DateTime @db.Date // NGÀY (date-only) — nhập từ <input type="date">, khớp PriceQuote.date
   price     Decimal  @db.Decimal(20, 4)
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([holdingId, date]) // 1 giá nhập tay / vị thế / ngày — đích upsert idempotent của saveNavOverride
   @@index([holdingId, date])
 }
 

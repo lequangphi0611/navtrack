@@ -2,6 +2,7 @@
 
 import Decimal from "decimal.js";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { Prisma } from "@prisma/client";
 import type { Cashflow } from "@prisma/client";
@@ -17,9 +18,11 @@ import { ROUTES } from "@/lib/routes";
 import {
   addTransactionSchema,
   deleteTransactionSchema,
+  navOverrideSchema,
   newHoldingSchema,
   updateTransactionSchema,
 } from "./schemas";
+import type { NavOverrideFormState } from "./types";
 
 function toCashflowInput(
   cf: Pick<Cashflow, "type" | "date" | "quantity" | "pricePerUnit">,
@@ -543,4 +546,58 @@ export async function deleteTransaction(
     logger.error({ err, cashflowId }, "deleteTransaction failed");
     throw err;
   }
+}
+
+// Chữ ký khớp useActionState ((prevState, formData) => Promise<State>) — truyền
+// thẳng làm prop `action` cho NavOverrideForm (Presentational, không tự bridge
+// FormData như TransactionForm), giống cách settings/page.tsx truyền onSignOut
+// là hàm "use server" trực tiếp. Cho phép nhập tay mọi AssetType (docs/domain/04
+// -pricing-and-valuation.md: STOCK/FUND vẫn cho sửa tay khi cần, GOLD/BOND chỉ
+// là loại mặc định dùng nhập tay) — không giới hạn cứng theo type ở đây.
+export async function saveNavOverride(
+  _prevState: NavOverrideFormState,
+  formData: FormData,
+): Promise<NavOverrideFormState> {
+  const parsed = navOverrideSchema.safeParse({
+    holdingId: formData.get("holdingId"),
+    price: formData.get("price"),
+    date: formData.get("date"),
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Dữ liệu không hợp lệ",
+      fieldErrors: toFieldErrors(parsed.error),
+    };
+  }
+
+  const session = await getSession();
+  if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
+
+  const { holdingId, price, date } = parsed.data;
+
+  const holding = await db.holding.findUnique({
+    where: { id: holdingId },
+    select: { userId: true },
+  });
+  if (!holding || holding.userId !== session.user.id) {
+    return { ok: false, error: "Không tìm thấy vị thế" };
+  }
+
+  try {
+    // upsert theo unique (holdingId, date) — atomic ở tầng DB, không cần
+    // $transaction/Serializable như các action cashflow: không có bất biến
+    // derive (kiểu derivePosition) cần bảo vệ TOCTOU ở đây.
+    await db.navOverride.upsert({
+      where: { holdingId_date: { holdingId, date } },
+      create: { holdingId, date, price },
+      update: { price },
+    });
+  } catch (err) {
+    logger.error({ err, holdingId }, "saveNavOverride failed");
+    return { ok: false, error: "Không lưu được giá. Thử lại sau ít phút." };
+  }
+
+  revalidatePath(ROUTES.holdingDetail(holdingId));
+  redirect(ROUTES.holdingDetail(holdingId));
 }

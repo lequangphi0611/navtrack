@@ -70,6 +70,12 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - `Fund()` tải toàn bộ listing quỹ khi khởi tạo (1 API call) — cache 1 instance dùng chung trong suốt lần chạy job (`_fund_client()`), tránh gọi lại `listing()` cho mỗi mã FUND fallback.
 - Docs đã sync: `docs/domain/04-pricing-and-valuation.md`, `jobs/price-fetcher/README.md`.
 
+**`NavOverride`: thêm `@@unique([holdingId, date])` + đổi `date` sang `@db.Date`.**
+- Bối cảnh: wiring Server Action `saveNavOverride` (nhập giá tay cho vàng/trái phiếu, có thể mọi loại tài sản) cần "upsert theo (holdingId, date)" — sửa giá cùng ngày phải ghi đè, không tạo dòng trùng. `NavOverride` khi đó **chưa có** unique constraint nào (khác `PriceQuote` đã có `@@unique([symbol, date])` cho đúng mục đích này) → Prisma `upsert` không có `where` hợp lệ để dùng.
+- Quyết định: thêm `@@unique([holdingId, date])`, đồng thời đổi `date DateTime` → `date DateTime @db.Date` — `NavOverride.date` chỉ bao giờ nhận từ `<input type="date">` (không có giờ), giữ nguyên `DateTime` có giờ sẽ khiến 2 lần nhập cùng ngày nhưng khác millisecond/giờ (nếu code sau này parse khác đi) âm thầm né được unique constraint và làm lệch kết quả "dòng mới nhất ≤ D" ở `lib/valuation.ts` (`getLatestNavOverrides`, dùng `distinct: ["holdingId"]`).
+- Migration: `20260712023349_add_nav_override_unique_date_only` (SQL sinh bằng `prisma migrate diff` vì môi trường CLI non-interactive không chạy được `migrate dev` thẳng — verify không có dữ liệu `NavOverride` cũ nên đổi kiểu cột không rủi ro mất dữ liệu).
+- Docs đã sync: `docs/02-data-model.md` (định nghĩa `NavOverride`).
+
 **Bỏ retry loop thủ công trong `fetch_price` — `Quote.history()` (VCI) đã tự retry nội bộ qua tenacity.**
 - Bối cảnh: code review phát hiện `fetch_price()` tự viết retry loop (3 lần, backoff 2/4/8s) bọc ngoài `Quote.history()`, trong khi `Quote.history()` của vnstock đã tự retry 3 lần nội bộ (`Config.RETRIES=3`, tenacity `wait_exponential`, xem `vnstock/api/quote.py`). 1 mã lỗi có thể tốn tới 9 lần gọi HTTP thật — không tôn trọng rate limit.
 - Quyết định: bỏ hẳn retry loop tay viết; `_fetch_price_vci`/`_fetch_price_fmarket` chỉ `try/except` bắt exception cuối cùng (sau khi tenacity đã tự retry hết ở phía VCI) rồi trả `None`, không raise ra ngoài — vẫn đúng rule "cô lập lỗi" (`docs/rules/python-job.md`), chỉ bỏ phần tự retry dư thừa.

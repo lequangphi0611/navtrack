@@ -11,10 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type NavOverrideFormState =
-  | { ok: true }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> }
-  | null;
+import type { NavOverrideFormState } from "../../types";
 
 // docs/domain/04-pricing-and-valuation.md: STOCK/FUND định giá tự động (vẫn cho
 // sửa tay), BOND/GOLD mặc định nhập tay (nguồn tự động kém ổn định/chưa hỗ trợ).

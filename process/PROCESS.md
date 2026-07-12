@@ -35,3 +35,5 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-11: Phase 1 — issue #18: materialize vị thế (`Holding.quantity`/`avgCost`), overview đọc thẳng cache + migration/backfill — xem [DECISION.md](./DECISION.md).
 - 2026-07-11: Phase 1 — issue #12: hết full-page skeleton khi chuyển trang ở 2 route (`transactions/new`, `transactions/[cashflowId]/edit`) — tách section async + `Suspense`, xoá `loading.tsx` cấp route thừa; `settings/members`/`settings/members/invite` giữ nguyên async page + `loading.tsx` riêng sau code review — xem [DECISION.md](./DECISION.md).
 - 2026-07-11: **Phase 1 hoàn thành** — toàn bộ tiêu chí ở [phase-1.md](./phase-1.md) đạt.
+- 2026-07-12: Phase 2 — `lib/valuation.ts`: định giá `Holding` tại ngày D (ưu tiên `NavOverride` → `PriceQuote` gần nhất ≤ D, batched tránh N+1, "thiếu giá" không mặc định 0); chưa wiring vào query/UI (chờ `lib/xirr.ts`).
+- 2026-07-12: Phase 2 — `NavOverride` nhập tay: Server Action `saveNavOverride` + route `/holdings/[id]/price`, migration thêm `@@unique([holdingId, date])`/`@db.Date` — xem [DECISION.md](./DECISION.md).

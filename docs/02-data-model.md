@@ -179,12 +179,13 @@ model NavOverride {
   id        String   @id @default(cuid())
   holdingId String
   holding   Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
-  date      DateTime
+  date      DateTime @db.Date // NGÀY (date-only) — nhập từ <input type="date">, khớp PriceQuote.date
   price     Decimal  @db.Decimal(20, 4)
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([holdingId, date]) // 1 giá nhập tay / vị thế / ngày — đích upsert idempotent của saveNavOverride
   @@index([holdingId, date])
 }
 
@@ -243,7 +244,7 @@ model Setting {
 - **`Dividend`** tách khỏi `Cashflow` vì cổ tức cổ phiếu không phải dòng tiền — chỉ tăng `stockQuantity` nắm giữ, không ảnh hưởng XIRR trực tiếp (chỉ ảnh hưởng gián tiếp qua NAV tăng do số lượng tăng).
 - **Cổ tức tiền mặt tự khấu trừ thuế:** khi ghi cổ tức tiền mặt, app tự trừ thuế TNCN (~5% ở VN) → lưu `grossAmount`, `taxAmount`, `netAmount`. **Dòng tiền dương đưa vào XIRR là `netAmount` (số thực nhận sau thuế)**. Cổ tức bằng cổ phiếu chỉ tăng số lượng, thuế xử lý khi bán (để sau).
 - **`Snapshot.holdingId = null`** dùng cho snapshot tổng danh mục (tổng NAV mọi tài sản tại 1 mốc) — cần cho biểu đồ NAV theo thời gian ở mục 03-roadmap.
-- **`NavOverride`** tách bảng riêng thay vì 1 field `nav_override` trên `Holding`, vì giá override có thể thay đổi theo từng ngày (không chỉ 1 giá cố định) — quan trọng với vàng/trái phiếu nhập tay thường xuyên.
+- **`NavOverride`** tách bảng riêng thay vì 1 field `nav_override` trên `Holding`, vì giá override có thể thay đổi theo từng ngày (không chỉ 1 giá cố định) — quan trọng với vàng/trái phiếu nhập tay thường xuyên. `date` là **`@db.Date`** (không có giờ, khớp `PriceQuote.date`) và có **`@@unique([holdingId, date])`** — 1 giá nhập tay/vị thế/ngày, làm đích `upsert` idempotent cho Server Action `saveNavOverride` (sửa giá cùng ngày ghi đè, không tạo dòng trùng). Xem `process/DECISION.md` (2026-07-12).
 - **`PriceQuote` (giá tự động):** job Python ghi giá EOD từ vnstock vào đây, app **chỉ đọc**. Là bảng **dùng chung theo `symbol`** (không theo user, không gắn `Holding`) — nhiều user giữ cùng mã chia sẻ một giá. Định giá một `Holding` tại ngày D: ưu tiên `NavOverride` (nhập tay), nếu không có thì tra `PriceQuote` của mã đó (giá có `date` gần nhất ≤ D — cho ngày nghỉ/lễ). `@@unique([symbol, date])` là đích upsert idempotent của job. `symbol` ở đây là mã vnstock; nếu sau này cần phân biệt trùng mã khác loại, thêm cột thị trường/loại.
 - **`Setting` (bảng master cấu hình):** thay `TaxRule`, gom mọi tham số chính sách chỉnh được mà không sửa code. Thuế bán để theo key mỗi loại (`SALE_TAX_STOCK`, `SALE_TAX_FUND`, `SALE_TAX_BOND`, `SALE_TAX_GOLD`), thuế cổ tức `DIVIDEND_TAX_RATE`.
   - **Effective dating:** mỗi `key` có thể có nhiều dòng theo thời gian. **Giá trị áp dụng cho một ngày** = dòng cùng `key` có `effectiveFrom` lớn nhất mà `<= ngày` cần tra (không dùng `effectiveTo` để tránh lỗi chồng lấn khoảng). Nhờ vậy, nhập giao dịch lùi ngày vẫn áp đúng thuế suất của thời điểm đó.
