@@ -1,7 +1,25 @@
 import Decimal from "decimal.js";
 import { unstable_cache } from "next/cache";
 
+import type { AssetType } from "@/components/AssetTypeBadge";
 import { db } from "@/lib/db";
+
+// AssetType nào có nguồn giá TỰ ĐỘNG (vnstock, ghi vào PriceQuote) —
+// docs/domain/04-pricing-and-valuation.md: "STOCK/FUND định giá tự động (vẫn
+// cho sửa tay), BOND/GOLD mặc định nhập tay (nguồn tự động kém ổn định/chưa
+// hỗ trợ)". Nguồn sự thật DUY NHẤT cho quy tắc này, dùng ở cả
+// NavOverrideForm (badge "Tự động" mờ đi khi không hỗ trợ) và
+// missingPriceReasonLabel (portfolio-valuation.ts, chọn câu "chưa có giá tự
+// động" vs "chưa có giá nhập tay") — trước đây 2 nơi hard-code độc lập, dễ
+// lệch khi thêm loại tài sản mới (code review #9).
+//
+// ĐỒNG BỘ THỦ CÔNG với jobs/price-fetcher/main.py (Python, không import được
+// type/const này) — sửa danh sách ở đây thì nhớ soát lại `WHERE type IN
+// (...)` trong file đó.
+export const AUTO_PRICED_ASSET_TYPES: ReadonlySet<AssetType> = new Set([
+  "STOCK",
+  "FUND",
+]);
 
 // Nguồn giá — docs/domain/04-pricing-and-valuation.md: luôn là "tự động"
 // (vnstock, PriceQuote) hoặc "nhập tay" (NavOverride). Nguồn sự thật cho type

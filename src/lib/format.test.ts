@@ -5,6 +5,7 @@ import {
   formatDayMonth,
   formatMoney,
   formatQuantity,
+  formatSignedPercent,
 } from "./format";
 
 describe("formatMoney", () => {
@@ -46,5 +47,29 @@ describe("formatDate", () => {
 describe("formatDayMonth", () => {
   test("format dd/MM theo giờ Asia/Ho_Chi_Minh, không kèm năm", () => {
     expect(formatDayMonth(new Date("2026-07-09T00:00:00.000Z"))).toBe("09/07");
+  });
+});
+
+describe("formatSignedPercent", () => {
+  test("số dương -> dấu +", () => {
+    expect(formatSignedPercent(12.34)).toBe("+12,3%");
+  });
+
+  test("số âm -> dấu − (KHÔNG phải dấu trừ ASCII thường)", () => {
+    expect(formatSignedPercent(-4.5)).toBe("−4,5%");
+  });
+
+  test("bằng 0 -> không có dấu +/−", () => {
+    expect(formatSignedPercent(0)).toBe("0,0%");
+  });
+
+  test("luôn giữ đúng 1 chữ số thập phân dù input là số nguyên", () => {
+    expect(formatSignedPercent(8)).toBe("+8,0%");
+  });
+
+  test("suffix tuỳ chọn (vd '/năm' cho XIRR)", () => {
+    expect(formatSignedPercent(-0.9991 * 100, { suffix: "/năm" })).toBe(
+      "−99,9%/năm",
+    );
   });
 });

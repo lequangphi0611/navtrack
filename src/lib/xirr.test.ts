@@ -74,6 +74,50 @@ describe("computeXirr — ca biên: chuỗi dòng tiền không hợp lệ", () 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("NO_POSITIVE_FLOW");
   });
+
+  test("amount=0 KHÔNG đánh dấu isNavPoint (vd một dòng cashflow/dividend thật = 0, không thực tế nhưng để kiểm tra hasValidSigns không tự nới lỏng ngoài case NAV) -> vẫn NO_POSITIVE_FLOW", () => {
+    const result = computeXirr([
+      { date: new Date("2023-01-01"), amount: new Decimal(-100) },
+      { date: new Date("2023-06-01"), amount: new Decimal(0) },
+    ]);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("NO_POSITIVE_FLOW");
+  });
+});
+
+describe("computeXirr — ca biên: NAV=0 hợp lệ (mất trắng) khác thiếu dòng tiền dương", () => {
+  test("NAV=0 hợp lệ (isNavPoint:true, vị thế đang mở, có định giá thật) -> XIRR = -100% (-1), KHÔNG phải NO_POSITIVE_FLOW", () => {
+    // Quyết định sản phẩm: khi holding còn mở và currentNav là Decimal(0) HỢP
+    // LỆ (không phải null/thiếu giá), XIRR phải khớp hành vi gốc thư viện
+    // "xirr" (maxAmount === 0 -> -1), tức "mất trắng" -100%/năm.
+    const result = computeXirr([
+      { date: new Date("2023-01-01"), amount: new Decimal(-100_000_000) },
+      {
+        date: new Date("2024-01-01"),
+        amount: new Decimal(0),
+        isNavPoint: true,
+      },
+    ]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.annualizedRate.toFixed(4)).toBe("-1.0000");
+  });
+
+  test("NAV=0 hợp lệ nhưng có nhiều dòng mua (âm) khác nhau -> vẫn -100%, không throw/không NO_CONVERGE", () => {
+    const result = computeXirr([
+      { date: new Date("2023-01-01"), amount: new Decimal(-50_000_000) },
+      { date: new Date("2023-06-01"), amount: new Decimal(-30_000_000) },
+      {
+        date: new Date("2024-01-01"),
+        amount: new Decimal(0),
+        isNavPoint: true,
+      },
+    ]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.annualizedRate.toFixed(4)).toBe("-1.0000");
+  });
 });
 
 describe("computeXirr — ca biên: không hội tụ", () => {

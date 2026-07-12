@@ -30,7 +30,15 @@ export function buildXirrCashflows(input: XirrCashflowInput): CashflowPoint[] {
   // chưa có giá thị trường -> 'Chưa tính được XIRR'" mà không cần rẽ nhánh
   // riêng ở đây.
   if (input.isOpenPosition && input.currentNav !== null) {
-    points.push({ date: input.cutoffDate, amount: input.currentNav });
+    // isNavPoint: true — đánh dấu để hasValidSigns() (lib/xirr.ts) phân biệt
+    // NAV=0 HỢP LỆ (mất trắng, currentNav là Decimal(0) thật, không phải
+    // MISSING_PRICE) với ca thiếu dòng tiền dương thực sự. Xem comment
+    // hasValidSigns.
+    points.push({
+      date: input.cutoffDate,
+      amount: input.currentNav,
+      isNavPoint: true,
+    });
   }
 
   return points;

@@ -18,7 +18,7 @@ import {
   MissingPriceList,
   type MissingPriceHolding,
 } from "@/features/dashboard/components/MissingPriceList";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatSignedPercent } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
 
 type DashboardScreenProps = {
@@ -47,15 +47,6 @@ type DashboardScreenProps = {
   missingPriceHoldings: MissingPriceHolding[];
   hidden?: boolean;
 };
-
-function formatSignedPercentLabel(value: number): string {
-  const magnitude = new Intl.NumberFormat("vi-VN", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(Math.abs(value));
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${sign}${magnitude}%`;
-}
 
 // Organism Phase 2 cho "/" (Dashboard NAV + XIRR, mockup 2a) — cũng tái dùng cho
 // biến thể "không tính được XIRR" (2f) khi missingPriceHoldings không rỗng, thay
@@ -135,7 +126,7 @@ function DashboardScreen({
             <ArrowUp className="size-4 text-gain" />
             <span className="font-mono text-sm font-semibold text-gain tabular-nums">
               {formatMoney(navDeltaAmount, { hidden })} (
-              {formatSignedPercentLabel(navDeltaPercent)})
+              {formatSignedPercent(navDeltaPercent)})
             </span>
             <span className="text-xs text-muted-faint">
               so với vốn đã bỏ vào

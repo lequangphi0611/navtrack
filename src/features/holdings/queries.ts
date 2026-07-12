@@ -5,6 +5,7 @@ import { cache } from "react";
 import { getSession } from "@/lib/auth";
 import { derivePosition } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
+import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
 import { valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
@@ -116,16 +117,20 @@ async function getCashDividends(
   }));
 }
 
-// cutoffDate mặc định "hôm nay" khi caller không truyền — mốc chọn được
-// (hôm nay/cuối tháng/cuối năm/tùy chỉnh) do resolveCutoffDate (lib/cutoff.ts)
-// resolve; nơi lưu lựa chọn của user (query param/Settings) là việc của
-// wiring UI, chưa thuộc phạm vi ở đây.
+// cutoffDate: khi caller không truyền tường minh, tự đọc mốc chốt user đã
+// chọn qua cookie (getCutoffSelection() — cùng cách Dashboard/Settings dùng),
+// KHÔNG hard-code "TODAY" nữa (code review #4: 3 nơi gọi hàm này — trang chi
+// tiết vị thế, form thêm/sửa giao dịch — đều không truyền, nên trước đây luôn
+// lệch khỏi mốc chốt user đang xem ở Dashboard/Settings).
 export async function getHoldingDetail(
   holdingId: string,
-  cutoffDate: Date = resolveCutoffDate({ key: "TODAY" }),
+  cutoffDate?: Date,
 ): Promise<HoldingDetail> {
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const resolvedCutoffDate =
+    cutoffDate ?? resolveCutoffDate(await getCutoffSelection());
 
   const holding = await db.holding.findUnique({
     where: { id: holdingId },
@@ -142,16 +147,9 @@ export async function getHoldingDetail(
   // Không tồn tại hoặc không thuộc user hiện tại: xử lý giống nhau, không lộ thông tin tồn tại.
   if (!holding || holding.userId !== session.user.id) notFound();
 
-  const position = derivePosition(
-    holding.cashflows.map((cf) => ({
-      type: cf.type,
-      date: cf.date,
-      quantity: new Decimal(cf.quantity.toString()),
-      pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
-    })),
-  );
-
   // Lịch sử giao dịch hiển thị mới nhất trước — đảo ngược mảng đã fetch theo thứ tự tăng dần.
+  // (Toàn bộ lịch sử, KHÔNG lọc theo cutoff — timeline hiển thị luôn đầy đủ,
+  // chỉ input XIRR/vị thế-tại-cutoff bên dưới mới cần lọc.)
   const cashflows: CashflowRow[] = [...holding.cashflows]
     .reverse()
     .map((cf) => ({
@@ -166,23 +164,41 @@ export async function getHoldingDetail(
       note: cf.note,
     }));
 
-  // Input XIRR: lọc cashflows đã fetch theo cutoffDate riêng cho XIRR (giữ
-  // nguyên mảng `cashflows` phía trên đầy đủ lịch sử cho timeline hiển thị) —
-  // không round-trip DB thứ hai cho Cashflow.
-  const cashflowsForXirr = holding.cashflows
-    .filter((cf) => cf.date.getTime() <= cutoffDate.getTime())
-    .map((cf) => ({
+  // Cashflow TÍNH TỚI cutoffDate — dùng cho cả position-tại-cutoff lẫn XIRR,
+  // hai input này PHẢI cùng phạm vi thời gian (code review #5: trước đây
+  // `position` tính từ TOÀN BỘ lịch sử trong khi `cashflowsForXirr` đã lọc,
+  // tự mâu thuẫn nội bộ — vd holding vừa đóng SAU cutoff vẫn báo isOpenPosition
+  // sai). Không round-trip DB thứ hai — lọc lại trên `holding.cashflows` đã
+  // fetch.
+  const cashflowsUpToCutoff = holding.cashflows.filter(
+    (cf) => cf.date.getTime() <= resolvedCutoffDate.getTime(),
+  );
+
+  // Vị thế TẠI THỜI ĐIỂM cutoff — KHÁC Holding.quantity/avgCost cache (luôn
+  // là snapshot HIỆN TẠI, không đổi theo cutoff, dùng cho các nơi khác như
+  // TotalInvestedSection). Dùng để valuate/xác định isOpenPosition đúng thời
+  // điểm đang xem, nhất quán với cashflowsForXirr/dividends bên dưới.
+  const position = derivePosition(
+    cashflowsUpToCutoff.map((cf) => ({
+      type: cf.type,
       date: cf.date,
-      amount: new Decimal(cf.amount.toString()),
-    }));
+      quantity: new Decimal(cf.quantity.toString()),
+      pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
+    })),
+  );
+
+  const cashflowsForXirr = cashflowsUpToCutoff.map((cf) => ({
+    date: cf.date,
+    amount: new Decimal(cf.amount.toString()),
+  }));
 
   const isOpenPosition = !position.quantity.isZero();
 
   const [dividends, valuations] = await Promise.all([
-    getCashDividends(holding.id, cutoffDate),
+    getCashDividends(holding.id, resolvedCutoffDate),
     valuateHoldings(
       [{ id: holding.id, symbol: holding.symbol, quantity: position.quantity }],
-      cutoffDate,
+      resolvedCutoffDate,
     ),
   ]);
 
@@ -194,7 +210,7 @@ export async function getHoldingDetail(
       cashflows: cashflowsForXirr,
       dividends,
       isOpenPosition,
-      cutoffDate,
+      cutoffDate: resolvedCutoffDate,
       currentNav,
     }),
   );

@@ -7,7 +7,6 @@ import type { MissingPriceHolding } from "@/features/dashboard/components/Missin
 import {
   getClosedHoldings,
   getOpenHoldings,
-  getTotalInvested,
 } from "@/features/holdings/queries";
 import type { HoldingSummary } from "@/features/holdings/types";
 import { getSession } from "@/lib/auth";
@@ -20,7 +19,7 @@ import { db } from "@/lib/db";
 import { formatDate, formatDayMonth } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
 import type { HoldingValuation } from "@/lib/valuation";
-import { valuateHoldings } from "@/lib/valuation";
+import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
 import { buildXirrCashflows } from "@/lib/xirr-cashflow";
 
@@ -63,10 +62,9 @@ function isValued(
 // thiếu giá nghĩa là chưa ai nhập NavOverride.
 function missingPriceReasonLabel(type: AssetType): string {
   const label = ASSET_TYPE_LABEL[type];
-  const suffix =
-    type === "STOCK" || type === "FUND"
-      ? "chưa có giá tự động"
-      : "chưa có giá nhập tay";
+  const suffix = AUTO_PRICED_ASSET_TYPES.has(type)
+    ? "chưa có giá tự động"
+    : "chưa có giá nhập tay";
   return `${label} · ${suffix}`;
 }
 
@@ -138,11 +136,17 @@ function buildAllocation(
   }));
 }
 
-// Ghi chú độ tươi của giá (mockup 2a): mốc PriceQuote tự động mới nhất trong
-// các mã đang mở + số mã đang dùng giá nhập tay (NavOverride) tại mốc chốt.
+// Ghi chú độ tươi của giá (mockup 2a): mốc PriceQuote tự động mới nhất <=
+// cutoffDate trong các mã đang mở + số mã đang dùng giá nhập tay (NavOverride)
+// tại mốc chốt. Lọc theo cutoffDate để nhất quán với mọi lookup giá khác
+// trong file này (valuateHoldings/getLatestPriceQuotes/getLatestNavOverrides)
+// — thiếu filter này khiến ghi chú "cập nhật EOD ..." hiện ngày mới hơn cả
+// mốc chốt đang xem (vd đang xem "cuối tháng trước" nhưng ghi chú lại nói
+// giá cập nhật hôm nay).
 async function getPriceFreshnessNote(
   open: HoldingSummary[],
   valuations: Map<string, HoldingValuation>,
+  cutoffDate: Date,
 ): Promise<string> {
   if (open.length === 0) return "";
 
@@ -152,7 +156,7 @@ async function getPriceFreshnessNote(
 
   const symbols = [...new Set(open.map((h) => h.symbol))];
   const latestQuote = await db.priceQuote.findFirst({
-    where: { symbol: { in: symbols } },
+    where: { symbol: { in: symbols }, date: { lte: cutoffDate } },
     orderBy: { date: "desc" },
     select: { date: true },
   });
@@ -182,14 +186,32 @@ function toUiXirr(result: ReturnType<typeof computeXirr>): XirrResultUi {
   return { status: result.reason };
 }
 
-// NAV toàn danh mục + XIRR (theo năm) + lãi/lỗ tuyệt đối + phân bổ theo loại +
-// danh sách mã thiếu giá, tại một mốc chốt (mặc định "hôm nay" —
-// docs/domain/05-returns-xirr-and-pnl.md "Mốc chốt chọn được"). Dùng chung cho
-// Dashboard (2a/2f) và preview XIRR từng mốc ở Settings (2e) —
-// process/UI_phase_2.md.
-export async function getPortfolioValuation(
-  selection: CutoffSelection = { key: "TODAY" },
-): Promise<PortfolioValuation> {
+// Phần lõi dùng chung giữa getPortfolioValuation() (đầy đủ, cho Dashboard) và
+// getXirrForCutoff() (nhẹ, chỉ cần XIRR — cho preview 3 mốc ở Settings,
+// getCutoffOptions()) — valuateHoldings + cashflow/dividend + XIRR + lãi/lỗ +
+// tổng vốn ròng LUÔN cần tính bất kể caller nào, chỉ allocation/missingPrice/
+// priceFreshnessNote là phần "đắt" riêng của Dashboard nên tách ra ngoài hàm
+// này (process/DECISION.md — tránh gọi dư 3 lần valuateHoldings+allocation+
+// priceFreshnessNote không cần thiết khi Settings chỉ đọc .xirr).
+type XirrAndPnlCore = {
+  cutoffDate: Date;
+  open: HoldingSummary[];
+  allHoldings: HoldingSummary[];
+  valuations: Map<string, HoldingValuation>;
+  navSum: Decimal;
+  xirr: ReturnType<typeof computeXirr>;
+  absolutePnl: Decimal;
+  // Tổng vốn ròng đã bỏ vào TÍNH TỚI cutoffDate, cho TẤT CẢ holding (mở lẫn
+  // đóng) — docs/domain/05 "Cách tính": Σ tiền ra (mua) − Σ tiền vào đã rút
+  // (bán + cổ tức) trước mốc. CỐ Ý không dùng getTotalInvested() (chỉ tính
+  // vốn của holding đang mở theo HÔM NAY, không theo cutoff — sai denominator
+  // cho navDeltaPercent khi cutoff khác "hôm nay", xem code review #2).
+  totalInvested: Decimal;
+};
+
+async function computeXirrAndPnlCore(
+  selection: CutoffSelection,
+): Promise<XirrAndPnlCore> {
   const cutoffDate = resolveCutoffDate(selection);
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
@@ -204,20 +226,18 @@ export async function getPortfolioValuation(
   const allHoldings = [...open, ...closed];
   const holdingIds = allHoldings.map((h) => h.id);
 
-  const [valuations, cashflows, dividends, totalInvestedRaw] =
-    await Promise.all([
-      valuateHoldings(
-        allHoldings.map((h) => ({
-          id: h.id,
-          symbol: h.symbol,
-          quantity: new Decimal(h.quantity),
-        })),
-        cutoffDate,
-      ),
-      getAllCashflowsForXirr(holdingIds, cutoffDate),
-      getAllCashDividendsForXirr(holdingIds, cutoffDate),
-      getTotalInvested(),
-    ]);
+  const [valuations, cashflows, dividends] = await Promise.all([
+    valuateHoldings(
+      allHoldings.map((h) => ({
+        id: h.id,
+        symbol: h.symbol,
+        quantity: new Decimal(h.quantity),
+      })),
+      cutoffDate,
+    ),
+    getAllCashflowsForXirr(holdingIds, cutoffDate),
+    getAllCashDividendsForXirr(holdingIds, cutoffDate),
+  ]);
 
   const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
   const navSum = validNavs.reduce((sum, nav) => sum.plus(nav), new Decimal(0));
@@ -245,6 +265,52 @@ export async function getPortfolioValuation(
     new Decimal(0),
   );
 
+  // Tổng vốn ròng = -(Σ Cashflow.amount + Σ Dividend.netAmount) trước cutoff,
+  // KHÔNG gồm điểm NAV giả định (points ở trên có thể có, nhưng cashflows/
+  // dividends thì không) — tương đương đại số với "Σ tiền ra (mua) − Σ tiền
+  // vào đã rút (bán + cổ tức)" vì BUY âm/SELL+Dividend dương theo quy ước
+  // (docs/domain/02-transactions-and-cost-basis.md).
+  const cashflowSum = cashflows.reduce(
+    (sum, cf) => sum.plus(cf.amount),
+    new Decimal(0),
+  );
+  const dividendSum = dividends.reduce(
+    (sum, d) => sum.plus(d.netAmount),
+    new Decimal(0),
+  );
+  const totalInvested = cashflowSum.plus(dividendSum).negated();
+
+  return {
+    cutoffDate,
+    open,
+    allHoldings,
+    valuations,
+    navSum,
+    xirr,
+    absolutePnl,
+    totalInvested,
+  };
+}
+
+// NAV toàn danh mục + XIRR (theo năm) + lãi/lỗ tuyệt đối + phân bổ theo loại +
+// danh sách mã thiếu giá, tại một mốc chốt (mặc định "hôm nay" —
+// docs/domain/05-returns-xirr-and-pnl.md "Mốc chốt chọn được"). Dùng cho
+// Dashboard (2a/2f) — process/UI_phase_2.md. Preview XIRR từng mốc ở Settings
+// (2e) dùng getXirrForCutoff() (nhẹ hơn) thay vì hàm này.
+export async function getPortfolioValuation(
+  selection: CutoffSelection = { key: "TODAY" },
+): Promise<PortfolioValuation> {
+  const {
+    cutoffDate,
+    open,
+    allHoldings,
+    valuations,
+    navSum,
+    xirr,
+    absolutePnl,
+    totalInvested,
+  } = await computeXirrAndPnlCore(selection);
+
   const missingPriceHoldings: MissingPriceHolding[] = open
     .filter((h) => valuations.get(h.id)?.status === "MISSING_PRICE")
     .map((h) => ({
@@ -257,13 +323,16 @@ export async function getPortfolioValuation(
     }));
 
   const navValueIsPartial = missingPriceHoldings.length > 0;
-  const totalInvested = new Decimal(totalInvestedRaw);
   const navDeltaPercent = totalInvested.isZero()
     ? 0
     : absolutePnl.div(totalInvested).mul(100).toNumber();
 
   const allocation = buildAllocation(allHoldings, valuations, navSum);
-  const priceFreshnessNote = await getPriceFreshnessNote(open, valuations);
+  const priceFreshnessNote = await getPriceFreshnessNote(
+    open,
+    valuations,
+    cutoffDate,
+  );
 
   return {
     cutoffLabel: CUTOFF_LABELS[selection.key],
@@ -280,4 +349,17 @@ export async function getPortfolioValuation(
     priceFreshnessNote,
     missingPriceHoldings,
   };
+}
+
+// XIRR tại một mốc chốt — bản NHẸ của getPortfolioValuation(), chỉ tính phần
+// cần cho XIRR (không valuate riêng allocation, không đếm missingPriceHoldings,
+// không query priceFreshnessNote) — dùng cho getCutoffOptions() (Settings,
+// preview XIRR của cả 3 mốc TODAY/END_OF_MONTH/END_OF_YEAR cùng lúc, code
+// review #3: gọi getPortfolioValuation() đầy đủ 3 lần trước đây dư 3 query
+// priceFreshnessNote + 3 lần buildAllocation không dùng tới).
+export async function getXirrForCutoff(
+  selection: CutoffSelection,
+): Promise<XirrResultUi> {
+  const { xirr } = await computeXirrAndPnlCore(selection);
+  return toUiXirr(xirr);
 }

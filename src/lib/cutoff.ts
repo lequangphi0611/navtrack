@@ -24,22 +24,63 @@ export const CUTOFF_LABELS: Record<CutoffKey | "CUSTOM", string> = {
   CUSTOM: "Tuỳ chỉnh",
 };
 
-// Cuối ngày theo local time (23:59:59.999) — Cashflow.date là DateTime (không
-// phải @db.Date), có thể mang giờ khác 0h tùy form nhập, nên cutoff phải chốt
-// ở cuối ngày để không bỏ sót dòng tiền phát sinh cùng ngày với mốc chốt.
+// "Hôm nay"/"cuối tháng"/"cuối năm" PHẢI neo theo giờ Việt Nam (Asia/Ho_Chi_Minh,
+// UTC+7, không có DST) — khớp DATE_FORMATTER ở lib/format.ts. new Date() +
+// getFullYear()/getMonth()/getDate()/setHours() đọc theo giờ LOCAL của máy chạy
+// code (UTC trên Vercel), sai lệch ngày khi giờ UTC rơi vào khung 17:00–23:59
+// (tức 00:00–06:59 ICT của NGÀY HÔM SAU) — đây chính là bug đã sửa ở đây.
+const ICT_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const ICT_OFFSET_HOURS = 7; // UTC+7 cố định, Việt Nam không có DST.
+
+const ICT_DATE_PARTS_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: ICT_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+// Thành phần năm/tháng (0-index, khớp Date.getMonth())/ngày của một instant,
+// CHIẾU theo giờ ICT — dùng Intl.DateTimeFormat (không phải getFullYear() v.v.
+// trên chính Date đó) để không phụ thuộc timezone của máy chạy code.
+function getIctDateParts(date: Date): {
+  year: number;
+  month: number;
+  day: number;
+} {
+  const parts = ICT_DATE_PARTS_FORMATTER.formatToParts(date);
+  const value = (type: "year" | "month" | "day"): number =>
+    Number(parts.find((p) => p.type === type)?.value);
+  return { year: value("year"), month: value("month") - 1, day: value("day") };
+}
+
+// Dựng Date instant ứng với 23:59:59.999 GIỜ ICT của đúng ngày dương lịch
+// (year/month/day, đã tính theo ICT) — quy đổi sang UTC bằng offset cố định
+// (23h ICT − 7h = 16h UTC cùng ngày). Kết quả vẫn là một instant tuyệt đối
+// bình thường, so sánh/lte với Prisma hoạt động đúng như trước.
+function endOfDayFromIctParts(year: number, month: number, day: number): Date {
+  return new Date(
+    Date.UTC(year, month, day, 23 - ICT_OFFSET_HOURS, 59, 59, 999),
+  );
+}
+
 function endOfDay(date: Date): Date {
-  const result = new Date(date);
-  result.setHours(23, 59, 59, 999);
-  return result;
+  const { year, month, day } = getIctDateParts(date);
+  return endOfDayFromIctParts(year, month, day);
 }
 
 function endOfMonth(now: Date): Date {
-  // Ngày 0 của tháng sau = ngày cuối cùng của tháng hiện tại (Date tự tràn).
-  return endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  const { year, month } = getIctDateParts(now);
+  // Ngày 0 của tháng sau (UTC, thuần lấy số ngày trong tháng) = ngày cuối cùng
+  // của tháng hiện tại (Date tự tràn) — year/month ở đây đã là year/month
+  // ĐÚNG theo ICT của `now`, chỉ dùng Date.UTC để tính "tháng có bao nhiêu
+  // ngày", không liên quan gì tới việc quy đổi timezone của endOfDayFromIctParts.
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return endOfDayFromIctParts(year, month, lastDay);
 }
 
 function endOfYear(now: Date): Date {
-  return endOfDay(new Date(now.getFullYear(), 11, 31));
+  const { year } = getIctDateParts(now);
+  return endOfDayFromIctParts(year, 11, 31);
 }
 
 // Resolve một lựa chọn mốc chốt thành Date cụ thể. `now` cho phép truyền vào

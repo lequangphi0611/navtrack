@@ -9,6 +9,15 @@ import xirr from "xirr";
 export type CashflowPoint = {
   date: Date;
   amount: Decimal;
+  // true CHỈ khi điểm này là dòng tiền GIẢ ĐỊNH = NAV tại mốc chốt mà
+  // buildXirrCashflows (xirr-cashflow.ts) ghép cho vị thế đang mở — không
+  // phải Cashflow/Dividend thật. Cho phép hasValidSigns() phân biệt "NAV=0
+  // HỢP LỆ" (vị thế mở, có định giá thật, chỉ là mất trắng) với "thiếu dòng
+  // tiền dương" thực sự (chưa có giá nào cả) — hai ca dẫn tới XirrResult khác
+  // nhau dù cùng "không có dòng tiền dương nào >0" (docs/domain/05 + quyết
+  // định sản phẩm: NAV=0 hợp lệ -> XIRR = -100%, khớp hành vi gốc thư viện
+  // "xirr" khi maxAmount === 0, KHÔNG phải NO_POSITIVE_FLOW).
+  isNavPoint?: boolean;
 };
 
 // Khớp nguyên văn ví dụ trong docs/rules/error-handling.md — "không tính
@@ -57,16 +66,31 @@ const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 const DAYS_PER_YEAR = 365;
 
 // docs/domain/05: "XIRR cần ít nhất một dòng tiền âm và một dòng tiền dương
-// mới tính được". isNegative()/isPositive() loại trừ 0 ở cả 2 phía, nên
-// chuỗi chỉ có [âm, 0] hay [dương, 0] cũng rơi vào NO_POSITIVE_FLOW — đúng ý
-// nghĩa "0 không tính là dương". Điều này cũng loại bỏ trước ca thư viện
-// xirr() trả về -1 không throw khi amount lớn nhất trong chuỗi = 0: vì ta đã
-// yêu cầu có ít nhất 1 dòng THỰC SỰ dương trước khi gọi thư viện, amount lớn
-// nhất truyền vào nó luôn > 0.
+// mới tính được". Dùng .lt(0)/.gt(0) (KHÔNG phải Decimal.isNegative()/
+// isPositive() — hai hàm đó dựa trên `this.s` (dấu nội bộ), và decimal.js
+// coi Decimal(0) có dấu DƯƠNG (`new Decimal(0).s === 1`), nên
+// isPositive() trả về TRUE cho 0! Đã xác nhận bằng thực nghiệm — dùng
+// isPositive()/isNegative() ở đây sẽ vô tình coi MỌI dòng tiền amount=0 (kể
+// cả dòng KHÔNG PHẢI NAV giả định) là "dòng dương", sai với đúng ý nghĩa "0
+// không tính là dương" mà comment gốc của hàm này từng nói nhưng thực ra
+// không đúng khi implement bằng isPositive()). .lt(0)/.gt(0) loại trừ 0 ở cả
+// 2 phía đúng nghĩa.
+//
+// Ngoại lệ CÓ CHỦ ĐÍCH DUY NHẤT cho amount=0: nếu đó là điểm NAV giả định
+// (isNavPoint — buildXirrCashflows ghép cho vị thế ĐANG MỞ có định giá THẬT,
+// không phải thiếu giá) thì coi là đủ điều kiện tính, để lọt xuống
+// tryLibraryXirr() — thư viện "xirr" tự trả về -1 (không throw) khi amount
+// lớn nhất trong chuỗi = 0, đúng nghĩa "mất trắng" (-100%). Case thiếu giá
+// thật (currentNav === null) thì buildXirrCashflows KHÔNG ghép điểm nào cả
+// (không có isNavPoint), nên vẫn rơi đúng vào NO_POSITIVE_FLOW như cũ —
+// không đổi hành vi ca đó.
 function hasValidSigns(points: CashflowPoint[]): boolean {
-  const hasNegative = points.some((p) => p.amount.isNegative());
-  const hasPositive = points.some((p) => p.amount.isPositive());
-  return hasNegative && hasPositive;
+  const hasNegative = points.some((p) => p.amount.lt(0));
+  const hasPositive = points.some((p) => p.amount.gt(0));
+  if (hasNegative && hasPositive) return true;
+
+  const hasValidZeroNav = points.some((p) => p.isNavPoint && p.amount.isZero());
+  return hasNegative && hasValidZeroNav;
 }
 
 // Thử thư viện xirr() (Newton-Raphson) với guess mặc định rồi lần lượt các
