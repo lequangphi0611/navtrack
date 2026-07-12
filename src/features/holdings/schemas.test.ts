@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   addTransactionSchema,
   deleteTransactionSchema,
+  navOverrideSchema,
   newHoldingSchema,
   updateTransactionSchema,
 } from "./schemas";
@@ -187,5 +188,56 @@ describe("deleteTransactionSchema", () => {
     expect(
       deleteTransactionSchema.safeParse({ cashflowId: "cf-1" }).success,
     ).toBe(true);
+  });
+});
+
+describe("navOverrideSchema", () => {
+  test("input hợp lệ được chấp nhận", () => {
+    const result = navOverrideSchema.safeParse({
+      holdingId: "holding-1",
+      price: "7720000",
+      date: "2026-07-11",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("thiếu holdingId bị từ chối", () => {
+    expect(
+      navOverrideSchema.safeParse({
+        holdingId: "",
+        price: "7720000",
+        date: "2026-07-11",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("price = 0 bị từ chối (phải > 0)", () => {
+    expect(
+      navOverrideSchema.safeParse({
+        holdingId: "holding-1",
+        price: "0",
+        date: "2026-07-11",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("price âm bị từ chối", () => {
+    expect(
+      navOverrideSchema.safeParse({
+        holdingId: "holding-1",
+        price: "-100",
+        date: "2026-07-11",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("date không hợp lệ bị từ chối", () => {
+    expect(
+      navOverrideSchema.safeParse({
+        holdingId: "holding-1",
+        price: "7720000",
+        date: "not-a-date",
+      }).success,
+    ).toBe(false);
   });
 });

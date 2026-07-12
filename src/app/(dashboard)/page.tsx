@@ -1,8 +1,19 @@
-import { redirect } from "next/navigation";
+import { DashboardScreen } from "@/features/dashboard/components/DashboardScreen";
+import { getSession } from "@/lib/auth";
+import { getCutoffSelection } from "@/lib/cutoff-cookie";
+import { getPortfolioValuation } from "@/lib/portfolio-valuation";
 
-import { ROUTES } from "@/lib/routes";
+// "/" — Dashboard tổng quan (mockup 2a/2f). Đúng 1 query quyết định toàn bộ
+// layout (component-architecture.md checklist #3) nên page giữ async đơn
+// giản, không tách Suspense nội bộ (giống pattern holdings/[id]/page.tsx).
+export default async function DashboardHomePage() {
+  const selection = await getCutoffSelection();
+  const [session, valuation] = await Promise.all([
+    getSession(),
+    getPortfolioValuation(selection),
+  ]);
 
-// Phase 1 chưa có dashboard tổng quan riêng — trang chủ chính là Danh mục (mockup 2b/2d).
-export default function DashboardHomePage() {
-  redirect(ROUTES.holdings);
+  return (
+    <DashboardScreen displayName={session?.user?.name ?? ""} {...valuation} />
+  );
 }

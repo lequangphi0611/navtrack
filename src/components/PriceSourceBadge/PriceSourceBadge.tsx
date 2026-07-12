@@ -2,10 +2,7 @@ import { Pencil, Zap } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-
-// Khớp docs/domain/04-pricing-and-valuation.md: nguồn giá luôn là "tự động"
-// (vnstock, PriceQuote) hoặc "nhập tay" (NavOverride) — UI phải ghi rõ nguồn.
-type PriceSource = "AUTO" | "MANUAL";
+import type { PriceSource } from "@/lib/valuation";
 
 type PriceSourceBadgeProps = {
   source: PriceSource;

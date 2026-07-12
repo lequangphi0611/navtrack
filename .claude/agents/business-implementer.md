@@ -43,5 +43,6 @@ Bạn là agent chuyên trách **lớp Container/business logic** của Navtrack
 2. Đối chiếu domain spec để đảm bảo đúng công thức/quy tắc/ca biên (đặc biệt XIRR, cost basis, thuế — dễ sai).
 3. Viết migration, `queries.ts`, Server Action theo `ActionResult` contract, luôn tách theo `userId`.
 4. Wiring Container (`page.tsx`) trỏ props vào đúng component Presentational đã có — không tự vẽ thêm JSX.
-5. Unit test cho logic domain (đối chiếu Google Sheets nếu là XIRR).
-6. Kết thúc bằng danh sách file đã tạo/sửa + shape dữ liệu trả về của từng query/action mới (để design-implementer đối chiếu).
+5. Unit test cho logic domain mới/sửa (đối chiếu Google Sheets nếu là XIRR) — chỉ chạy đúng (các) file test liên quan để tự kiểm tra, không chạy lint/typecheck toàn dự án hay e2e.
+6. Dừng lại ở đó — **không** tự chạy verify toàn diện theo `HARNESS.md` (lint/typecheck toàn dự án, e2e suite). Việc đó thuộc về agent `verifier`, chạy độc lập ở bước sau.
+7. Kết thúc bằng danh sách file đã tạo/sửa + shape dữ liệu trả về của từng query/action mới (để design-implementer đối chiếu).

@@ -1,6 +1,6 @@
 import { Ban } from "lucide-react";
 
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatSignedPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Kết quả XIRR — union tường minh khớp docs/domain/05-returns-xirr-and-pnl.md:
@@ -26,17 +26,6 @@ type ReturnMetricsProps = {
 function signColorClass(value: number): string {
   if (value === 0) return "text-foreground";
   return value > 0 ? "text-gain" : "text-destructive";
-}
-
-// Trùng cách format ở PercentChange (TODO(format) chung đã ghi ở đó) — giữ nhất
-// quán 1 chữ số thập phân, dấu +/− tường minh.
-function formatSignedPercent(value: number): string {
-  const magnitude = new Intl.NumberFormat("vi-VN", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(Math.abs(value));
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${sign}${magnitude}%`;
 }
 
 // Cặp thẻ XIRR (theo năm) + Lãi/lỗ tuyệt đối, luôn hiển thị song song (bất biến

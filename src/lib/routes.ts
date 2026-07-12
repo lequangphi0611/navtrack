@@ -5,8 +5,7 @@ export const ROUTES = {
   // Prefix route handler Auth.js — không phải app route, nhưng vẫn qua đây để
   // proxy.ts (middleware) không hardcode string riêng.
   apiAuth: "/api/auth",
-  // Trang chủ (Tổng quan) — hiện `redirect(ROUTES.holdings)` (Phase 1, xem
-  // src/app/(dashboard)/page.tsx); vẫn khai ở đây để BottomNav không hardcode "/".
+  // Trang chủ (Tổng quan/Dashboard) — src/app/(dashboard)/page.tsx.
   dashboard: "/",
   holdings: "/holdings",
   holdingsClosed: "/holdings/closed",
@@ -16,7 +15,12 @@ export const ROUTES = {
     `/holdings/${holdingId}/transactions/new`,
   editTransaction: (holdingId: string, cashflowId: string) =>
     `/holdings/${holdingId}/transactions/${cashflowId}/edit`,
+  navOverrideNew: (holdingId: string) => `/holdings/${holdingId}/price`,
   settings: "/settings",
   members: "/settings/members",
   inviteMember: "/settings/members/invite",
+  // Route handler ghi cookie mốc chốt rồi redirect về /settings — xem
+  // src/app/api/cutoff/route.ts. Chỉ nhận 3 key cố định (CUSTOM chưa wiring).
+  cutoffAction: (key: "TODAY" | "END_OF_MONTH" | "END_OF_YEAR") =>
+    `/api/cutoff?key=${key}`,
 } as const;

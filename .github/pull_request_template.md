@@ -22,7 +22,7 @@
 - [ ] `pnpm lint` pass
 - [ ] `pnpm test` (unit) pass
 - [ ] `pnpm build` pass
-- [ ] `pnpm e2e` pass (nếu đổi luồng có test e2e)
+- [ ] `pnpm e2e` pass (luôn chạy — đảm bảo thay đổi không phá vỡ luồng chính, kể cả PR không có vẻ đụng UI)
 - [ ] Tự tay chạy thử luồng chính trong app (không chỉ tin vào test) — mô tả ngắn đã thử gì:
 
 ## Ảnh chụp màn hình

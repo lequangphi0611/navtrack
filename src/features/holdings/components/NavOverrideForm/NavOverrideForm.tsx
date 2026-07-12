@@ -1,5 +1,6 @@
 "use client";
 
+import Decimal from "decimal.js";
 import { CalendarDays, History, Info, Pencil, Zap } from "lucide-react";
 import { useActionState, useState } from "react";
 
@@ -8,22 +9,11 @@ import type { AssetType } from "@/components/AssetTypeBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/PageHeader";
-import { formatMoney, formatQuantity } from "@/lib/format";
+import { formatMoney, formatQuantity, formatSignedPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { AUTO_PRICED_ASSET_TYPES } from "@/lib/valuation";
 
-type NavOverrideFormState =
-  | { ok: true }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> }
-  | null;
-
-// docs/domain/04-pricing-and-valuation.md: STOCK/FUND định giá tự động (vẫn cho
-// sửa tay), BOND/GOLD mặc định nhập tay (nguồn tự động kém ổn định/chưa hỗ trợ).
-const AUTO_SUPPORTED: Record<AssetType, boolean> = {
-  STOCK: true,
-  FUND: true,
-  BOND: false,
-  GOLD: false,
-};
+import type { NavOverrideFormState } from "../../types";
 
 type NavOverrideFormProps = {
   holdingId: string;
@@ -54,11 +44,28 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function toPreviewAmount(quantity: string, price: string): number {
-  const q = Number(quantity);
-  const p = Number(price);
-  if (!Number.isFinite(q) || !Number.isFinite(p) || q <= 0 || p <= 0) return 0;
-  return q * p;
+// Parse lenient — input "price" gõ tay có thể rỗng/dở dang ("", "-", "1.")
+// trong lúc user đang gõ; new Decimal() throw trên chuỗi không hợp lệ (khác
+// Number() trả NaN êm), nên phải try/catch thay vì để lỗi văng ra ngoài React
+// render. Tiền luôn Decimal, không float (CLAUDE.md) — kể cả preview.
+function parseDecimalOrNull(value: string): Decimal | null {
+  if (value.trim() === "") return null;
+  try {
+    const decimal = new Decimal(value);
+    return decimal.isFinite() ? decimal : null;
+  } catch {
+    return null;
+  }
+}
+
+// null khi chưa nhập đủ/không hợp lệ (số lượng hoặc giá <= 0) — khác 0 hợp lệ
+// thật, giữ đúng ngữ nghĩa "chưa xem trước được" như bản Number() cũ (previewNav
+// > 0 là điều kiện hiện preview) mà không mượn 0 làm giá trị sentinel.
+function toPreviewNav(quantity: string, price: string): Decimal | null {
+  const q = parseDecimalOrNull(quantity);
+  const p = parseDecimalOrNull(price);
+  if (!q || !p || q.lte(0) || p.lte(0)) return null;
+  return q.mul(p);
 }
 
 // Form nhập giá tay (NavOverride) — mockup 2d. Chỉ là component, KHÔNG có route
@@ -78,16 +85,16 @@ function NavOverrideForm({
   action,
 }: NavOverrideFormProps) {
   const [price, setPrice] = useState("");
-  const autoSupported = AUTO_SUPPORTED[assetType];
+  const autoSupported = AUTO_PRICED_ASSET_TYPES.has(assetType);
   const [state, formAction, isPending] = useActionState(action, null);
 
-  const previewNav = toPreviewAmount(quantity, price);
-  const previewCostBasis = Number(totalCostBasis);
-  const previewPnl = previewNav > 0 ? previewNav - previewCostBasis : 0;
+  const previewNav = toPreviewNav(quantity, price);
+  const previewCostBasis = new Decimal(totalCostBasis);
+  const previewPnl = previewNav ? previewNav.minus(previewCostBasis) : null;
   const previewPnlPercent =
-    previewNav > 0 && previewCostBasis > 0
-      ? (previewPnl / previewCostBasis) * 100
-      : 0;
+    previewPnl && previewCostBasis.gt(0)
+      ? previewPnl.div(previewCostBasis).mul(100)
+      : null;
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
@@ -181,7 +188,7 @@ function NavOverrideForm({
           <div className="flex items-center justify-between border-t border-white/5 py-1.5">
             <span className="text-[12.5px] text-muted-faint">NAV mới</span>
             <span className="font-mono text-[13.5px] font-semibold text-foreground tabular-nums">
-              {previewNav > 0 ? formatMoney(String(previewNav)) : "—"}
+              {previewNav ? formatMoney(previewNav.toString()) : "—"}
             </span>
           </div>
           <div className="flex items-center justify-between border-t border-white/5 py-1.5">
@@ -191,11 +198,13 @@ function NavOverrideForm({
             <span
               className={cn(
                 "font-mono text-[13.5px] font-semibold tabular-nums",
-                previewPnl >= 0 ? "text-gain" : "text-destructive",
+                !previewPnl || previewPnl.gte(0)
+                  ? "text-gain"
+                  : "text-destructive",
               )}
             >
-              {previewNav > 0
-                ? `${previewPnl >= 0 ? "+" : "−"}${formatMoney(String(Math.abs(previewPnl)))} (${previewPnl >= 0 ? "+" : "−"}${Math.abs(previewPnlPercent).toFixed(1)}%)`
+              {previewPnl
+                ? `${previewPnl.gte(0) ? "+" : "−"}${formatMoney(previewPnl.abs().toString())} (${formatSignedPercent((previewPnlPercent ?? new Decimal(0)).toNumber())})`
                 : "—"}
             </span>
           </div>

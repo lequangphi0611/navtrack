@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { type AssetType, AssetTypeBadge } from "@/components/AssetTypeBadge";
@@ -78,6 +78,17 @@ function HoldingDetailScreen({
             {holding.name}
           </span>
         ) : null}
+        <span className="flex-1" />
+        <Link
+          href={ROUTES.navOverrideNew(holding.id)}
+          className={cn(
+            buttonVariants({ size: "sm", variant: "outline" }),
+            "gap-1 font-semibold",
+          )}
+        >
+          <Pencil className="size-3.5" />
+          Nhập giá tay
+        </Link>
       </div>
 
       {valuation ? (
