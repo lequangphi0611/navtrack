@@ -68,3 +68,9 @@ export const updateTransactionSchema = z.object({
 export const deleteTransactionSchema = z.object({
   cashflowId: z.string().min(1, "Thiếu giao dịch"),
 });
+
+export const navOverrideSchema = z.object({
+  holdingId: z.string().min(1, "Thiếu vị thế"),
+  price: positiveDecimal("Giá phải lớn hơn 0"),
+  date: z.coerce.date({ error: "Ngày không hợp lệ" }),
+});

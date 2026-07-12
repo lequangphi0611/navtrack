@@ -1,5 +1,6 @@
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 
+import { formatSignedPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type PercentChangeProps = {
@@ -18,14 +19,9 @@ function PercentChange({
   const isNegative = value < 0;
   const Icon = isZero ? Minus : isNegative ? TrendingDown : TrendingUp;
 
-  // TODO(format): chuyển sang lib/format.ts formatPercent() khi helper chung được tạo
-  // (xem docs/rules/component-architecture.md#format-locale).
-  const magnitude = new Intl.NumberFormat("vi-VN", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(Math.abs(value));
-  const sign = value > 0 ? "+" : isNegative ? "−" : "";
-  const label = `${sign}${magnitude}%${variant === "xirr" ? "/năm" : ""}`;
+  const label = formatSignedPercent(value, {
+    suffix: variant === "xirr" ? "/năm" : "",
+  });
 
   const colorClass =
     variant === "xirr"

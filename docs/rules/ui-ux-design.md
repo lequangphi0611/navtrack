@@ -20,7 +20,7 @@ Quy tắc giao diện cho Navtrack: theme màu, typography, icon, và kho atoms/
 | Bề mặt | `background`, `card`, `card-elevated`, `muted`, `border`/`input` | Nền, thẻ, thẻ nổi (popover), viền |
 | Chữ | `foreground`, `foreground-soft`, `muted-foreground`, `muted-faint` | 4 mức độ tương phản, từ chữ chính tới chữ mờ nhất |
 | Thương hiệu | `primary` (indigo), `accent` (teal), `secondary` (`#242938` — nút Secondary/IconButton nền/SegmentedControl track) | Màu thương hiệu, không phải ngữ nghĩa lãi/lỗ |
-| Ngữ nghĩa | `gain` (lãi ▲, xanh), `destructive` (dùng chung cho **loss**/lỗ ▼, đỏ) | **Không có token `loss` riêng** — mockup dùng cùng 1 hex cho destructive và loss |
+| Ngữ nghĩa | `gain` (lãi ▲, xanh), `destructive` (dùng chung cho **loss**/lỗ ▼, đỏ), `warning` (amber — nguồn giá "Nhập tay", thiếu giá, "không tính được XIRR", giá cũ) | **Không có token `loss` riêng** — mockup dùng cùng 1 hex cho destructive và loss. `warning` trùng hex với `asset-gold` một cách ngẫu nhiên (không phải alias — Phase 2, xem `globals.css`) |
 | Phân bổ tài sản | `asset-stock`, `asset-fund`, `asset-bond`, `asset-gold` | Màu cố định cho biểu đồ/badge loại tài sản — token riêng, độc lập với `primary`/`accent` dù trùng giá trị (có thể lệch màu brand sau này) |
 
 - `gain`/`asset-*`/`foreground-soft`/`muted-faint`/`card-elevated` là **mở rộng riêng của Navtrack**, không thuộc bộ token chuẩn shadcn — khi thêm token mới tương tự, khai ở `.dark` trong `globals.css` **và** map qua `@theme inline` để Tailwind sinh utility.
@@ -94,6 +94,9 @@ Tái dùng trước khi tạo mới trùng lặp. Cấu trúc/pattern (thư mụ
 | `EmptyState` | Icon tròn + tiêu đề + mô tả + `action?: ReactNode` (composition slot, giữ Server Component thuần) |
 | `Alert` | 2 biến thể `info`/`error` |
 | `SettingsMenuItem` | Dòng menu điều hướng cho màn Cài đặt: icon + nhãn + chevron, dùng chung cho mọi mục settings (`/settings`) |
+| `BottomNav` | Thanh điều hướng cố định đáy (Phase 2): Tổng quan/Danh mục/Cài đặt — nhận `active` tường minh (không tự suy pathname), chỉ gắn ở 3 màn gốc/tab |
+| `ReturnMetrics` | Cặp thẻ XIRR (theo năm) + Lãi/lỗ tuyệt đối song song (Phase 2) — thẻ XIRR tự chuyển "Chưa tính được" khi status khác `"OK"` (không bao giờ render số/NaN/-100%), dùng ở Dashboard và chi tiết vị thế |
+| `PriceSourceBadge` | Badge nguồn giá "Tự động"/"Nhập tay" (Phase 2) — dùng ở nhóm danh mục, NAV chi tiết vị thế |
 
 ## Chuyển động (animation)
 

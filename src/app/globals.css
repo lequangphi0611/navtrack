@@ -15,6 +15,8 @@
   --color-card-elevated: var(--card-elevated);
   --color-gain: var(--gain);
   --color-gain-foreground: var(--gain-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-asset-stock: var(--asset-stock);
   --color-asset-fund: var(--asset-fund);
   --color-asset-bond: var(--asset-bond);
@@ -90,6 +92,11 @@
   --destructive-foreground: #ffffff;
   --gain: #35d07f;
   --gain-foreground: #ffffff;
+  /* Cảnh báo/nguồn giá nhập tay (mockup Phase 2 Screens: badge "Nhập tay", ngưỡng
+     "giá cũ", các mục "thiếu giá"/"không tính được XIRR") — trùng hex với
+     --asset-gold một cách ngẫu nhiên, đây là token ngữ nghĩa riêng, không phải alias. */
+  --warning: #e0b34c;
+  --warning-foreground: #221a08;
   --border: #1e222b;
   --input: #1e222b;
   --ring: #7c8cf8;

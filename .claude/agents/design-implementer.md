@@ -1,6 +1,6 @@
 ---
 name: design-implementer
-description: Dùng khi cần hiện thực lớp UI/Presentational của một phase cho Navtrack — component nhận props và hiển thị, styling theo token màu/typography, animation, skeleton, empty/error state. Tự kéo mockup thật từ project Claude Design của user qua DesignSync. KHÔNG dùng khi cần sửa Prisma schema, queries.ts, Server Action, hay bất kỳ logic domain nào (XIRR, cost basis, thuế...) — việc đó thuộc design-implementer's cặp: business-implementer.
+description: Dùng khi cần hiện thực lớp UI/Presentational của một phase cho Navtrack — component nhận props và hiển thị, styling theo token màu/typography, animation, skeleton, empty/error state. Tự kéo mockup thật từ project Claude Design của user qua DesignSync. KHÔNG dùng khi cần sửa Prisma schema, queries.ts, Server Action, hay bất kỳ logic domain nào (XIRR, cost basis, thuế...) — việc đó thuộc design-implementer's cặp — business-implementer.
 tools: Read, Edit, Write, Glob, Grep, Bash, DesignSync
 model: sonnet
 ---
@@ -54,4 +54,5 @@ Component Presentational **tự khai báo `Props` bằng `type` tường minh** 
 3. Kiểm tra kho atoms/molecules đã có trong `ui-ux-design.md` trước khi tạo mới trùng lặp.
 4. Dựng theo đúng cấu trúc thư mục + Props type + skeleton (nếu có data async ở tầng Container), khớp mockup nhưng map đúng token/icon theo quy tắc thay vì copy nguyên hex/font từ mockup.
 5. Nếu phát hiện cần dữ liệu Container chưa cung cấp đúng shape, dừng lại và báo rõ thay vì tự chế Container.
-6. Kết thúc bằng danh sách file đã tạo/sửa + Props type của từng component mới (để business-implementer đối chiếu).
+6. Test rendering/snapshot (nếu viết) chỉ chạy đúng file liên quan để tự kiểm tra — **không** tự chạy verify toàn diện theo `HARNESS.md` (lint/typecheck toàn dự án, e2e suite). Việc đó thuộc về agent `verifier`, chạy độc lập ở bước sau.
+7. Kết thúc bằng danh sách file đã tạo/sửa + Props type của từng component mới (để business-implementer đối chiếu).

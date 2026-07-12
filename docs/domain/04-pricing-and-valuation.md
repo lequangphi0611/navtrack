@@ -10,8 +10,9 @@
 ## Quy tắc & bất biến
 - **NAV của một vị thế** = `số lượng hiện tại × giá tại thời điểm cần định giá`.
 - **Nguồn giá theo loại tài sản:**
-  - STOCK, FUND: **tự động** (vnstock), vẫn cho sửa tay khi cần.
+  - STOCK, FUND: **tự động** (vnstock), vẫn cho sửa tay khi cần. `FUND` gồm cả ETF niêm yết sàn (nguồn VCI) lẫn quỹ mở không niêm yết (fallback nguồn fmarket khi VCI không có dữ liệu — không phủ hết mọi quỹ mở VN, xem `process/DECISION.md` 2026-07-12); job thử VCI trước rồi mới fallback fmarket, không đoán trước loại quỹ.
   - GOLD, BOND: **mặc định nhập tay** (nguồn tự động kém ổn định).
+- **Đơn vị giá theo nguồn (job Python quy đổi về VND thô trước khi ghi `PriceQuote`):** VCI trả **nghìn đồng** (nhân 1000); fmarket trả **VND thô** (không nhân) — 2 nguồn khác đơn vị dù cùng nằm trong thư viện `vnstock`, xem `process/DECISION.md` 2026-07-12.
 - **Ưu tiên giá tại ngày D:** nếu có `NavOverride` (mã đó, ngày ≤ D gần nhất) → dùng **giá nhập tay**; nếu không → tra `PriceQuote` của mã đó, lấy **giá có `date` gần nhất ≤ D** (cho ngày nghỉ/lễ không có giá đúng ngày). UI ghi rõ nguồn ("Tự động (vnstock)" / "Nhập tay").
 - **Vàng:** dùng **giá mua vào** (giá bạn bán ra được), lưu ý đơn vị chỉ/lượng khớp với `Holding.unit`.
 - App TypeScript **chỉ đọc** giá; **không** gọi vnstock trực tiếp.
