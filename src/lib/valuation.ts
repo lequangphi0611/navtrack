@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { unstable_cache } from "next/cache";
 
 import { db } from "@/lib/db";
 
@@ -91,24 +92,58 @@ export async function getLatestNavOverrides(
   );
 }
 
+// Job chạy 1 lần/ngày giao dịch (16:30 ICT, .github/workflows/price-fetcher.yml)
+// — revalidate ngắn hơn nhiều so với cadence này vẫn "không kém tươi hơn job"
+// (docs/rules/performance.md), chỉ để giá mới cập nhật lan tới UI trong vài
+// chu kỳ sau giờ job chạy thay vì phải đợi tới tận nửa đêm (TTL reset theo
+// đồng hồ tường, không theo lần job chạy — job không gọi revalidateTag vì ghi
+// thẳng Postgres, ngoài Next.js).
+const PRICE_QUOTE_REVALIDATE_SECONDS = 60 * 60; // 1 giờ
+
+// Cache riêng theo TỪNG symbol (không theo cả tập/mảng symbol) — dùng chung
+// được giữa nhiều user/nhiều holding cùng mã (process/DECISION.md 2026-07-12).
+// unstable_cache cần giá trị trả về JSON-safe thuần (không Decimal/Date) —
+// convert ở biên trong hàm cache, hàm bọc ngoài convert ngược lại (nhất quán
+// "Decimal -> string tại biên", docs/rules/data-prisma.md).
+const getCachedLatestPriceQuote = unstable_cache(
+  async (
+    symbol: string,
+    cutoffDateIso: string,
+  ): Promise<{ date: string; price: string } | null> => {
+    const row = await db.priceQuote.findFirst({
+      where: { symbol, date: { lte: new Date(cutoffDateIso) } },
+      orderBy: { date: "desc" },
+      select: { date: true, price: true },
+    });
+    return row
+      ? { date: row.date.toISOString(), price: row.price.toString() }
+      : null;
+  },
+  ["price-quote-latest"],
+  { revalidate: PRICE_QUOTE_REVALIDATE_SECONDS },
+);
+
 export async function getLatestPriceQuotes(
   symbols: string[],
   cutoffDate: Date,
 ): Promise<Map<string, LatestQuoteRow>> {
   if (symbols.length === 0) return new Map();
 
-  const rows = await db.priceQuote.findMany({
-    where: { symbol: { in: symbols }, date: { lte: cutoffDate } },
-    orderBy: [{ symbol: "asc" }, { date: "desc" }],
-    distinct: ["symbol"],
-    select: { symbol: true, date: true, price: true },
-  });
+  const cutoffDateIso = cutoffDate.toISOString();
+  const entries = await Promise.all(
+    [...new Set(symbols)].map(async (symbol) => {
+      const cached = await getCachedLatestPriceQuote(symbol, cutoffDateIso);
+      return cached
+        ? ([
+            symbol,
+            { date: new Date(cached.date), price: new Decimal(cached.price) },
+          ] as const)
+        : null;
+    }),
+  );
 
   return new Map(
-    rows.map((row) => [
-      row.symbol,
-      { date: row.date, price: new Decimal(row.price.toString()) },
-    ]),
+    entries.filter((e): e is [string, LatestQuoteRow] => e !== null),
   );
 }
 
