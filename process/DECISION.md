@@ -15,9 +15,8 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 
 ## 2026-07-11
 
-**Nghi vấn regression session ở `proxy.ts`/middleware — không phải bug thật.**
-- Triệu chứng: mọi route đã đăng nhập bị redirect `/sign-in` dù session hợp lệ. Nghi vấn ban đầu: Next.js 16 đổi middleware sang **Edge**, không gọi được Prisma cho `session: { strategy: "database" }`.
-- Kết luận: **không tái hiện** (fetch trực tiếp + `holdings.spec.ts`/`smoke.spec.ts` pass, `/holdings` trả 200). Từ v16.0.0 Proxy **mặc định Node.js runtime** (ngược nghi vấn) → Prisma gọi bình thường. Lần fail đầu là lỗi môi trường/cookie nhất thời. Ghi lại để **không đi lại hướng "middleware Edge runtime"**; không sửa gì ở `proxy.ts`/`auth.ts`.
+**Nghi vấn regression session — không phải bug thật, không đi lại hướng Edge runtime.**
+- Triệu chứng thoáng qua: redirect `/sign-in` dù session hợp lệ. Kết luận: **không tái hiện**, lỗi môi trường nhất thời; không sửa code. Ghi lại để **tránh tranh luận lại** khi tăng cường bảo mật middleware ở phase sau.
 
 **PWA gộp vào Phase 1 — phạm vi cố ý tối giản.**
 - Ràng buộc bền: (1) **không cache số liệu tài chính offline** (app tài chính — tránh hiện số sai/cũ khi mất mạng); chỉ installable + cache asset tĩnh. (2) **Chưa làm Web Push/VAPID** — cảnh báo giá vẫn ở Backlog. (3) Service worker **viết tay** (`public/sw.js`), không dùng `next-pwa`/Serwist — tránh rủi ro tương thích Next 16 + Turbopack.
@@ -31,22 +30,16 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - Ứng viên cache (Phase 2–3): `PriceQuote` (revalidate khớp cadence job EOD); snapshot đã `frozen` (bất biến). Overview **đã materialize** (đọc thẳng `Holding.quantity/avgCost`) → không cần cache lớp holdings/cashflow cho overview.
 - Phase 1 vẫn **không cache**. Docs đã sync: `docs/rules/performance.md` (mục "Data fetching"), `process/phase-2.md`, `docs/03-roadmap.md` (Phase 2).
 
-**Materialize vị thế (`quantity`/`avgCost`) lên `Holding` — issue #18 (đảo hướng "giá vốn không lưu cứng").**
-- Bối cảnh: màn Danh mục (`getHoldingsRaw`) dù `select` hẹp vẫn **kéo toàn bộ cashflow của mọi holding** chỉ để `derivePosition` ra vài con số. `select` hẹp chỉ giảm **bề rộng field**, **không giảm số dòng** → payload phình vô hạn theo lịch sử giao dịch. (Đính chính lý do "driver chậm chính" của bước refactor `include`→`select` cùng ngày: bỏ `include` chưa phải fix; giảm **số dòng** mới là fix, và cách làm là materialize.)
-- Quyết định: thêm 2 cột **materialized cache** `Holding.quantity` + `Holding.avgCost`. Overview đọc thuần 2 cột (O(số holding), không kéo cashflow). **Đảo** ghi chú domain cũ "giá vốn bình quân không lưu cứng".
-- Vì sao an toàn (không data drift): mọi mutation cashflow tập trung đúng **4 action** (`createHolding`/`addTransaction`/`updateTransaction`/`deleteTransaction`), job Python **không** đụng cashflow, cả 4 **đã** gọi `derivePosition` sẵn để validate `wentNegative` → ghi cache gần như **miễn phí** (không thêm round-trip).
-- **Bất biến:** cache là bản chiếu, **nguồn sự thật vẫn là `Cashflow`**; chỉ ghi bằng `persistPosition(derivePosition(toàn bộ cashflow))` trong **cùng transaction** với mọi thay đổi cashflow, **không cộng/trừ tay**. ⚠️ **Cổ tức cổ phiếu (Phase 4)** cũng làm đổi `quantity` → đường ghi đó phải cập nhật cache theo cùng bất biến, nếu không cache lệch.
-- Backfill dữ liệu cũ: **data migration** `20260711092933_backfill_holding_position` (recursive CTE bản sao `derivePosition`, gồm reset avgCost khi SL về 0; đã **verify khớp** local: 4 holding thật + 4 kịch bản synthetic). Chạy **tự động 1 lần/DB** qua `migrate deploy` (Prisma ghi `_prisma_migrations` nên không lặp; idempotent như lưới an toàn) — **không còn thao tác tay trên prod**. Cả migration schema `20260711081325_add_holding_position_cache` + data migration này **đã áp local**; prod sẽ tự áp khi deploy.
-- Route (cùng issue #18): tách `/holdings` (mở) ↔ `/holdings/closed` (đóng) qua route group `holdings/(overview)/` dùng chung `layout.tsx`, mỗi route con Suspense riêng vùng danh sách; xóa `HoldingsTabs` (thay bằng `<Link>` thật, không giữ tab state client).
-- Docs đã sync: `prisma/schema.prisma`, `docs/02-data-model.md`, `docs/domain/01-assets-and-holdings.md` (+ cảnh báo cổ tức Phase 4), `docs/domain/02-transactions-and-cost-basis.md`, `docs/rules/data-prisma.md` (mục "Chọn `select` hẹp…" + "Materialized cache…"), `docs/rules/component-architecture.md` (Suspense per-region + "tab → tách route").
+**Materialize `Holding.quantity`/`avgCost` — issue #18 (giảm payload overview từ O(cashflow dồn) xuống O(number)).**
+- Quyết định: thêm 2 cột cache `quantity`, `avgCost` lên schema `Holding`. Overview đọc thuần 2 cột, không kéo `Cashflow`. **Bất biến bảo mật:** cache là bản chiếu, **nguồn sự thật `Cashflow`**; ghi bằng `derivePosition()` **cùng transaction** mọi mutation cashflow ⚠️ **Cổ tức Phase 4 cũng đổi `quantity`** → phải cập nhật cache theo bất biến này.
+- Backfill: data migration đã áp local; prod tự áp lúc deploy.
+- Route (issue #18): tách `/holdings` ↔ `/holdings/closed` qua route group `(overview)`, Suspense per-route; xóa `HoldingsTabs`.
+- Docs: `prisma/schema.prisma`, `docs/02-data-model.md`, `docs/rules/data-prisma.md` (mục "Materialized cache"), `docs/rules/component-architecture.md` (route group).
 
-**Issue #12: full-page skeleton khi chuyển trang — chỉ 2/6 route thật sự cần tách, không phải 4.**
-- Khảo sát: `(dashboard)/layout.tsx` cố ý không có header chrome riêng (theo mockup Phase 1 Screens, điều hướng nằm trong từng màn) — xác nhận đây **là chủ đích thiết kế**, không phải chỗ thiếu; không đổi layout gốc.
-- Chỉ 2 route thật sự cần tách Suspense: `holdings/[id]/transactions/new` và `holdings/[id]/transactions/[cashflowId]/edit` — header tĩnh (title cố định + route param, không phụ thuộc query) và có `loading.tsx` tổ tiên (`holdings/[id]/loading.tsx`) làm prefetch boundary sẵn, nên tách `TransactionForm` thành async section trong `Suspense` riêng (page giữ sync/`PageHeader` + fallback skeleton) là đúng checklist rule #2 (`docs/rules/component-architecture.md`, mục "Loading, skeleton & Suspense"). Xoá `loading.tsx` cấp route tương ứng cho 2 route này (đúng ngoại lệ quy tắc #1, vì đã có prefetch boundary ở tổ tiên).
-- `settings/members` và `settings/members/invite` **ban đầu bị áp nhầm hướng tách Suspense** (tưởng giống case trên) — code review phát hiện: cả 2 route này có `getInvitableStatus()` là **1 query quyết định toàn bộ nhánh render** (Denied vs List ở `/settings/members`; render form vs redirect ở `/settings/members/invite`) → đúng case rule #3 ("1 query quyết định toàn bộ layout → giữ async page + `loading.tsx` riêng"), không phải rule #2. Tách bằng Suspense sai vì (a) fallback skeleton (quota+list shape) hiện ra cho cả user bị từ chối quyền — ngầm gợi ý sai họ có quyền truy cập, đi ngược tinh thần bảo mật của `MembersDeniedScreen`; (b) xóa `loading.tsx` làm mất prefetch boundary (route này không có `loading.tsx` tổ tiên nào khác thay thế). Đã **revert** về async `page.tsx` (gọi `getInvitableStatus()` trực tiếp, rẽ nhánh JSX) + `loading.tsx` riêng — giống cách xử lý `holdings/[id]`. Giữ lại phần dọn code hợp lệ: `PageHeader` gọi 1 lần ở `page.tsx` thay vì lặp lại trong từng screen con (`MembersListScreen`/`MembersDeniedScreen` không tự dựng wrapper/header riêng).
-- **Không đổi** `holdings/[id]` (title = `holding.symbol`, phụ thuộc đúng query mà nội dung còn lại cũng cần → rule #3, giữ nguyên `loading.tsx`) và `holdings/(overview)` (đã tách route group từ issue #18).
-- Trade-off có chủ đích (2 route transactions): `getHoldingDetail()`/`notFound()` cho cashflow không tồn tại giờ chạy **bên trong `Suspense`** → theo Next.js, sau khi fallback đã stream thì không đổi được HTTP status nữa, nên id không hợp lệ trả về **200** (không phải 404 thật). Chấp nhận vì app private/auth-gated, không có crawler/SEO — ưu tiên UX header hiện tức thì mỗi lần điều hướng.
-- Không cần đổi rule vì code đang **chưa tuân** rule sẵn có (`settings/members/page.tsx` là ví dụ mẫu ✅ Good ngay trong rule #2 nhưng implementation cũ lại await tuần tự) — không sync thêm doc nào ngoài mục này.
+**Issue #12: Suspense routes — chỉ 2/6 route cần tách Suspense (2 route transactions), không phải 4.**
+- Quy tắc rule #2 vs #3: chỉ có 2 route `holdings/[id]/transactions/{new,edit}` có header tĩnh + prefetch boundary tổ tiên → tách `TransactionForm` async + Suspense, xoá `loading.tsx` riêng. **Khác hẳn** `settings/members/*` (query quyết định toàn bộ nhánh render → rule #3, giữ async page + `loading.tsx` riêng; tách Suspense sai vì fallback skeleton gợi ý sai).
+- Trade-off: status 200 thay 404 cho cashflow invalid (chấp nhận vì app private/auth-gated).
+- Docs: `docs/rules/component-architecture.md` (rule #2 vs #3 rõ ràng).
 
 **Phase 2: thêm `BottomNav` dùng chung cho màn gốc/tab — ghi đè phạm vi hẹp quyết định "không có header chrome riêng" (issue #12, mục trên).**
 - Bối cảnh: mockup Phase 2 (`Phase 2 Screens.dc.html`, 2a/2b) giới thiệu thanh bottom nav (Tổng quan / Danh mục / Cài đặt) — Phase 1 cố ý không có, điều hướng nằm trong từng màn (xem quyết định issue #12 ở trên). Đây là thay đổi kiến trúc điều hướng, áp dụng **ngược lại** cho cả màn gốc Phase 1 để nhất quán.
@@ -57,36 +50,23 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 
 ## 2026-07-12
 
-**Đơn vị giá `jobs/price-fetcher`: VCI trả nghìn đồng (×1000), fmarket trả VND thô (không nhân).**
-- `PRICE_SCALE = Decimal(1000)` áp cho nguồn VCI (`vnstock.Quote`, cổ phiếu/ETF niêm yết) — verify thủ công VNM/FPT khớp giá thị trường thật. Lý do: khớp đơn vị với `Cashflow.pricePerUnit` (VND thô), tránh sai NAV/XIRR **1000 lần** nếu quên quy đổi.
-- fmarket (`vnstock.Fund`, quỹ mở không niêm yết, xem mục dưới) trả NAV/chứng chỉ quỹ **đã là VND thô** — verify thủ công VESAF: `listing().nav` (32455.33) khớp `nav_report()` mới nhất cùng ngày. **KHÔNG** áp `PRICE_SCALE` cho nguồn này — 2 nguồn khác đơn vị dù cùng nằm trong thư viện `vnstock`.
-- Docs đã sync: `docs/domain/04-pricing-and-valuation.md` (mục "Quy tắc & bất biến", thêm 1 câu nêu rõ 2 nguồn khác đơn vị).
+**Đơn vị giá: VCI ×1000 (nghìn VND), fmarket không nhân (VND thô).**
+- VCI (`vnstock.Quote`, cổ phiếu/ETF) trả gía nghìn đồng → áp `PRICE_SCALE = 1000`. fmarket (quỹ mở) trả NAV đã là VND thô → không nhân. **Tránh sai 1000 lần** XIRR nếu quên quy đổi.
+- Docs: `docs/domain/04-pricing-and-valuation.md` (mục "Quy tắc").
 
-**Cache `PriceQuote` (`getLatestPriceQuotes`, `lib/valuation.ts`): cache riêng theo TỪNG `symbol`, không theo cả tập/mảng symbol.**
-- Lý do: rule "cache theo `symbol`" (`docs/rules/performance.md`) nghĩa là cache entry phải **dùng chung được giữa nhiều user/nhiều holding cùng mã** (vd 2 user cùng nắm FPT chỉ tốn 1 lần đọc DB/chu kỳ revalidate). Bọc `unstable_cache` quanh nguyên hàm nhận `symbols: string[]` (cache theo cả mảng) sẽ tạo cache key riêng theo từng tập symbol khác nhau của mỗi user/holding-set — gần như không cache-hit chéo, sai tinh thần rule. Đổi kiến trúc: `Promise.all` gọi 1 hàm cache (`getCachedLatestPriceQuote`) nhận đúng 1 `symbol` + `cutoffDateIso`, thay vì bọc cache 1 lớp ngoài query `distinct` batched.
-- Đánh đổi **đã chấp nhận**: cache lạnh (mới deploy/hết TTL) → N symbol bắn N query song song thay vì 1 query gộp — chấp nhận được vì traffic thấp (app cá nhân phi thương mại), đổi lại đúng cache dùng chung theo symbol.
-- `revalidate = 1 giờ` — job chạy 1 lần/ngày giao dịch (16:30 ICT), 1 giờ ngắn hơn nhiều cadence này nên không kém tươi hơn job; chỉ để giá mới lan tới UI trong vài chu kỳ sau giờ job chạy thay vì phải đợi tới tận nửa đêm (TTL reset theo đồng hồ tường, job không gọi `revalidateTag` vì ghi thẳng Postgres ngoài Next.js).
-- `cutoffDate.toISOString()` dùng thẳng làm 1 phần cache key — không cần chuẩn hoá thêm vì mốc "hôm nay" (`resolveCutoffDate`) trả cuối ngày `23:59:59.999`, tự nhiên ổn định suốt 1 ngày.
-- Docs đã sync: không cần sửa `docs/rules/performance.md` (rule cũ đã mô tả đúng "cache theo `symbol`" — mục này chỉ ghi lại cách hiện thực đúng để không quay lại hướng cache theo mảng lần nữa).
+**Cache `PriceQuote` theo TỪNG `symbol` (không theo tập mảng symbol).**
+- Quy tắc: cache entry phải dùng chung giữa nhiều user/holding cùng mã → cache lúc lạnh bắn N query parallel. Đổi lại cache-hit chéo đúng.
+- Chấp nhận: traffic thấp (app cá nhân).
+- Docs: `docs/rules/performance.md` (rule đã mô tả "cache theo symbol").
 
-**FUND holdings không niêm yết sàn (quỹ mở, vd VESAF/DCDS) — thêm fallback fmarket khi VCI không có dữ liệu.**
-- Bối cảnh: `Holding{ type: FUND }` gồm cả ETF niêm yết sàn (có ticker VCI thật, vd FUEVFVND) lẫn quỹ mở không niêm yết (vd TCBF, VESAF, DCDS — nguồn VCI luôn fail vì không có ticker sàn). Không có field phân loại thêm trong `Holding` để tách 2 loại này trước khi gọi API.
-- Quyết định: `fetch_price(symbol, asset_type)` thử VCI trước (`_fetch_price_vci`); nếu rỗng/lỗi **và `asset_type == "FUND"`**, fallback thử fmarket (`_fetch_price_fmarket`, dùng `vnstock.explorer.fmarket.fund.Fund`) trước khi coi là fail hẳn. `asset_type` lấy từ `Holding.type` (query kèm trong `get_symbols_to_fetch`, trước đó chỉ lấy `symbol` nên bị bỏ phí). **STOCK không fallback fmarket** — cổ phiếu luôn niêm yết sàn nên VCI fail là fail hẳn; fallback fmarket cho STOCK vừa vô ích vừa có rủi ro (dù hiếm) trùng `shortName` với 1 quỹ mở nào đó trên fmarket, lưu nhầm giá NAV quỹ vào `PriceQuote` của mã cổ phiếu. Match quỹ theo **CHÍNH XÁC** `shortName` (API `Fund.filter()` search substring phía server, vd tìm "VCBF" trả về cả VCBF-BCF/VCBF-MGF/...).
-- **Giới hạn đã biết:** fmarket chỉ liệt kê quỹ phân phối qua nền tảng Fmarket — **không phủ hết mọi quỹ mở VN**. Verify thủ công: `TCBF` (ví dụ minh hoạ ở `docs/domain/01-assets-and-holdings.md`) **không có** trong danh sách 66 quỹ của fmarket tại thời điểm verify (có thể phân phối riêng qua kênh ngân hàng Techcombank, không qua Fmarket) — trong khi VESAF/DCDS **có**. Khi cả VCI lẫn fmarket đều fail, job log rõ gợi ý nhập tay qua `NavOverride` thay vì log chung chung.
-- fmarket **không có retry nội bộ** (khác VCI dùng tenacity) — cố ý không thêm retry/backoff thủ công riêng cho nguồn này (job chạy lại theo lịch mỗi ngày nên lỗi mạng thoáng qua tự phục hồi ở lần chạy sau; thêm retry tay riêng cho 1 nguồn đi ngược lý do đã bỏ retry tay ở VCI — xem mục double-retry bên dưới).
-- `Fund()` tải toàn bộ listing quỹ khi khởi tạo (1 API call) — cache 1 instance dùng chung trong suốt lần chạy job (`_fund_client()`), tránh gọi lại `listing()` cho mỗi mã FUND fallback.
-- Docs đã sync: `docs/domain/04-pricing-and-valuation.md`, `jobs/price-fetcher/README.md`.
+**FUND fallback fmarket khi VCI fail (quỹ mở không niêm yết).**
+- Quyết định: VCI fail + `type=FUND` → fallback fmarket. **STOCK không fallback** (luôn niêm yết, VCI fail = fail hẳn; fallback fmarket tránh nhầm ticker quỹ ≠ cổ phiếu).
+- fmarket giới hạn: chỉ quỹ phân phối qua Fmarket, không phủ toàn bộ quỹ mở VN.
+- Docs: `docs/domain/04-pricing-and-valuation.md`, `jobs/price-fetcher/README.md`.
 
-**`NavOverride`: thêm `@@unique([holdingId, date])` + đổi `date` sang `@db.Date`.**
-- Bối cảnh: wiring Server Action `saveNavOverride` (nhập giá tay cho vàng/trái phiếu, có thể mọi loại tài sản) cần "upsert theo (holdingId, date)" — sửa giá cùng ngày phải ghi đè, không tạo dòng trùng. `NavOverride` khi đó **chưa có** unique constraint nào (khác `PriceQuote` đã có `@@unique([symbol, date])` cho đúng mục đích này) → Prisma `upsert` không có `where` hợp lệ để dùng.
-- Quyết định: thêm `@@unique([holdingId, date])`, đồng thời đổi `date DateTime` → `date DateTime @db.Date` — `NavOverride.date` chỉ bao giờ nhận từ `<input type="date">` (không có giờ), giữ nguyên `DateTime` có giờ sẽ khiến 2 lần nhập cùng ngày nhưng khác millisecond/giờ (nếu code sau này parse khác đi) âm thầm né được unique constraint và làm lệch kết quả "dòng mới nhất ≤ D" ở `lib/valuation.ts` (`getLatestNavOverrides`, dùng `distinct: ["holdingId"]`).
-- Migration: `20260712023349_add_nav_override_unique_date_only` (SQL sinh bằng `prisma migrate diff` vì môi trường CLI non-interactive không chạy được `migrate dev` thẳng — verify không có dữ liệu `NavOverride` cũ nên đổi kiểu cột không rủi ro mất dữ liệu).
-- Docs đã sync: `docs/02-data-model.md` (định nghĩa `NavOverride`).
-
-**Bỏ retry loop thủ công trong `fetch_price` — `Quote.history()` (VCI) đã tự retry nội bộ qua tenacity.**
-- Bối cảnh: code review phát hiện `fetch_price()` tự viết retry loop (3 lần, backoff 2/4/8s) bọc ngoài `Quote.history()`, trong khi `Quote.history()` của vnstock đã tự retry 3 lần nội bộ (`Config.RETRIES=3`, tenacity `wait_exponential`, xem `vnstock/api/quote.py`). 1 mã lỗi có thể tốn tới 9 lần gọi HTTP thật — không tôn trọng rate limit.
-- Quyết định: bỏ hẳn retry loop tay viết; `_fetch_price_vci`/`_fetch_price_fmarket` chỉ `try/except` bắt exception cuối cùng (sau khi tenacity đã tự retry hết ở phía VCI) rồi trả `None`, không raise ra ngoài — vẫn đúng rule "cô lập lỗi" (`docs/rules/python-job.md`), chỉ bỏ phần tự retry dư thừa.
-- Docs đã sync: không cần đổi `docs/rules/python-job.md` (rule "retry có backoff" vẫn đúng — chỉ là backoff nằm ở tầng thư viện `vnstock` thay vì code job tự viết); ghi lại đây để không quay lại thêm retry tay lần nữa.
+**`NavOverride`: `@@unique([holdingId, date])` + `@db.Date` (không @db.DateTime).**
+- Upsert theo (holdingId, date) → sửa giá cùng ngày phải ghi đè. Dùng `@db.Date` tránh nhầm lẫn millisecond/giờ khác ngày nhưng cùng ngày hôm đó.
+- Docs: `docs/02-data-model.md`.
 
 **Wire mốc chốt thật (đóng tiêu chí phase-2 "Đổi mốc chốt → XIRR tính lại đúng theo NAV mốc đó"): cookie + Route Handler trung gian, không dùng `searchParams`.**
 - Lý do kỹ thuật: lựa chọn mốc chốt phải lan từ `/settings` (nơi chọn) sang `/` (Dashboard, route khác hẳn), nhưng Server Component (`page.tsx`) không được phép gọi `cookies().set()` lúc render — nên không thể "đọc `searchParams` rồi tự ghi nhớ" ngay trong `page.tsx`. Giải pháp: `CutoffPicker`'s `href` trỏ `GET /api/cutoff?key=...` (`src/app/api/cutoff/route.ts`) — route handler set cookie `cutoff` (`src/lib/cutoff-cookie.ts`, tách khỏi `lib/cutoff.ts` vì đọc cookie là I/O, `lib/cutoff.ts` tự khai pure) rồi `NextResponse.redirect` cứng về `ROUTES.settings` (không nhận `redirectTo` từ query — tránh open-redirect). Mọi Server Component sau đó đọc cookie qua `getCutoffSelection()`, không phải `searchParams`.

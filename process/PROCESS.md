@@ -22,18 +22,11 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 
 Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọng kèm lý do ghi ở [`DECISION.md`](./DECISION.md), không lặp lại chi tiết ở đây.
 
-- 2026-07-09: Phase 1 — Auth.js + Google OAuth + allowlist + `resolveSetting` + mời thành viên xong.
-- 2026-07-09: Phase 1 — nhập vị thế + CRUD giao dịch mua/bán xong (`features/holdings`); kiểm chứng unit test + e2e + cách ly 2 tài khoản.
-- 2026-07-10: Phase 1 — đồng bộ UI theo mockup "Phase 1 Screens" (Claude Design): đăng nhập, danh mục, form vị thế/giao dịch, thành viên (6 màn).
-- 2026-07-10: Phase 1 — thêm loading/skeleton, animation, dropdown đơn vị theo loại tài sản; fix schema `User` (AdapterError khi login Google thật) — xem [DECISION.md](./DECISION.md).
-- 2026-07-10: Phase 1 — tách màn Cài đặt/Thành viên thành `/settings`, `/settings/members`, `/settings/members/invite` — xem [DECISION.md](./DECISION.md).
-- 2026-07-10: Phase 1 — route/Setting key qua constants (`ROUTES`, `SETTING_KEYS`); tách nhật ký khỏi quyết định — xem [DECISION.md](./DECISION.md).
-- 2026-07-11: Phase 1 — thêm PWA (manifest, icon, service worker, offline fallback) — xem [DECISION.md](./DECISION.md).
-- 2026-07-11: Phase 1 — gom nhóm danh sách danh mục theo loại tài sản (mockup "Danh sách danh mục" cập nhật): card theo `AssetType` + mở rộng "Xem thêm N mã"; xoá `HoldingRow` cũ (thay bằng `HoldingsGroupCard`).
-- 2026-07-11: Điều tra nghi vấn regression session ở `proxy.ts`/middleware (redirect `/sign-in` dù session hợp lệ) → **không tái hiện**, không phải bug thật (root-cause + tài liệu ở [DECISION.md](./DECISION.md)).
-- 2026-07-11: Phase 1 — issue #18: đổi `include`→`select` hẹp, tách route `/holdings` ↔ `/holdings/closed` (route group `(overview)`, xóa `HoldingsTabs`) — xem [DECISION.md](./DECISION.md).
-- 2026-07-11: Phase 1 — issue #18: materialize vị thế (`Holding.quantity`/`avgCost`), overview đọc thẳng cache + migration/backfill — xem [DECISION.md](./DECISION.md).
-- 2026-07-11: Phase 1 — issue #12: hết full-page skeleton khi chuyển trang ở 2 route (`transactions/new`, `transactions/[cashflowId]/edit`) — tách section async + `Suspense`, xoá `loading.tsx` cấp route thừa; `settings/members`/`settings/members/invite` giữ nguyên async page + `loading.tsx` riêng sau code review — xem [DECISION.md](./DECISION.md).
+- 2026-07-09: Phase 1 — Auth.js + Google OAuth + allowlist + `resolveSetting` + mời thành viên; nhập vị thế + CRUD giao dịch mua/bán xong; kiểm chứng unit test + e2e + cách ly 2 tài khoản.
+- 2026-07-10: Phase 1 — UI mockup (6 màn), loading/skeleton/animation, schema `User` fix, tách route `/settings/*`, constants `ROUTES`/`SETTING_KEYS` — xem [DECISION.md](./DECISION.md).
+- 2026-07-11: Phase 1 — PWA (manifest, icon, sw, offline); gom danh sách theo `AssetType` — xem [DECISION.md](./DECISION.md).
+- 2026-07-11: Điều tra nghi vấn session regression → không phải bug thật — xem [DECISION.md](./DECISION.md).
+- 2026-07-11: Phase 1 — issue #18: tách route `/holdings` ↔ `/holdings/closed`, materialize `Holding.quantity`/`avgCost`, backfill — xem [DECISION.md](./DECISION.md).
+- 2026-07-11: Phase 1 — issue #12: Suspense cho 2 route transactions, giữ async page cho `settings/members/*` — xem [DECISION.md](./DECISION.md).
 - 2026-07-11: **Phase 1 hoàn thành** — toàn bộ tiêu chí ở [phase-1.md](./phase-1.md) đạt.
-- 2026-07-12: Phase 2 — `lib/valuation.ts`: định giá `Holding` tại ngày D (ưu tiên `NavOverride` → `PriceQuote` gần nhất ≤ D, batched tránh N+1, "thiếu giá" không mặc định 0); chưa wiring vào query/UI (chờ `lib/xirr.ts`).
-- 2026-07-12: Phase 2 — `NavOverride` nhập tay: Server Action `saveNavOverride` + route `/holdings/[id]/price`, migration thêm `@@unique([holdingId, date])`/`@db.Date` — xem [DECISION.md](./DECISION.md).
+- 2026-07-12: Phase 2 — thêm `lib/valuation.ts` + `lib/portfolio-valuation.ts` (định giá Holding tại ngày D, batched); `NavOverride` nhập tay + wire cutoff selection qua cookie — xem [DECISION.md](./DECISION.md).
