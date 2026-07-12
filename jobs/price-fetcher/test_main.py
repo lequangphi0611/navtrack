@@ -1,13 +1,13 @@
 """Unit test cho logic của main.py — mock toàn bộ thư viện ngoài (vnstock,
-psycopg, time.sleep), KHÔNG gọi mạng/DB thật. Chỉ test logic thuần: cách gọi
-SQL, quy tắc chuyển đổi giá, retry/backoff, cô lập lỗi từng mã. Xem
+psycopg), KHÔNG gọi mạng/DB thật. Chỉ test logic thuần: cách gọi SQL, quy tắc
+chuyển đổi/validate giá, fallback VCI -> fmarket, cô lập lỗi từng mã. Xem
 docs/rules/testing.md + docs/rules/python-job.md ("tách fetch_*/save_* để
 test được logic riêng").
 """
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -55,7 +55,24 @@ def test_get_symbols_to_fetch_only_queries_open_stock_and_fund_positions():
 
 
 # ---------------------------------------------------------------------------
-# fetch_price
+# _is_valid_price
+# ---------------------------------------------------------------------------
+
+
+def test_is_valid_price_accepts_positive_finite_decimal():
+    assert main._is_valid_price(Decimal("56600.0")) is True
+
+
+@pytest.mark.parametrize(
+    "price",
+    [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity"), Decimal("0"), Decimal("-1")],
+)
+def test_is_valid_price_rejects_nan_infinite_zero_and_negative(price: Decimal):
+    assert main._is_valid_price(price) is False
+
+
+# ---------------------------------------------------------------------------
+# _fetch_price_vci
 # ---------------------------------------------------------------------------
 
 
@@ -76,11 +93,10 @@ def _fake_history(rows: list[tuple[str, float]]) -> pd.DataFrame:
 def _patch_quote(monkeypatch: pytest.MonkeyPatch, quote_instance: MagicMock) -> MagicMock:
     quote_cls = MagicMock(return_value=quote_instance)
     monkeypatch.setattr(main, "Quote", quote_cls)
-    monkeypatch.setattr(main.time, "sleep", MagicMock())
     return quote_cls
 
 
-def test_fetch_price_scales_close_by_1000_into_raw_vnd(monkeypatch: pytest.MonkeyPatch):
+def test_fetch_price_vci_scales_close_by_1000_into_raw_vnd(monkeypatch: pytest.MonkeyPatch):
     """vnstock (nguồn VCI) trả close theo NGHÌN đồng — PriceQuote phải lưu VND
     thô để khớp đơn vị với Cashflow.pricePerUnit (xem docs/domain/04)."""
     quote_instance = MagicMock()
@@ -89,73 +105,252 @@ def test_fetch_price_scales_close_by_1000_into_raw_vnd(monkeypatch: pytest.Monke
     )
     quote_cls = _patch_quote(monkeypatch, quote_instance)
 
-    result = main.fetch_price("VNM")
+    result = main._fetch_price_vci("VNM")
 
     assert result == (date(2026, 7, 10), Decimal("56600.0"))
     quote_cls.assert_called_once_with(symbol="VNM", source="VCI")
 
 
-def test_fetch_price_uses_latest_data_date_not_todays_date(monkeypatch: pytest.MonkeyPatch):
+def test_fetch_price_vci_uses_latest_data_date_not_todays_date(monkeypatch: pytest.MonkeyPatch):
     """Ngày trả về phải lấy từ dữ liệu thật (KHÔNG tự suy date.today()) — an
     toàn quanh ngày nghỉ lễ khi phiên gần nhất không phải hôm nay."""
     quote_instance = MagicMock()
     quote_instance.history.return_value = _fake_history([("2026-01-28", 80.0)])
     _patch_quote(monkeypatch, quote_instance)
 
-    quote_date, _price = main.fetch_price("VNM")
+    quote_date, _price = main._fetch_price_vci("VNM")
 
     assert quote_date == date(2026, 1, 28)
     assert quote_date != date.today()
 
 
-def test_fetch_price_retries_with_backoff_then_succeeds(monkeypatch: pytest.MonkeyPatch):
-    quote_instance = MagicMock()
-    quote_instance.history.side_effect = [
-        ConnectionError("network blip"),
-        TimeoutError("still down"),
-        _fake_history([("2026-07-10", 56.6)]),
-    ]
-    _patch_quote(monkeypatch, quote_instance)
-
-    result = main.fetch_price("VNM")
-
-    assert result == (date(2026, 7, 10), Decimal("56600.0"))
-    assert main.time.sleep.call_args_list == [call(2), call(4)]
-
-
-def test_fetch_price_returns_none_without_raising_after_max_retries(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """Hết retry vẫn lỗi -> trả None, KHÔNG raise ra ngoài (một mã lỗi không
-    được làm sập cả job)."""
+def test_fetch_price_vci_returns_none_without_raising_on_error(monkeypatch: pytest.MonkeyPatch):
+    """`Quote.history()` đã tự retry nội bộ (tenacity) — ở tầng này chỉ bắt
+    exception cuối cùng và trả `None`, KHÔNG raise ra ngoài, KHÔNG tự retry
+    thêm (double retry đã bị bỏ, xem docs code)."""
     quote_instance = MagicMock()
     quote_instance.history.side_effect = ConnectionError("down")
     _patch_quote(monkeypatch, quote_instance)
 
-    result = main.fetch_price("VNM")
+    result = main._fetch_price_vci("VNM")
 
     assert result is None
-    assert main.time.sleep.call_args_list == [call(2), call(4), call(8)]
-    assert main.time.sleep.call_count == main.MAX_RETRIES
 
 
-def test_fetch_price_treats_empty_dataframe_as_failure(monkeypatch: pytest.MonkeyPatch):
+def test_fetch_price_vci_treats_empty_dataframe_as_failure(monkeypatch: pytest.MonkeyPatch):
     quote_instance = MagicMock()
     quote_instance.history.return_value = pd.DataFrame()
     _patch_quote(monkeypatch, quote_instance)
 
-    result = main.fetch_price("ZZZ")
+    result = main._fetch_price_vci("ZZZ")
 
     assert result is None
 
 
-def test_fetch_price_never_raises_even_on_constructor_error(monkeypatch: pytest.MonkeyPatch):
+def test_fetch_price_vci_never_raises_even_on_constructor_error(monkeypatch: pytest.MonkeyPatch):
     """Mã sai định dạng -> Quote() raise ValueError ngay khi khởi tạo — vẫn
     phải bị nuốt lại thành None, không văng ra ngoài vòng lặp ở main()."""
     monkeypatch.setattr(main, "Quote", MagicMock(side_effect=ValueError("bad symbol")))
-    monkeypatch.setattr(main.time, "sleep", MagicMock())
 
-    result = main.fetch_price("X")
+    result = main._fetch_price_vci("X")
+
+    assert result is None
+
+
+def test_fetch_price_vci_rejects_nan_close_price(monkeypatch: pytest.MonkeyPatch):
+    """Mã bị halt có thể trả close = NaN — không được lưu vào DB."""
+    quote_instance = MagicMock()
+    quote_instance.history.return_value = _fake_history([("2026-07-10", float("nan"))])
+    _patch_quote(monkeypatch, quote_instance)
+
+    result = main._fetch_price_vci("HALTED")
+
+    assert result is None
+
+
+def test_fetch_price_vci_rejects_zero_close_price(monkeypatch: pytest.MonkeyPatch):
+    quote_instance = MagicMock()
+    quote_instance.history.return_value = _fake_history([("2026-07-10", 0.0)])
+    _patch_quote(monkeypatch, quote_instance)
+
+    result = main._fetch_price_vci("ZERO")
+
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _fetch_price_fmarket
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_fund_client_cache():
+    """`_fund_client()` cache 1 instance `Fund()` ở module scope — reset giữa
+    các test để không rò instance mock của test này sang test khác."""
+    main._fund_client_instance = None
+    yield
+    main._fund_client_instance = None
+
+
+def _fake_fmarket_client(filter_result: pd.DataFrame, nav_result: pd.DataFrame) -> MagicMock:
+    client = MagicMock()
+    client.filter.return_value = filter_result
+    client.nav_report.return_value = nav_result
+    return client
+
+
+def _patch_fund(monkeypatch: pytest.MonkeyPatch, client: MagicMock) -> MagicMock:
+    fund_cls = MagicMock(return_value=client)
+    monkeypatch.setattr(main, "Fund", fund_cls)
+    return fund_cls
+
+
+def test_fetch_price_fmarket_returns_latest_nav_as_raw_vnd_no_scale(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """fmarket NAV/chứng chỉ quỹ đã là VND thô — KHÔNG nhân PRICE_SCALE (khác
+    VCI trả nghìn đồng), xem process/DECISION.md."""
+    filter_df = pd.DataFrame({"id": [23], "shortName": ["VESAF"]})
+    nav_df = pd.DataFrame(
+        {"date": ["2026-07-09", "2026-07-10"], "nav_per_unit": [32648.37, 32455.33]}
+    )
+    client = _fake_fmarket_client(filter_df, nav_df)
+    _patch_fund(monkeypatch, client)
+
+    result = main._fetch_price_fmarket("VESAF")
+
+    assert result == (date(2026, 7, 10), Decimal("32455.33"))
+    client.nav_report.assert_called_once_with(fundId=23)
+
+
+def test_fetch_price_fmarket_sorts_by_date_before_taking_latest(monkeypatch: pytest.MonkeyPatch):
+    """`nav_report()` không đảm bảo thứ tự — phải tự sort theo date, không
+    tin tưởng dòng cuối của response."""
+    filter_df = pd.DataFrame({"id": [23], "shortName": ["VESAF"]})
+    nav_df = pd.DataFrame(
+        {"date": ["2026-07-10", "2026-07-08", "2026-07-09"], "nav_per_unit": [3.0, 1.0, 2.0]}
+    )
+    client = _fake_fmarket_client(filter_df, nav_df)
+    _patch_fund(monkeypatch, client)
+
+    result = main._fetch_price_fmarket("VESAF")
+
+    assert result == (date(2026, 7, 10), Decimal("3.0"))
+
+
+def test_fetch_price_fmarket_matches_exact_short_name_not_first_substring_hit(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """`filter()` search substring phía server (vd "VCBF" trả về cả
+    VCBF-BCF/VCBF-MGF/...) — phải tự lọc khớp CHÍNH XÁC shortName."""
+    filter_df = pd.DataFrame(
+        {
+            "id": [82, 46, 32, 33, 31],
+            "shortName": ["VCBF-AIF", "VCBF-MGF", "VCBF-BCF", "VCBF-FIF", "VCBF-TBF"],
+        }
+    )
+    nav_df = pd.DataFrame({"date": ["2026-07-10"], "nav_per_unit": [42810.18]})
+    client = _fake_fmarket_client(filter_df, nav_df)
+    _patch_fund(monkeypatch, client)
+
+    result = main._fetch_price_fmarket("VCBF-BCF")
+
+    assert result == (date(2026, 7, 10), Decimal("42810.18"))
+    client.nav_report.assert_called_once_with(fundId=32)
+
+
+def test_fetch_price_fmarket_returns_none_when_no_exact_match(monkeypatch: pytest.MonkeyPatch):
+    """Chỉ có match theo substring, không có match CHÍNH XÁC -> coi như fail
+    (không đoán đại 1 quỹ khác)."""
+    filter_df = pd.DataFrame({"id": [82, 46], "shortName": ["VCBF-AIF", "VCBF-MGF"]})
+    client = _fake_fmarket_client(filter_df, pd.DataFrame())
+    _patch_fund(monkeypatch, client)
+
+    result = main._fetch_price_fmarket("VCBF")
+
+    assert result is None
+    client.nav_report.assert_not_called()
+
+
+def test_fetch_price_fmarket_returns_none_when_fund_not_found_at_all(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Quỹ không phân phối qua fmarket (vd TCBF, phân phối riêng qua kênh
+    ngân hàng) -> `filter()` raise ValueError -> bị nuốt lại thành None."""
+    client = MagicMock()
+    client.filter.side_effect = ValueError("no fund found with this symbol TCBF")
+    _patch_fund(monkeypatch, client)
+
+    result = main._fetch_price_fmarket("TCBF")
+
+    assert result is None
+
+
+def test_fetch_price_fmarket_rejects_invalid_nav(monkeypatch: pytest.MonkeyPatch):
+    filter_df = pd.DataFrame({"id": [23], "shortName": ["VESAF"]})
+    nav_df = pd.DataFrame({"date": ["2026-07-10"], "nav_per_unit": [0.0]})
+    client = _fake_fmarket_client(filter_df, nav_df)
+    _patch_fund(monkeypatch, client)
+
+    result = main._fetch_price_fmarket("VESAF")
+
+    assert result is None
+
+
+def test_fund_client_is_cached_across_multiple_fetch_calls(monkeypatch: pytest.MonkeyPatch):
+    """`Fund()` tải toàn bộ listing khi khởi tạo — chỉ tạo 1 lần dùng chung
+    cho mọi mã fallback trong cùng lần chạy job (tôn trọng rate limit)."""
+    filter_df = pd.DataFrame({"id": [23], "shortName": ["VESAF"]})
+    nav_df = pd.DataFrame({"date": ["2026-07-10"], "nav_per_unit": [32455.33]})
+    client = _fake_fmarket_client(filter_df, nav_df)
+    fund_cls = _patch_fund(monkeypatch, client)
+
+    main._fetch_price_fmarket("VESAF")
+    main._fetch_price_fmarket("VESAF")
+
+    fund_cls.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# fetch_price (orchestration: VCI trước, fallback fmarket)
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_price_returns_vci_result_without_trying_fmarket(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        main, "_fetch_price_vci", MagicMock(return_value=(date(2026, 7, 10), Decimal("56600.0")))
+    )
+    fmarket_mock = MagicMock()
+    monkeypatch.setattr(main, "_fetch_price_fmarket", fmarket_mock)
+
+    result = main.fetch_price("VNM")
+
+    assert result == (date(2026, 7, 10), Decimal("56600.0"))
+    fmarket_mock.assert_not_called()
+
+
+def test_fetch_price_falls_back_to_fmarket_when_vci_fails(monkeypatch: pytest.MonkeyPatch):
+    """Quỹ mở không niêm yết (vd VESAF) -> VCI không có dữ liệu -> fallback
+    fmarket lấy NAV."""
+    monkeypatch.setattr(main, "_fetch_price_vci", MagicMock(return_value=None))
+    monkeypatch.setattr(
+        main,
+        "_fetch_price_fmarket",
+        MagicMock(return_value=(date(2026, 7, 10), Decimal("32455.33"))),
+    )
+
+    result = main.fetch_price("VESAF")
+
+    assert result == (date(2026, 7, 10), Decimal("32455.33"))
+
+
+def test_fetch_price_returns_none_when_both_vci_and_fmarket_fail(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(main, "_fetch_price_vci", MagicMock(return_value=None))
+    monkeypatch.setattr(main, "_fetch_price_fmarket", MagicMock(return_value=None))
+
+    result = main.fetch_price("UNKNOWN")
 
     assert result is None
 

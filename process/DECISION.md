@@ -54,3 +54,23 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - Wiring đúng 4 chỗ: `HoldingsOverviewScreen`, `HoldingsEmptyState`, `DashboardScreen` (mới), `SettingsScreen` (mới, tách từ `settings/page.tsx` inline JSX cũ).
 - Docs đã sync: `process/UI_phase_2.md` (mới — Props-contract chi tiết từng component Phase 2 UI, deliverable của `design-implementer`), `process/phase-2.md` (trỏ tới `UI_phase_2.md`).
 - Còn treo (business-implementer xác nhận khi wiring dữ liệu thật, xem `UI_phase_2.md`): nơi lưu lựa chọn mốc chốt định giá (`Setting` không lưu theo `docs/domain/09-settings.md` — query param/cookie/field `User` mới TBD); route thật cho `NavOverrideForm` (hiện chưa có, CTA tạm trỏ `ROUTES.holdingDetail`).
+
+## 2026-07-12
+
+**Đơn vị giá `jobs/price-fetcher`: VCI trả nghìn đồng (×1000), fmarket trả VND thô (không nhân).**
+- `PRICE_SCALE = Decimal(1000)` áp cho nguồn VCI (`vnstock.Quote`, cổ phiếu/ETF niêm yết) — verify thủ công VNM/FPT khớp giá thị trường thật. Lý do: khớp đơn vị với `Cashflow.pricePerUnit` (VND thô), tránh sai NAV/XIRR **1000 lần** nếu quên quy đổi.
+- fmarket (`vnstock.Fund`, quỹ mở không niêm yết, xem mục dưới) trả NAV/chứng chỉ quỹ **đã là VND thô** — verify thủ công VESAF: `listing().nav` (32455.33) khớp `nav_report()` mới nhất cùng ngày. **KHÔNG** áp `PRICE_SCALE` cho nguồn này — 2 nguồn khác đơn vị dù cùng nằm trong thư viện `vnstock`.
+- Docs đã sync: `docs/domain/04-pricing-and-valuation.md` (mục "Quy tắc & bất biến", thêm 1 câu nêu rõ 2 nguồn khác đơn vị).
+
+**FUND holdings không niêm yết sàn (quỹ mở, vd VESAF/DCDS) — thêm fallback fmarket khi VCI không có dữ liệu.**
+- Bối cảnh: `Holding{ type: FUND }` gồm cả ETF niêm yết sàn (có ticker VCI thật, vd FUEVFVND) lẫn quỹ mở không niêm yết (vd TCBF, VESAF, DCDS — nguồn VCI luôn fail vì không có ticker sàn). Không có field phân loại thêm trong `Holding` để tách 2 loại này trước khi gọi API.
+- Quyết định: `fetch_price(symbol)` thử VCI trước (`_fetch_price_vci`); nếu rỗng/lỗi, fallback thử fmarket (`_fetch_price_fmarket`, dùng `vnstock.explorer.fmarket.fund.Fund`) trước khi coi là fail hẳn. Match quỹ theo **CHÍNH XÁC** `shortName` (API `Fund.filter()` search substring phía server, vd tìm "VCBF" trả về cả VCBF-BCF/VCBF-MGF/...).
+- **Giới hạn đã biết:** fmarket chỉ liệt kê quỹ phân phối qua nền tảng Fmarket — **không phủ hết mọi quỹ mở VN**. Verify thủ công: `TCBF` (ví dụ minh hoạ ở `docs/domain/01-assets-and-holdings.md`) **không có** trong danh sách 66 quỹ của fmarket tại thời điểm verify (có thể phân phối riêng qua kênh ngân hàng Techcombank, không qua Fmarket) — trong khi VESAF/DCDS **có**. Khi cả VCI lẫn fmarket đều fail, job log rõ gợi ý nhập tay qua `NavOverride` thay vì log chung chung.
+- fmarket **không có retry nội bộ** (khác VCI dùng tenacity) — cố ý không thêm retry/backoff thủ công riêng cho nguồn này (job chạy lại theo lịch mỗi ngày nên lỗi mạng thoáng qua tự phục hồi ở lần chạy sau; thêm retry tay riêng cho 1 nguồn đi ngược lý do đã bỏ retry tay ở VCI — xem mục double-retry bên dưới).
+- `Fund()` tải toàn bộ listing quỹ khi khởi tạo (1 API call) — cache 1 instance dùng chung trong suốt lần chạy job (`_fund_client()`), tránh gọi lại `listing()` cho mỗi mã FUND fallback.
+- Docs đã sync: `docs/domain/04-pricing-and-valuation.md`, `jobs/price-fetcher/README.md`.
+
+**Bỏ retry loop thủ công trong `fetch_price` — `Quote.history()` (VCI) đã tự retry nội bộ qua tenacity.**
+- Bối cảnh: code review phát hiện `fetch_price()` tự viết retry loop (3 lần, backoff 2/4/8s) bọc ngoài `Quote.history()`, trong khi `Quote.history()` của vnstock đã tự retry 3 lần nội bộ (`Config.RETRIES=3`, tenacity `wait_exponential`, xem `vnstock/api/quote.py`). 1 mã lỗi có thể tốn tới 9 lần gọi HTTP thật — không tôn trọng rate limit.
+- Quyết định: bỏ hẳn retry loop tay viết; `_fetch_price_vci`/`_fetch_price_fmarket` chỉ `try/except` bắt exception cuối cùng (sau khi tenacity đã tự retry hết ở phía VCI) rồi trả `None`, không raise ra ngoài — vẫn đúng rule "cô lập lỗi" (`docs/rules/python-job.md`), chỉ bỏ phần tự retry dư thừa.
+- Docs đã sync: không cần đổi `docs/rules/python-job.md` (rule "retry có backoff" vẫn đúng — chỉ là backoff nằm ở tầng thư viện `vnstock` thay vì code job tự viết); ghi lại đây để không quay lại thêm retry tay lần nữa.
