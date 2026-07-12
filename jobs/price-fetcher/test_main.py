@@ -7,7 +7,7 @@ test được logic riêng").
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pandas as pd
 import pytest
@@ -27,14 +27,14 @@ def _fake_cursor(fetchall_result: list[tuple]) -> MagicMock:
     return cursor
 
 
-def test_get_symbols_to_fetch_returns_distinct_symbols():
-    cursor = _fake_cursor([("VNM",), ("FPT",)])
+def test_get_symbols_to_fetch_returns_distinct_symbols_with_type():
+    cursor = _fake_cursor([("VNM", "STOCK"), ("VESAF", "FUND")])
     conn = MagicMock()
     conn.cursor.return_value = cursor
 
     result = main.get_symbols_to_fetch(conn)
 
-    assert result == ["VNM", "FPT"]
+    assert result == [("VNM", "STOCK"), ("VESAF", "FUND")]
 
 
 def test_get_symbols_to_fetch_only_queries_open_stock_and_fund_positions():
@@ -46,6 +46,7 @@ def test_get_symbols_to_fetch_only_queries_open_stock_and_fund_positions():
 
     sql = cursor.execute.call_args[0][0]
     assert '"Holding"' in sql
+    assert "symbol, type" in sql
     assert "STOCK" in sql
     assert "FUND" in sql
     assert "quantity > 0" in sql
@@ -323,13 +324,15 @@ def test_fetch_price_returns_vci_result_without_trying_fmarket(monkeypatch: pyte
     fmarket_mock = MagicMock()
     monkeypatch.setattr(main, "_fetch_price_fmarket", fmarket_mock)
 
-    result = main.fetch_price("VNM")
+    result = main.fetch_price("VNM", "STOCK")
 
     assert result == (date(2026, 7, 10), Decimal("56600.0"))
     fmarket_mock.assert_not_called()
 
 
-def test_fetch_price_falls_back_to_fmarket_when_vci_fails(monkeypatch: pytest.MonkeyPatch):
+def test_fetch_price_falls_back_to_fmarket_when_vci_fails_for_fund(
+    monkeypatch: pytest.MonkeyPatch,
+):
     """Quỹ mở không niêm yết (vd VESAF) -> VCI không có dữ liệu -> fallback
     fmarket lấy NAV."""
     monkeypatch.setattr(main, "_fetch_price_vci", MagicMock(return_value=None))
@@ -339,18 +342,31 @@ def test_fetch_price_falls_back_to_fmarket_when_vci_fails(monkeypatch: pytest.Mo
         MagicMock(return_value=(date(2026, 7, 10), Decimal("32455.33"))),
     )
 
-    result = main.fetch_price("VESAF")
+    result = main.fetch_price("VESAF", "FUND")
 
     assert result == (date(2026, 7, 10), Decimal("32455.33"))
 
 
-def test_fetch_price_returns_none_when_both_vci_and_fmarket_fail(
+def test_fetch_price_does_not_fall_back_to_fmarket_for_stock(monkeypatch: pytest.MonkeyPatch):
+    """STOCK luôn ở sàn — VCI fail thì fail hẳn, không thử fmarket (vô ích +
+    rủi ro trùng shortName với 1 quỹ mở nào đó)."""
+    monkeypatch.setattr(main, "_fetch_price_vci", MagicMock(return_value=None))
+    fmarket_mock = MagicMock()
+    monkeypatch.setattr(main, "_fetch_price_fmarket", fmarket_mock)
+
+    result = main.fetch_price("VNM", "STOCK")
+
+    assert result is None
+    fmarket_mock.assert_not_called()
+
+
+def test_fetch_price_returns_none_when_both_vci_and_fmarket_fail_for_fund(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setattr(main, "_fetch_price_vci", MagicMock(return_value=None))
     monkeypatch.setattr(main, "_fetch_price_fmarket", MagicMock(return_value=None))
 
-    result = main.fetch_price("UNKNOWN")
+    result = main.fetch_price("UNKNOWN", "FUND")
 
     assert result is None
 
@@ -401,7 +417,7 @@ def fake_conn() -> MagicMock:
 
 
 def _patch_main_infra(
-    monkeypatch: pytest.MonkeyPatch, fake_conn: MagicMock, symbols: list[str]
+    monkeypatch: pytest.MonkeyPatch, fake_conn: MagicMock, symbols: list[tuple[str, str]]
 ) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@localhost:5433/db")
     monkeypatch.setattr(main, "load_dotenv", MagicMock())
@@ -414,9 +430,11 @@ def test_main_isolates_one_symbol_failure_and_saves_the_rest(
 ):
     """Một mã không lấy được giá (fetch_price -> None) không được chặn các mã
     còn lại — xem docs/rules/python-job.md 'Cô lập lỗi'."""
-    _patch_main_infra(monkeypatch, fake_conn, ["VNM", "BAD", "FPT"])
+    _patch_main_infra(
+        monkeypatch, fake_conn, [("VNM", "STOCK"), ("BAD", "STOCK"), ("FPT", "STOCK")]
+    )
 
-    def fake_fetch(symbol: str):
+    def fake_fetch(symbol: str, asset_type: str):
         if symbol == "BAD":
             return None
         return date(2026, 7, 10), Decimal("56600.0")
@@ -432,12 +450,27 @@ def test_main_isolates_one_symbol_failure_and_saves_the_rest(
     assert fake_conn.commit.call_count == 2
 
 
+def test_main_passes_asset_type_through_to_fetch_price(
+    monkeypatch: pytest.MonkeyPatch, fake_conn: MagicMock
+):
+    """type từ get_symbols_to_fetch phải tới đúng fetch_price (STOCK không
+    fallback fmarket, FUND mới fallback) — xem finding code-review."""
+    _patch_main_infra(monkeypatch, fake_conn, [("VNM", "STOCK"), ("VESAF", "FUND")])
+    fetch_mock = MagicMock(return_value=(date(2026, 7, 10), Decimal("1")))
+    monkeypatch.setattr(main, "fetch_price", fetch_mock)
+    monkeypatch.setattr(main, "save_price", MagicMock())
+
+    main.main()
+
+    assert fetch_mock.call_args_list == [call("VNM", "STOCK"), call("VESAF", "FUND")]
+
+
 def test_main_rolls_back_and_continues_when_save_price_raises(
     monkeypatch: pytest.MonkeyPatch, fake_conn: MagicMock
 ):
     """Lỗi bất ngờ khi ghi DB cho một mã (vd deadlock) không được làm mất mã
     tiếp theo — connection phải rollback để dùng lại được."""
-    _patch_main_infra(monkeypatch, fake_conn, ["VNM", "FPT"])
+    _patch_main_infra(monkeypatch, fake_conn, [("VNM", "STOCK"), ("FPT", "STOCK")])
     monkeypatch.setattr(
         main, "fetch_price", MagicMock(return_value=(date(2026, 7, 10), Decimal("1")))
     )

@@ -1,13 +1,15 @@
 """Entry point cho job lấy giá (GitHub Actions, chạy theo lịch).
 
-Lấy danh sách mã STOCK/FUND đang có vị thế mở (quantity > 0) từ `Holding`, gọi
-vnstock lấy giá EOD gần nhất, rồi upsert vào `PriceQuote` (idempotent theo
-(symbol, date)). Hai nguồn được thử theo thứ tự cho mỗi mã:
-1. VCI (`vnstock.Quote`) — mã niêm yết sàn: cổ phiếu, ETF/chứng chỉ quỹ niêm yết.
-2. fmarket (`vnstock.Fund`) — NAV quỹ mở không niêm yết (vd VESAF, DCDS), dùng
-   khi VCI không có dữ liệu. `Holding.symbol` không có field phân loại
-   ETF-niêm-yết vs quỹ-mở nên không đoán trước được, phải thử VCI trước rồi
-   fallback (xem docs/domain/01-assets-and-holdings.md, process/DECISION.md).
+Lấy danh sách (symbol, type) STOCK/FUND đang có vị thế mở (quantity > 0) từ
+`Holding`, gọi vnstock lấy giá EOD gần nhất, rồi upsert vào `PriceQuote`
+(idempotent theo (symbol, date)). Nguồn theo `type`:
+- STOCK: chỉ VCI (`vnstock.Quote`) — mã niêm yết sàn.
+- FUND: thử VCI trước (ETF/chứng chỉ quỹ niêm yết); nếu rỗng/lỗi, fallback
+  fmarket (`vnstock.Fund`) lấy NAV quỹ mở không niêm yết (vd VESAF, DCDS).
+  `Holding.type = FUND` gồm cả 2 loại, không phân biệt thêm được qua field
+  nào khác nên phải thử VCI trước rồi fallback (xem
+  docs/domain/01-assets-and-holdings.md, process/DECISION.md). STOCK không
+  fallback fmarket — vừa vô ích vừa có rủi ro trùng `shortName` với 1 quỹ.
 GOLD/BOND không nằm trong phạm vi job này — mặc định nhập tay qua
 `NavOverride` (nguồn tự động kém ổn định, xem
 docs/domain/04-pricing-and-valuation.md). Lỗi một mã không được làm sập cả
@@ -53,22 +55,25 @@ def to_libpq_url(database_url: str) -> str:
     return urlunparse(parsed._replace(query=urlencode(query)))
 
 
-def get_symbols_to_fetch(conn: psycopg.Connection) -> list[str]:
-    """Mã STOCK/FUND đang có vị thế mở (quantity > 0).
+def get_symbols_to_fetch(conn: psycopg.Connection) -> list[tuple[str, str]]:
+    """(symbol, type) của STOCK/FUND đang có vị thế mở (quantity > 0).
 
     Vị thế đóng (quantity = 0) có NAV = 0 nên không cần giá mới — tiết kiệm
     rate limit vnstock. GOLD/BOND không nằm trong danh sách: nguồn tự động
-    kém ổn định, mặc định nhập tay (NavOverride).
+    kém ổn định, mặc định nhập tay (NavOverride). Trả kèm `type` để
+    `fetch_price` biết mã nào mới cần thử fallback fmarket (chỉ FUND mới có
+    thể là quỹ mở không niêm yết — STOCK luôn ở sàn, fallback fmarket cho
+    STOCK vừa vô ích vừa có rủi ro trùng shortName với 1 quỹ nào đó).
     """
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT DISTINCT symbol
+            SELECT DISTINCT symbol, type
             FROM "Holding"
             WHERE type IN ('STOCK', 'FUND') AND quantity > 0
             """
         )
-        return [row[0] for row in cur.fetchall()]
+        return [(row[0], row[1]) for row in cur.fetchall()]
 
 
 def _is_valid_price(price: Decimal) -> bool:
@@ -165,18 +170,24 @@ def _fetch_price_fmarket(symbol: str) -> tuple[date, Decimal] | None:
         return None
 
 
-def fetch_price(symbol: str) -> tuple[date, Decimal] | None:
-    """Lấy giá EOD gần nhất của `symbol`, thử VCI trước rồi fallback fmarket.
+def fetch_price(symbol: str, asset_type: str) -> tuple[date, Decimal] | None:
+    """Lấy giá EOD gần nhất của `symbol`.
 
-    `Holding.symbol` không phân biệt được ETF niêm yết vs quỹ mở không niêm
-    yết (không có field phân loại thêm) nên không đoán trước được nguồn đúng
-    — thử VCI (mã niêm yết sàn) trước; nếu rỗng/lỗi thì thử fmarket (NAV quỹ
-    mở) trước khi coi là fail hẳn. Trả `None`, không raise ra ngoài — một mã
-    lỗi không được làm sập cả job (xem docs/rules/python-job.md).
+    STOCK luôn ở sàn — chỉ thử VCI, không fallback fmarket (vô ích, và có rủi
+    ro trùng `shortName` với 1 quỹ mở nào đó trên fmarket → lưu nhầm giá).
+    FUND gồm cả ETF niêm yết (VCI có data) lẫn quỹ mở không niêm yết (chỉ
+    fmarket có data) và `Holding` không phân biệt thêm được 2 loại này qua
+    field nào khác — nên với FUND: thử VCI trước, rỗng/lỗi thì fallback
+    fmarket trước khi coi là fail hẳn. Trả `None`, không raise ra ngoài — một
+    mã lỗi không được làm sập cả job (xem docs/rules/python-job.md).
     """
     result = _fetch_price_vci(symbol)
     if result is not None:
         return result
+
+    if asset_type != "FUND":
+        logger.warning("no VCI data for %s (type=%s)", symbol, asset_type)
+        return None
 
     logger.info("no VCI data for %s (possibly an open-end fund) — trying fmarket NAV", symbol)
     result = _fetch_price_fmarket(symbol)
@@ -232,9 +243,9 @@ def main() -> None:
 
         ok_count = 0
         fail_count = 0
-        for symbol in symbols:
+        for symbol, asset_type in symbols:
             try:
-                result = fetch_price(symbol)
+                result = fetch_price(symbol, asset_type)
                 if result is None:
                     fail_count += 1
                     continue
