@@ -14,6 +14,16 @@ export type CutoffKey = "TODAY" | "END_OF_MONTH" | "END_OF_YEAR";
 export type CutoffSelection =
   { key: CutoffKey } | { key: "CUSTOM"; date: Date };
 
+// Nhãn hiển thị dùng chung cho Settings (CutoffPicker) + Dashboard
+// (cutoffLabel) — một nguồn sự thật, tránh lệch câu chữ giữa 2 nơi hiển thị
+// cùng một mốc chốt.
+export const CUTOFF_LABELS: Record<CutoffKey | "CUSTOM", string> = {
+  TODAY: "Hôm nay",
+  END_OF_MONTH: "Cuối tháng này",
+  END_OF_YEAR: "Cuối năm nay",
+  CUSTOM: "Tuỳ chỉnh",
+};
+
 // Cuối ngày theo local time (23:59:59.999) — Cashflow.date là DateTime (không
 // phải @db.Date), có thể mang giờ khác 0h tùy form nhập, nên cutoff phải chốt
 // ở cuối ngày để không bỏ sót dòng tiền phát sinh cùng ngày với mốc chốt.

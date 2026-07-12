@@ -19,4 +19,8 @@ export const ROUTES = {
   settings: "/settings",
   members: "/settings/members",
   inviteMember: "/settings/members/invite",
+  // Route handler ghi cookie mốc chốt rồi redirect về /settings — xem
+  // src/app/api/cutoff/route.ts. Chỉ nhận 3 key cố định (CUSTOM chưa wiring).
+  cutoffAction: (key: "TODAY" | "END_OF_MONTH" | "END_OF_YEAR") =>
+    `/api/cutoff?key=${key}`,
 } as const;

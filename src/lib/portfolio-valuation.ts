@@ -11,7 +11,11 @@ import {
 } from "@/features/holdings/queries";
 import type { HoldingSummary } from "@/features/holdings/types";
 import { getSession } from "@/lib/auth";
-import { resolveCutoffDate } from "@/lib/cutoff";
+import {
+  CUTOFF_LABELS,
+  type CutoffSelection,
+  resolveCutoffDate,
+} from "@/lib/cutoff";
 import { db } from "@/lib/db";
 import { formatDate, formatDayMonth } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
@@ -20,7 +24,28 @@ import { valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
 import { buildXirrCashflows } from "@/lib/xirr-cashflow";
 
-import type { PortfolioValuation } from "./types";
+// Shape trả về bởi getPortfolioValuation() — khớp NGUYÊN VĂN
+// DashboardScreenProps (features/dashboard/components/DashboardScreen) TRỪ
+// displayName (lấy từ session ở page.tsx, không phải việc của query) và
+// hidden (cờ ẩn số tiền, không set ở tầng dữ liệu). Khai độc lập (không
+// `Omit<DashboardScreenProps, ...>`) vì file này nằm ở lib/ — lib/ không
+// được phụ thuộc ngược vào features/ (cùng lý do đã ghi ở lib/cutoff.ts).
+// TypeScript structural typing vẫn đảm bảo khớp Props khi spread ở page.tsx.
+export type PortfolioValuation = {
+  cutoffLabel: string;
+  cutoffDate: string;
+  cutoffHref: string;
+  navValue: string;
+  navValueIsPartial: boolean;
+  navDeltaAmount: string;
+  navDeltaPercent: number;
+  xirr: XirrResultUi;
+  absolutePnl: string;
+  absolutePnlIsPartial: boolean;
+  allocation: AllocationSlice[];
+  priceFreshnessNote: string;
+  missingPriceHoldings: MissingPriceHolding[];
+};
 
 // Thứ tự hiển thị cố định cho allocation — khớp thứ tự dùng ở
 // AssetTypeBadge/AllocationBar mockup (STOCK, FUND, BOND, GOLD), không phụ
@@ -160,10 +185,12 @@ function toUiXirr(result: ReturnType<typeof computeXirr>): XirrResultUi {
 // NAV toàn danh mục + XIRR (theo năm) + lãi/lỗ tuyệt đối + phân bổ theo loại +
 // danh sách mã thiếu giá, tại một mốc chốt (mặc định "hôm nay" —
 // docs/domain/05-returns-xirr-and-pnl.md "Mốc chốt chọn được"). Dùng chung cho
-// Dashboard (2a/2f) — process/UI_phase_2.md mục "2a Dashboard".
+// Dashboard (2a/2f) và preview XIRR từng mốc ở Settings (2e) —
+// process/UI_phase_2.md.
 export async function getPortfolioValuation(
-  cutoffDate: Date = resolveCutoffDate({ key: "TODAY" }),
+  selection: CutoffSelection = { key: "TODAY" },
 ): Promise<PortfolioValuation> {
+  const cutoffDate = resolveCutoffDate(selection);
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
@@ -239,7 +266,7 @@ export async function getPortfolioValuation(
   const priceFreshnessNote = await getPriceFreshnessNote(open, valuations);
 
   return {
-    cutoffLabel: "Hôm nay",
+    cutoffLabel: CUTOFF_LABELS[selection.key],
     cutoffDate: formatDate(cutoffDate),
     cutoffHref: ROUTES.settings,
     navValue: navSum.toString(),
