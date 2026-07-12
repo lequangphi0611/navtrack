@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { formatDate, formatMoney, formatQuantity } from "./format";
+import {
+  formatDate,
+  formatDayMonth,
+  formatMoney,
+  formatQuantity,
+} from "./format";
 
 describe("formatMoney", () => {
   test("format số dương thành VND", () => {
@@ -35,5 +40,11 @@ describe("formatDate", () => {
 
   test("nhận string ISO", () => {
     expect(formatDate("2026-07-09T00:00:00.000Z")).toBe("09/07/2026");
+  });
+});
+
+describe("formatDayMonth", () => {
+  test("format dd/MM theo giờ Asia/Ho_Chi_Minh, không kèm năm", () => {
+    expect(formatDayMonth(new Date("2026-07-09T00:00:00.000Z"))).toBe("09/07");
   });
 });
