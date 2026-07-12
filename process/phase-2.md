@@ -7,8 +7,8 @@ Có định giá thị trường (NAV) và hai chỉ số hiệu quả: **XIRR (
 Lớp Presentational của phase này (6 màn 2a–2f + BottomNav dùng chung) đã xong, xem **[`process/UI_phase_2.md`](./UI_phase_2.md)** — Props-contract từng component + query/Server Action còn thiếu (đọc trước khi code phần business bên dưới, khỏi phải hỏi lại design-implementer).
 
 ## Công việc cần làm
-- [ ] Model `PriceQuote` (`symbol`, `date`, `price`, `source`, `@@unique([symbol, date])`) + migration
-- [ ] Job **Python + vnstock** (`jobs/price-fetcher/`) chạy trên GitHub Actions, upsert `PriceQuote`; secrets ở GitHub Secrets
+- [x] Model `PriceQuote` (`symbol`, `date`, `price`, `source`, `@@unique([symbol, date])`) + migration
+- [x] Job **Python + vnstock** (`jobs/price-fetcher/`) chạy trên GitHub Actions, upsert `PriceQuote`; secrets ở GitHub Secrets
 - [ ] Định giá `Holding` tại ngày D: ưu tiên `NavOverride` → nếu không có, `PriceQuote` gần nhất ≤ D
 - [ ] `NavOverride` cho vàng/trái phiếu (nhập tay); nhãn nguồn giá (tự động/nhập tay)
 - [ ] `lib/xirr.ts` — **lai**: thư viện + lớp bọc (validate dấu dòng tiền, bắt không hội tụ, gắn nhãn "theo năm")
