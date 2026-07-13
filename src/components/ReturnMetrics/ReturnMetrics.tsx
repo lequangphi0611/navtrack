@@ -42,7 +42,7 @@ function ReturnMetrics({
     <div className={cn("grid grid-cols-2 gap-3", className)}>
       <div
         className={cn(
-          "rounded-2xl border p-3.75",
+          "min-w-0 rounded-2xl border p-3.75",
           xirrUnavailable
             ? "border-warning/24 bg-warning/7"
             : "border-border bg-card",
@@ -85,13 +85,13 @@ function ReturnMetrics({
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-3.75">
+      <div className="min-w-0 rounded-2xl border border-border bg-card p-3.75">
         <div className="mb-2 text-[11.5px] font-semibold text-muted-foreground">
           {pnlLabel}
         </div>
         <div
           className={cn(
-            "font-mono text-[22px] leading-none font-semibold tabular-nums",
+            "font-mono text-[22px] leading-tight font-semibold break-words tabular-nums",
             signColorClass(pnlNumber),
           )}
         >
