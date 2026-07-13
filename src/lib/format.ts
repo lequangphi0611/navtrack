@@ -19,14 +19,44 @@ const PERCENT_FORMATTER = new Intl.NumberFormat("vi-VN", {
   maximumFractionDigits: 1,
 });
 
+const COMPACT_MONEY_FORMATTER = new Intl.NumberFormat("vi-VN", {
+  maximumFractionDigits: 2,
+});
+
+// Ngưỡng rút gọn — kiểm tra từ lớn xuống nhỏ, giá trị đầu tiên khớp thắng.
+const COMPACT_MONEY_TIERS: {
+  threshold: number;
+  divisor: number;
+  suffix: string;
+}[] = [
+  { threshold: 1_000_000_000, divisor: 1_000_000_000, suffix: " tỷ" },
+  { threshold: 1_000_000, divisor: 1_000_000, suffix: "tr" },
+  { threshold: 1_000, divisor: 1_000, suffix: "k" },
+];
+
 // value là Decimal đã serialize thành string ở biên server — không nhận number
 // (xem docs/rules/component-architecture.md#format-locale).
+// compact: rút gọn "200.000.000 ₫" -> "200tr" cho chỗ hiển thị hẹp (thẻ nhỏ, badge,
+// dòng danh sách). Dưới 1.000 hoặc không truyền compact -> giữ nguyên định dạng đầy
+// đủ có ký hiệu ₫ như cũ. Không tự đổi tier sau khi làm tròn (vd 999.999 rơi vào
+// tier k -> "1.000k" thay vì nhảy sang "1tr") — chấp nhận, không thêm logic phức
+// tạp cho ca hiếm này.
 export function formatMoney(
   value: string,
-  opts?: { hidden?: boolean },
+  opts?: { hidden?: boolean; compact?: boolean },
 ): string {
   if (opts?.hidden) return "••••••";
-  return MONEY_FORMATTER.format(Number(value));
+  const amount = Number(value);
+  if (opts?.compact) {
+    const abs = Math.abs(amount);
+    const tier = COMPACT_MONEY_TIERS.find((t) => abs >= t.threshold);
+    if (tier) {
+      const sign = amount < 0 ? "-" : "";
+      const shortValue = COMPACT_MONEY_FORMATTER.format(abs / tier.divisor);
+      return `${sign}${shortValue}${tier.suffix}`;
+    }
+  }
+  return MONEY_FORMATTER.format(amount);
 }
 
 export function formatQuantity(value: string, unit: string): string {

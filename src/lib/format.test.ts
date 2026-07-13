@@ -24,6 +24,62 @@ describe("formatMoney", () => {
     const formatted = formatMoney("-10000000");
     expect(formatted).toMatch(/^-10\.000\.000\s₫$/);
   });
+
+  test("compact: dưới 1.000 giữ nguyên định dạng đầy đủ", () => {
+    expect(formatMoney("999", { compact: true })).toMatch(/^999\s₫$/);
+  });
+
+  test("compact: 1.000 rút gọn thành k", () => {
+    expect(formatMoney("1000", { compact: true })).toBe("1k");
+  });
+
+  test("compact: 999.000 rút gọn thành k", () => {
+    expect(formatMoney("999000", { compact: true })).toBe("999k");
+  });
+
+  test("compact: 200.000 rút gọn thành k", () => {
+    expect(formatMoney("200000", { compact: true })).toBe("200k");
+  });
+
+  test("compact: 1.000.000 rút gọn thành tr", () => {
+    expect(formatMoney("1000000", { compact: true })).toBe("1tr");
+  });
+
+  test("compact: 999.000.000 rút gọn thành tr", () => {
+    expect(formatMoney("999000000", { compact: true })).toBe("999tr");
+  });
+
+  test("compact: 200.000.000 rút gọn thành tr", () => {
+    expect(formatMoney("200000000", { compact: true })).toBe("200tr");
+  });
+
+  test("compact: 1.000.000.000 rút gọn thành tỷ", () => {
+    expect(formatMoney("1000000000", { compact: true })).toBe("1 tỷ");
+  });
+
+  test("compact: 1.500.000.000 rút gọn thành tỷ có thập phân", () => {
+    expect(formatMoney("1500000000", { compact: true })).toBe("1,5 tỷ");
+  });
+
+  test("compact: số âm vẫn giữ dấu", () => {
+    expect(formatMoney("-200000", { compact: true })).toBe("-200k");
+  });
+
+  test("compact: bằng 0 giữ nguyên định dạng đầy đủ", () => {
+    expect(formatMoney("0", { compact: true })).toMatch(/^0\s₫$/);
+  });
+
+  test("compact kết hợp hidden -> vẫn ưu tiên che số", () => {
+    expect(formatMoney("2000000", { compact: true, hidden: true })).toBe(
+      "••••••",
+    );
+  });
+
+  test("compact = false giữ nguyên định dạng đầy đủ như không truyền option", () => {
+    expect(formatMoney("10000000", { compact: false })).toBe(
+      formatMoney("10000000"),
+    );
+  });
 });
 
 describe("formatQuantity", () => {

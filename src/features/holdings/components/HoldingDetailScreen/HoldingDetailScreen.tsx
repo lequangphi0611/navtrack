@@ -151,7 +151,7 @@ function HoldingDetailScreen({
                 Giá vốn bình quân
               </div>
               <div className="font-mono font-medium text-foreground tabular-nums">
-                {formatMoney(holding.avgCost)}
+                {formatMoney(holding.avgCost, { compact: true })}
               </div>
             </div>
           </div>
