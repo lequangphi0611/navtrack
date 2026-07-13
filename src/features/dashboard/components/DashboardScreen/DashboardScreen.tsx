@@ -1,4 +1,5 @@
 import {
+  ArrowDown,
   ArrowUp,
   CalendarClock,
   Sigma,
@@ -18,8 +19,9 @@ import {
   MissingPriceList,
   type MissingPriceHolding,
 } from "@/features/dashboard/components/MissingPriceList";
-import { formatMoney, formatSignedPercent } from "@/lib/format";
+import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 
 type DashboardScreenProps = {
   displayName: string;
@@ -72,6 +74,8 @@ function DashboardScreen({
   hidden = false,
 }: DashboardScreenProps) {
   const hasMissingPrices = missingPriceHoldings.length > 0;
+  const navDeltaNumber = Number(navDeltaAmount);
+  const NavDeltaIcon = navDeltaNumber < 0 ? ArrowDown : ArrowUp;
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-3.5 p-5 pb-28 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
@@ -123,8 +127,15 @@ function DashboardScreen({
           </div>
         ) : (
           <div className="mt-3 flex items-center gap-2">
-            <ArrowUp className="size-4 text-gain" />
-            <span className="font-mono text-sm font-semibold text-gain tabular-nums">
+            <NavDeltaIcon
+              className={cn("size-4", signColorClass(navDeltaNumber))}
+            />
+            <span
+              className={cn(
+                "font-mono text-sm font-semibold tabular-nums",
+                signColorClass(navDeltaNumber),
+              )}
+            >
               {formatMoney(navDeltaAmount, { hidden })} (
               {formatSignedPercent(navDeltaPercent)})
             </span>

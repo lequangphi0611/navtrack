@@ -1,6 +1,6 @@
 import { Ban } from "lucide-react";
 
-import { formatMoney, formatSignedPercent } from "@/lib/format";
+import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Kết quả XIRR — union tường minh khớp docs/domain/05-returns-xirr-and-pnl.md:
@@ -22,11 +22,6 @@ type ReturnMetricsProps = {
   hidden?: boolean;
   className?: string;
 };
-
-function signColorClass(value: number): string {
-  if (value === 0) return "text-foreground";
-  return value > 0 ? "text-gain" : "text-destructive";
-}
 
 // Cặp thẻ XIRR (theo năm) + Lãi/lỗ tuyệt đối, luôn hiển thị song song (bất biến
 // domain: "Hai chỉ số song song" — docs/domain/README.md). Thẻ XIRR tự chuyển

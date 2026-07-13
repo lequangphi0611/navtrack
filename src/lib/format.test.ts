@@ -4,8 +4,10 @@ import {
   formatDate,
   formatDayMonth,
   formatMoney,
+  formatPercent,
   formatQuantity,
   formatSignedPercent,
+  signColorClass,
 } from "./format";
 
 describe("formatMoney", () => {
@@ -71,5 +73,29 @@ describe("formatSignedPercent", () => {
     expect(formatSignedPercent(-0.9991 * 100, { suffix: "/năm" })).toBe(
       "−99,9%/năm",
     );
+  });
+});
+
+describe("formatPercent", () => {
+  test("làm tròn đúng 1 chữ số thập phân, không có dấu +/−", () => {
+    expect(formatPercent(60.924587865454434)).toBe("60,9%");
+  });
+
+  test("số nguyên vẫn giữ đúng 1 chữ số thập phân", () => {
+    expect(formatPercent(60)).toBe("60,0%");
+  });
+});
+
+describe("signColorClass", () => {
+  test("dương -> text-gain", () => {
+    expect(signColorClass(5)).toBe("text-gain");
+  });
+
+  test("âm -> text-destructive", () => {
+    expect(signColorClass(-5)).toBe("text-destructive");
+  });
+
+  test("bằng 0 -> text-foreground", () => {
+    expect(signColorClass(0)).toBe("text-foreground");
   });
 });

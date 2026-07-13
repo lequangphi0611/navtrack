@@ -108,3 +108,61 @@ test("Dashboard hiển thị đúng NAV/XIRR/lãi-lỗ khi vị thế có giá t
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
 });
+
+// Bug #27: khối chênh lệch NAV hardcode ArrowUp + text-gain bất kể lãi/lỗ —
+// vị thế mua giá cao, giá EOD thấp hơn hẳn (NAV < vốn đã bỏ vào) phải hiện
+// mũi tên xuống + màu text-destructive, KHÔNG được lẫn text-gain.
+test("Dashboard hiển thị đúng màu/mũi tên khi NAV lỗ so với vốn", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dashboard-nav-loss");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const quoteDate = daysAgo(7);
+
+  try {
+    // Seed PriceQuote TRƯỚC Holding (xem lý do chi tiết ở test phía trên) —
+    // giá EOD 50.000, thấp hơn nhiều giá mua 100.000 để NAV chắc chắn lỗ.
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol, date: quoteDate } },
+      create: { symbol, date: quoteDate, price: "50000", source: "vnstock" },
+      update: { price: "50000", source: "vnstock" },
+    });
+
+    // Mua 100 <symbol> @ 100.000 -> vốn 10.000.000, NAV = 100 * 50.000 =
+    // 5.000.000 -> lỗ 5.000.000 (-50%).
+    const buyDate = isoDate(daysAgo(730));
+    await page.goto("/holdings/new");
+    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
+    await page.locator('input[name="quantity"]').fill("100");
+    await page.locator('input[name="pricePerUnit"]').fill("100000");
+    await page.locator('input[name="date"]').fill(buyDate);
+    await page.getByRole("button", { name: "Xong", exact: true }).click();
+    await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
+
+    await page.goto("/");
+
+    const navDeltaRow = page
+      .getByText("so với vốn đã bỏ vào", { exact: true })
+      .locator("..");
+    const navDeltaAmount = navDeltaRow.locator("span").first();
+    const navDeltaIcon = navDeltaRow.locator("svg");
+
+    // Số âm — "-5.000.000" (formatMoney dùng dấu trừ ASCII cho số âm, đã tự
+    // verify ở formatMoney test "số âm vẫn format đúng dấu").
+    await expect(navDeltaAmount).toContainText("-5.000.000");
+
+    // Đúng màu lỗ, KHÔNG lẫn màu lãi.
+    await expect(navDeltaAmount).toHaveClass(/text-destructive/);
+    await expect(navDeltaAmount).not.toHaveClass(/text-gain/);
+    await expect(navDeltaIcon).toHaveClass(/text-destructive/);
+    await expect(navDeltaIcon).not.toHaveClass(/text-gain/);
+  } finally {
+    await context.close();
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
+  }
+});
