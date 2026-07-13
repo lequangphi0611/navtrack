@@ -40,6 +40,33 @@ export async function signInAs(context: BrowserContext, sessionToken: string) {
   ]);
 }
 
+// Ghi thẳng qua Prisma (bypass UI) — tạo `count` giao dịch BUY hợp lệ cho
+// holdingId, ngày khác nhau (tăng dần) để có thứ tự ổn định trong lịch sử.
+// Dùng để test cursor pagination lịch sử giao dịch mà không cần submit
+// hàng chục form qua UI (chậm, không cần thiết cho việc test riêng phần
+// phân trang).
+export async function seedCashflows(
+  holdingId: string,
+  count: number,
+): Promise<void> {
+  const baseDate = new Date("2024-01-01T00:00:00.000Z");
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  await db.cashflow.createMany({
+    data: Array.from({ length: count }, (_, i) => ({
+      holdingId,
+      type: "BUY" as const,
+      date: new Date(baseDate.getTime() + i * dayMs),
+      quantity: "1",
+      pricePerUnit: "10000",
+      amount: "-10000",
+      feeAmount: "0",
+      taxAmount: "0",
+      note: `seed-${i}`,
+    })),
+  });
+}
+
 export async function cleanupTestUser(userId: string) {
   // Cascade xóa Holding/Cashflow/Session qua onDelete: Cascade trong schema.
   await db.user.delete({ where: { id: userId } }).catch(() => {});

@@ -30,3 +30,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-11: Phase 1 — issue #12: Suspense cho 2 route transactions, giữ async page cho `settings/members/*` — xem [DECISION.md](./DECISION.md).
 - 2026-07-11: **Phase 1 hoàn thành** — toàn bộ tiêu chí ở [phase-1.md](./phase-1.md) đạt.
 - 2026-07-12: Phase 2 — thêm `lib/valuation.ts` + `lib/portfolio-valuation.ts` (định giá Holding tại ngày D, batched); `NavOverride` nhập tay + wire cutoff selection qua cookie — xem [DECISION.md](./DECISION.md).
+- 2026-07-13: Phase 2 — issue #16: cursor pagination lịch sử giao dịch (`getHoldingCashflowPage`, 20 dòng/trang, tách khỏi full-history dùng cho XIRR/vị thế); fix phát sinh `getCashflowForEdit` (sửa giao dịch cũ hơn trang đầu từng 404 âm thầm) — kiểm chứng độc lập: lint/typecheck/unit/e2e đạt.

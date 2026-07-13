@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
 
 import { TransactionForm } from "@/features/holdings/components/TransactionForm";
-import { getHoldingDetail } from "@/features/holdings/queries";
+import {
+  getCashflowForEdit,
+  getHoldingDetail,
+} from "@/features/holdings/queries";
 
 type EditTransactionFormSectionProps = {
   holdingId: string;
@@ -12,8 +15,14 @@ async function EditTransactionFormSection({
   holdingId,
   cashflowId,
 }: EditTransactionFormSectionProps) {
-  const holding = await getHoldingDetail(holdingId);
-  const cashflow = holding.cashflows.find((cf) => cf.id === cashflowId);
+  // Tra cashflow qua query riêng (getCashflowForEdit), KHÔNG dùng
+  // holding.cashflows — field đó giờ chỉ là trang đầu (tối đa 20 dòng, xem
+  // getHoldingDetail/getHoldingCashflowPage), sửa giao dịch cũ hơn sẽ không
+  // tìm thấy nếu dựa vào đó.
+  const [holding, cashflow] = await Promise.all([
+    getHoldingDetail(holdingId),
+    getCashflowForEdit(holdingId, cashflowId),
+  ]);
   // notFound() ở đây chạy trong Suspense nên trả 200 (không phải 404 thật) khi
   // cashflow không tồn tại — đánh đổi có chủ đích để header hiện tức thì; chấp
   // nhận được vì app private/auth-gated, không có crawler/SEO (xem process/DECISION.md).
