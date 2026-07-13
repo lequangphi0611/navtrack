@@ -78,14 +78,14 @@ function DashboardScreen({
   const NavDeltaIcon = navDeltaNumber < 0 ? ArrowDown : ArrowUp;
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-3.5 p-5 pb-28 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 p-5 pb-28 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[13px] font-medium text-muted-foreground">
             Tổng tài sản ròng
           </div>
           <div className="text-xl font-bold tracking-tight text-foreground">
-            Danh mục
+            Tổng quan
           </div>
         </div>
         <Link href={ROUTES.settings} aria-label="Cài đặt">
