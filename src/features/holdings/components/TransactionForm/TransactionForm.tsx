@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 
 import { Alert } from "@/components/Alert";
+import { MoneyInput } from "@/components/MoneyInput";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { SymbolAvatar } from "@/components/SymbolAvatar";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,8 @@ function TransactionForm(props: TransactionFormProps) {
   );
   const [quantity, setQuantity] = useState(defaults.quantity);
   const [pricePerUnit, setPricePerUnit] = useState(defaults.pricePerUnit);
+  const [feeAmount, setFeeAmount] = useState(defaults.feeAmount);
+  const [taxAmount, setTaxAmount] = useState(defaults.taxAmount);
   const isBuy = cashflowType === "BUY";
 
   async function submitTransaction(
@@ -181,22 +184,15 @@ function TransactionForm(props: TransactionFormProps) {
         </div>
         <div>
           <FieldLabel>Giá / đơn vị</FieldLabel>
-          <div className="relative">
-            <Input
-              type="text"
-              inputMode="decimal"
-              name="pricePerUnit"
-              value={pricePerUnit}
-              onChange={(event) => setPricePerUnit(event.target.value)}
-              placeholder="0"
-              className="h-11 rounded-xl pr-8 font-mono font-semibold"
-              required
-              disabled={isPending}
-            />
-            <span className="absolute top-1/2 right-3.5 -translate-y-1/2 text-[13px] text-muted-faint">
-              ₫
-            </span>
-          </div>
+          <MoneyInput
+            name="pricePerUnit"
+            value={pricePerUnit}
+            onChange={setPricePerUnit}
+            placeholder="0"
+            className="h-11 rounded-xl font-mono font-semibold"
+            required
+            disabled={isPending}
+          />
         </div>
       </div>
 
@@ -217,22 +213,22 @@ function TransactionForm(props: TransactionFormProps) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <FieldLabel>Phí</FieldLabel>
-          <Input
-            type="text"
-            inputMode="decimal"
+          <MoneyInput
             name="feeAmount"
-            defaultValue={defaults.feeAmount}
+            value={feeAmount}
+            onChange={setFeeAmount}
+            placeholder="0"
             className="h-11 rounded-xl font-mono font-semibold"
             disabled={isPending}
           />
         </div>
         <div>
           <FieldLabel>Thuế</FieldLabel>
-          <Input
-            type="text"
-            inputMode="decimal"
+          <MoneyInput
             name="taxAmount"
-            defaultValue={defaults.taxAmount}
+            value={taxAmount}
+            onChange={setTaxAmount}
+            placeholder="0"
             className="h-11 rounded-xl font-mono font-semibold"
             disabled={isPending}
           />

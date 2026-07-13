@@ -4,9 +4,11 @@ import {
   formatDate,
   formatDayMonth,
   formatMoney,
+  formatMoneyInputDisplay,
   formatPercent,
   formatQuantity,
   formatSignedPercent,
+  parseMoneyInputValue,
   signColorClass,
 } from "./format";
 
@@ -139,6 +141,54 @@ describe("formatPercent", () => {
 
   test("số nguyên vẫn giữ đúng 1 chữ số thập phân", () => {
     expect(formatPercent(60)).toBe("60,0%");
+  });
+});
+
+describe("parseMoneyInputValue", () => {
+  test("số nguyên thô giữ nguyên", () => {
+    expect(parseMoneyInputValue("1000000")).toBe("1000000");
+  });
+
+  test("chuỗi có dấu chấm nhóm hàng nghìn -> bỏ hết dấu chấm", () => {
+    expect(parseMoneyInputValue("1.000.000")).toBe("1000000");
+  });
+
+  test("chuỗi có dấu phẩy thập phân -> đổi thành dấu chấm", () => {
+    expect(parseMoneyInputValue("1000,5")).toBe("1000.5");
+  });
+
+  test("chuỗi hỗn hợp cả dấu chấm nhóm và dấu phẩy thập phân", () => {
+    expect(parseMoneyInputValue("1.234,5")).toBe("1234.5");
+  });
+
+  test("dán nguyên formatMoney output kèm ký hiệu ₫ và khoảng trắng", () => {
+    expect(parseMoneyInputValue("1.234.567 ₫")).toBe("1234567");
+  });
+
+  test("chuỗi rỗng -> chuỗi rỗng", () => {
+    expect(parseMoneyInputValue("")).toBe("");
+  });
+});
+
+describe("formatMoneyInputDisplay", () => {
+  test("số nguyên nhỏ -> không thêm dấu chấm", () => {
+    expect(formatMoneyInputDisplay("999")).toBe("999");
+  });
+
+  test("số lớn -> thêm đúng dấu chấm mỗi 3 số", () => {
+    expect(formatMoneyInputDisplay("1000000")).toBe("1.000.000");
+  });
+
+  test("có phần thập phân -> đổi dấu chấm thập phân thành dấu phẩy", () => {
+    expect(formatMoneyInputDisplay("1234.5")).toBe("1.234,5");
+  });
+
+  test("dấu chấm cuối chưa có số thập phân theo sau -> giữ dấu phẩy hiển thị", () => {
+    expect(formatMoneyInputDisplay("1234.")).toBe("1.234,");
+  });
+
+  test("chuỗi rỗng -> chuỗi rỗng", () => {
+    expect(formatMoneyInputDisplay("")).toBe("");
   });
 });
 

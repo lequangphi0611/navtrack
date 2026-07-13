@@ -73,7 +73,7 @@ test("Dashboard hiển thị đúng NAV/XIRR/lãi-lỗ khi vị thế có giá t
     await page.goto("/holdings/new");
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("100");
-    await page.locator('input[name="pricePerUnit"]').fill("100000");
+    await page.locator('[data-testid="pricePerUnit"]').fill("100000");
     await page.locator('input[name="date"]').fill(buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
@@ -138,7 +138,7 @@ test("Dashboard hiển thị đúng màu/mũi tên khi NAV lỗ so với vốn",
     await page.goto("/holdings/new");
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("100");
-    await page.locator('input[name="pricePerUnit"]').fill("100000");
+    await page.locator('[data-testid="pricePerUnit"]').fill("100000");
     await page.locator('input[name="date"]').fill(buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);

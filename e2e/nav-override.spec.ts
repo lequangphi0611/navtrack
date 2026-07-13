@@ -35,7 +35,7 @@ test("nhập giá tay (NavOverride) cho vị thế Vàng cập nhật NAV toàn 
     await page.getByRole("button", { name: "Vàng", exact: true }).click();
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("10");
-    await page.locator('input[name="pricePerUnit"]').fill("7000000");
+    await page.locator('[data-testid="pricePerUnit"]').fill("7000000");
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
     const holdingUrl = page.url();
