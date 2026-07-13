@@ -127,6 +127,22 @@ https://<domain-vercel-cua-ban>/api/auth/callback/google
 (Path callback của Auth.js v5 là cố định `/api/auth/callback/google`.) Nếu dùng Preview
 deployments cần đăng nhập, thêm cả domain preview tương ứng.
 
+## 7. GitHub Actions secret cho job price-fetcher
+
+Job Python ghi giá (`.github/workflows/price-fetcher.yml`) chạy trên GitHub Actions theo lịch,
+**tách khỏi Vercel** — khai báo `DATABASE_URL` ở Vercel Environment Variables (mục 2 & 3) không
+tự động cấp cho GitHub Actions. Thiếu bước này, job fail ngay ở lần chạy đầu với lỗi
+`DATABASE_URL is not set` (xem `jobs/price-fetcher/main.py`).
+
+Ở GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**:
+
+| Tên secret | Giá trị | Ghi chú |
+| --- | --- | --- |
+| `DATABASE_URL` | connection string **pooled** của Neon (giống giá trị dùng cho Vercel ở mục 2 & 3) | job chỉ `SELECT`/`INSERT` qua `psycopg`, không chạy DDL nên dùng pooled là đủ, không cần `DIRECT_URL` |
+
+Sau khi thêm secret, chạy thử tay qua tab **Actions → Price fetcher → Run workflow**
+(`workflow_dispatch`) để xác nhận job kết nối DB thành công trước khi để chạy theo lịch.
+
 ## Checklist deploy
 
 - [ ] Neon: có DB, lấy được cả pooled + direct connection string.
@@ -135,5 +151,7 @@ deployments cần đăng nhập, thêm cả domain preview tương ứng.
 - [ ] `schema.prisma` có `directUrl`; Build Command = `prisma migrate deploy && next build`.
 - [ ] Chạy tay 1 lần: `db:migrate:deploy` → `db:seed` (kèm `SEED_ADMIN_EMAIL`) trỏ vào Neon.
 - [ ] Google OAuth redirect URI khớp domain production.
+- [ ] GitHub Actions: khai báo secret `DATABASE_URL` (repo → Settings → Secrets and variables →
+      Actions) cho job `price-fetcher`; chạy thử qua `workflow_dispatch` để xác nhận.
 - [ ] Đăng nhập thử bằng email admin → vào được app.
 - [ ] Không có secret nào lọt vào git (`.env`, commit, log).
