@@ -106,3 +106,38 @@ export function signColorClass(value: number): string {
   if (value === 0) return "text-foreground";
   return value > 0 ? "text-gain" : "text-destructive";
 }
+
+// Chuỗi input thô (từ event.target.value, có thể còn "." / "," / ký tự khác
+// nếu user dán) -> chuỗi canonical (chỉ digit + tối đa 1 dấu "." thập phân,
+// khớp decimalString ở features/holdings/schemas.ts). Dùng bởi MoneyInput —
+// KHÔNG gắn thẳng chuỗi hiển thị (có dấu phân cách) vào input có `name`, vì
+// `new Decimal("100.000")` sẽ hiểu "." là thập phân (= 100) thay vì 100.000.
+// Quy ước vi-VN: nếu có "," -> dấu "," ĐẦU TIÊN là thập phân, mọi "." trước đó
+// là dấu nhóm hàng nghìn; nếu chỉ có "." -> toàn bộ là dấu nhóm hàng nghìn
+// (app không có ca thập phân kiểu Mỹ).
+export function parseMoneyInputValue(raw: string): string {
+  const stripped = raw.replace(/[^0-9.,]/g, "");
+  const firstCommaIndex = stripped.indexOf(",");
+  if (firstCommaIndex !== -1) {
+    const integerPart = stripped.slice(0, firstCommaIndex).replace(/\./g, "");
+    const decimalPart = stripped
+      .slice(firstCommaIndex + 1)
+      .replace(/[.,]/g, "");
+    return `${integerPart}.${decimalPart}`;
+  }
+  return stripped.replace(/\./g, "");
+}
+
+// Canonical (digit + tối đa 1 dấu ".") -> chuỗi hiển thị vi-VN (dấu "." nhóm
+// hàng nghìn, dấu "," thập phân) — ngược lại với parseMoneyInputValue. Dùng
+// để render displayValue của MoneyInput mỗi lần render, tính lại từ prop
+// value thay vì giữ state hiển thị riêng.
+export function formatMoneyInputDisplay(canonical: string): string {
+  if (canonical === "") return "";
+  const dotIndex = canonical.indexOf(".");
+  const hasDot = dotIndex !== -1;
+  const integerPart = hasDot ? canonical.slice(0, dotIndex) : canonical;
+  const decimalPart = hasDot ? canonical.slice(dotIndex + 1) : "";
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return hasDot ? `${formattedInteger},${decimalPart}` : formattedInteger;
+}

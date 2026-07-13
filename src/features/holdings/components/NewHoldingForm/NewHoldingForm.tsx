@@ -6,6 +6,7 @@ import { useActionState, useRef, useState } from "react";
 
 import { Alert } from "@/components/Alert";
 import type { AssetType } from "@/components/AssetTypeBadge";
+import { MoneyInput } from "@/components/MoneyInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -224,22 +225,15 @@ function NewHoldingForm() {
 
       <div>
         <FieldLabel>Giá vốn bình quân / đơn vị</FieldLabel>
-        <div className="relative">
-          <Input
-            type="text"
-            inputMode="decimal"
-            name="pricePerUnit"
-            placeholder="0"
-            className="h-11 rounded-xl pr-8 font-mono font-semibold"
-            value={pricePerUnit}
-            onChange={(event) => setPricePerUnit(event.target.value)}
-            required
-            disabled={isPending}
-          />
-          <span className="absolute top-1/2 right-3.5 -translate-y-1/2 text-[13px] text-muted-faint">
-            ₫
-          </span>
-        </div>
+        <MoneyInput
+          name="pricePerUnit"
+          placeholder="0"
+          className="h-11 rounded-xl font-mono font-semibold"
+          value={pricePerUnit}
+          onChange={setPricePerUnit}
+          required
+          disabled={isPending}
+        />
       </div>
 
       <div>
