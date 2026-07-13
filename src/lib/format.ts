@@ -14,7 +14,7 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
   year: "numeric",
 });
 
-const SIGNED_PERCENT_FORMATTER = new Intl.NumberFormat("vi-VN", {
+const PERCENT_FORMATTER = new Intl.NumberFormat("vi-VN", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 });
@@ -57,7 +57,22 @@ export function formatSignedPercent(
   value: number,
   opts?: { suffix?: string },
 ): string {
-  const magnitude = SIGNED_PERCENT_FORMATTER.format(Math.abs(value));
+  const magnitude = PERCENT_FORMATTER.format(Math.abs(value));
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
   return `${sign}${magnitude}%${opts?.suffix ?? ""}`;
+}
+
+// Phần trăm KHÔNG dấu, 1 chữ số thập phân — khác formatSignedPercent ở chỗ
+// input ở đây luôn đã ≥ 0 (tỷ lệ phân bổ NAV theo loại tài sản, AllocationBar)
+// nên không cần +/−, format thẳng value thay vì Math.abs(value).
+export function formatPercent(value: number): string {
+  return `${PERCENT_FORMATTER.format(value)}%`;
+}
+
+// Màu theo dấu giá trị (dùng cho XIRR, lãi/lỗ, chênh lệch NAV...) — 0 trung
+// tính, dương = "text-gain", âm = "text-destructive". Nguồn sự thật DUY NHẤT,
+// dùng chung ở ReturnMetrics và DashboardScreen (navDelta).
+export function signColorClass(value: number): string {
+  if (value === 0) return "text-foreground";
+  return value > 0 ? "text-gain" : "text-destructive";
 }

@@ -3,6 +3,7 @@ import {
   ASSET_TYPE_DOT_CLASS,
   ASSET_TYPE_LABEL,
 } from "@/components/AssetTypeBadge";
+import { formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type AllocationSlice = {
@@ -53,7 +54,9 @@ function AllocationBar({ slices, className }: AllocationBarProps) {
             />
             <span className="text-[11.5px] text-muted-foreground">
               {ASSET_TYPE_LABEL[slice.type]}{" "}
-              <span className="font-mono tabular-nums">{slice.percent}%</span>
+              <span className="font-mono tabular-nums">
+                {formatPercent(slice.percent)}
+              </span>
             </span>
           </div>
         ))}
