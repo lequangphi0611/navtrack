@@ -3,10 +3,10 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { BottomNav } from "@/components/BottomNav";
-import { StatCardSkeleton } from "@/components/StatCard";
 import { UserAvatar } from "@/components/UserAvatar";
 import { HoldingsSegmentedNav } from "@/features/holdings/components/HoldingsSegmentedNav";
-import { TotalInvestedSection } from "@/features/holdings/components/TotalInvestedSection";
+import { HoldingsSummaryCardSkeleton } from "@/features/holdings/components/HoldingsSummaryCard";
+import { HoldingsSummarySection } from "@/features/holdings/components/HoldingsSummarySection";
 import { ROUTES } from "@/lib/routes";
 
 type HoldingsOverviewScreenProps = {
@@ -15,10 +15,11 @@ type HoldingsOverviewScreenProps = {
 };
 
 // Shell dùng chung cho /holdings + /holdings/closed (khai báo ở layout.tsx của route
-// group (overview)): header + StatCard tổng vốn (vùng data riêng) + segmented nav
-// (điều hướng route, không phải tab client) + FAB + BottomNav (mockup Phase 2 —
-// áp ngược cho màn gốc Phase 1, xem process/UI_phase_2.md). Danh sách vị thế của
-// route con nào truyền vào qua children, tự lo Suspense/skeleton riêng của nó.
+// group (overview)): header + HoldingsSummaryCard NAV/lãi-lỗ/XIRR toàn danh mục
+// (vùng data riêng, thay TotalInvestedSection Phase 1) + segmented nav (điều hướng
+// route, không phải tab client) + FAB + BottomNav (mockup Phase 2 — áp ngược cho
+// màn gốc Phase 1, xem process/UI_phase_2.md). Danh sách vị thế của route con nào
+// truyền vào qua children, tự lo Suspense/skeleton riêng của nó.
 function HoldingsOverviewScreen({
   displayName,
   children,
@@ -34,8 +35,8 @@ function HoldingsOverviewScreen({
         </Link>
       </div>
 
-      <Suspense fallback={<StatCardSkeleton />}>
-        <TotalInvestedSection />
+      <Suspense fallback={<HoldingsSummaryCardSkeleton />}>
+        <HoldingsSummarySection />
       </Suspense>
 
       <HoldingsSegmentedNav />

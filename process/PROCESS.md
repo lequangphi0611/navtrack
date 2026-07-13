@@ -30,3 +30,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-11: Phase 1 — issue #12: Suspense cho 2 route transactions, giữ async page cho `settings/members/*` — xem [DECISION.md](./DECISION.md).
 - 2026-07-11: **Phase 1 hoàn thành** — toàn bộ tiêu chí ở [phase-1.md](./phase-1.md) đạt.
 - 2026-07-12: Phase 2 — thêm `lib/valuation.ts` + `lib/portfolio-valuation.ts` (định giá Holding tại ngày D, batched); `NavOverride` nhập tay + wire cutoff selection qua cookie — xem [DECISION.md](./DECISION.md).
+- 2026-07-13: Phase 2 — wire NAV/XIRR/PnL thật vào chi tiết vị thế (`/holdings/[id]`) và danh sách vị thế (`/holdings`, theo nhóm loại tài sản) + thay `TotalInvestedSection` bằng `HoldingsSummaryCard` toàn danh mục — xem [DECISION.md](./DECISION.md).
