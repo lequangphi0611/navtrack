@@ -1,6 +1,8 @@
 import type { z } from "zod";
 
-import type { XirrResult } from "@/lib/xirr";
+import type { CashflowTimelineRow } from "@/features/holdings/components/CashflowTimeline";
+import type { XirrResult as XirrResultUi } from "@/components/ReturnMetrics";
+import type { PriceSource } from "@/lib/valuation";
 
 import type {
   addTransactionSchema,
@@ -38,8 +40,6 @@ export type HoldingSummary = {
 export type HoldingsOverview = {
   open: HoldingSummary[];
   closed: HoldingSummary[];
-  // Tổng vốn đã bỏ vào các vị thế đang mở (chưa có giá thị trường ở Phase 1).
-  totalInvested: string;
 };
 
 // Danh sách vị thế gom nhóm theo loại tài sản (mockup 2d cập nhật: card theo AssetType).
@@ -62,6 +62,29 @@ export type CashflowRow = {
   note: string | null;
 };
 
+// Khối NAV + XIRR/PnL + timeline dòng tiền cho /holdings/[id] (mockup 2c) —
+// khai ĐỘC LẬP (không import) khỏi `HoldingValuation` của
+// HoldingDetailScreen.tsx, dù cấu trúc giống hệt: cùng lý do `PortfolioValuation`
+// ở lib/portfolio-valuation.ts khai độc lập khỏi DashboardScreenProps (xem
+// process/DECISION.md 2026-07-12 "getPortfolioValuation() chuyển từ...") —
+// feature (business-implementer) không phụ thuộc ngược vào component
+// Presentational (design-implementer). TypeScript structural typing đảm bảo
+// khớp Props khi truyền ở page.tsx.
+export type HoldingDetailValuation = {
+  navValue: string;
+  priceSource: PriceSource;
+  // "Tự động · vnstock" / "Nhập tay".
+  priceSourceLabel: string;
+  // "Giá EOD 10/07: 178.900 · vốn TB 163.100".
+  priceNote: string;
+  xirr: XirrResultUi;
+  absolutePnl: string;
+  // Gồm cả dòng "NAV tại mốc chốt" giả định (kind: "CUTOFF_NAV") khi vị thế
+  // còn mở và định giá được — xem buildXirrCashflows (lib/xirr-cashflow.ts).
+  timeline: CashflowTimelineRow[];
+  timelineFootnote?: string;
+};
+
 export type HoldingDetail = {
   id: string;
   symbol: string;
@@ -72,8 +95,7 @@ export type HoldingDetail = {
   avgCost: string;
   totalCostBasis: string;
   cashflows: CashflowRow[];
-  // Giữ nguyên shape business (ok/reason/Decimal) — CHƯA phải biên client
-  // cuối, adapter sang shape UI (status/percentPerYear/number) thuộc task kế
-  // tiếp "Dashboard hiển thị song song XIRR + lãi/lỗ tuyệt đối".
-  xirr: XirrResult;
+  // undefined khi NAV không xác định được (MISSING_PRICE) — HoldingDetailScreen
+  // tự rơi về hiển thị Phase 1 (chỉ vốn đã bỏ vào) khi vắng mặt.
+  valuation: HoldingDetailValuation | undefined;
 };

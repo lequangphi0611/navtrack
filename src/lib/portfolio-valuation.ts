@@ -44,6 +44,12 @@ export type PortfolioValuation = {
   allocation: AllocationSlice[];
   priceFreshnessNote: string;
   missingPriceHoldings: MissingPriceHolding[];
+  // Tổng vốn ròng đã bỏ vào TÍNH TỚI cutoffDate (XirrAndPnlCore.totalInvested)
+  // — DashboardScreenProps không dùng field này (Dashboard không hiện dòng
+  // "Vốn: ..."), chỉ HoldingsSummarySection (features/holdings) cần, nhưng
+  // expose ở đây thay vì viết lại phép tính để NAV/XIRR/PnL/vốn LUÔN nhất
+  // quán giữa Dashboard và Danh mục (cùng một lần gọi computeXirrAndPnlCore).
+  totalCostBasis: string;
 };
 
 // Thứ tự hiển thị cố định cho allocation — khớp thứ tự dùng ở
@@ -175,8 +181,10 @@ async function getPriceFreshnessNote(
 
 // Adapter shape business (ok/reason/Decimal, lib/xirr.ts) -> shape UI
 // (status/percentPerYear/number, @/components/ReturnMetrics) — hai type khác
-// nhau có chủ đích (xem comment HoldingDetail.xirr trong holdings/types.ts).
-function toUiXirr(result: ReturnType<typeof computeXirr>): XirrResultUi {
+// nhau có chủ đích (xem comment HoldingDetailValuation trong holdings/types.ts).
+// Export vì getHoldingDetail() (features/holdings/queries.ts) cũng cần adapter
+// này để build HoldingDetailValuation.xirr — tránh viết lại lần 2.
+export function toUiXirr(result: ReturnType<typeof computeXirr>): XirrResultUi {
   if (result.ok) {
     return {
       status: "OK",
@@ -348,6 +356,7 @@ export async function getPortfolioValuation(
     allocation,
     priceFreshnessNote,
     missingPriceHoldings,
+    totalCostBasis: totalInvested.toString(),
   };
 }
 

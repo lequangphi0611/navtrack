@@ -2,24 +2,55 @@ import Decimal from "decimal.js";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
+import type { CashflowTimelineRow } from "@/features/holdings/components/CashflowTimeline";
+import type {
+  GroupValuation,
+  HoldingValuationExtras,
+  HoldingWithValuation,
+} from "@/features/holdings/components/HoldingsGroupCard";
 import { getSession } from "@/lib/auth";
 import { derivePosition } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
-import { valuateHoldings } from "@/lib/valuation";
+import {
+  formatDate,
+  formatDayMonth,
+  formatMoney,
+  formatQuantity,
+} from "@/lib/format";
+// toUiXirr được export từ lib/portfolio-valuation.ts (adapter dùng chung
+// business XirrResult -> UI XirrResult). Import ngược chiều với
+// getOpenHoldings/getClosedHoldings mà portfolio-valuation.ts import từ file
+// này — CHẤP NHẬN ĐƯỢC vì cả hai đều chỉ dùng nhau bên trong THÂN hàm
+// (gọi lúc request, không phải lúc module khởi tạo), không có usage nào ở
+// top-level module — ES module xử lý tham chiếu vòng kiểu này an toàn
+// (live binding), không phải "true" circular init dependency.
+import { toUiXirr } from "@/lib/portfolio-valuation";
+import type { PriceSource } from "@/lib/valuation";
+import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
 import { buildXirrCashflows } from "@/lib/xirr-cashflow";
 
+import { groupHoldingsByType } from "./group-holdings";
 import type {
   CashflowRow,
   HoldingDetail,
+  HoldingDetailValuation,
   HoldingsOverview,
   HoldingSummary,
 } from "./types";
 
-// Memo theo request (như getSession) — nhiều Suspense region (StatCard tổng vốn,
-// danh sách vị thế open/closed) gọi độc lập vẫn chỉ tốn 1 DB round-trip/request.
+// Nhãn nguồn giá cho priceNote/priceSourceLabel của khối định giá chi tiết vị
+// thế (mockup 2c) — nguồn sự thật riêng cho câu chữ này (PriceSourceBadge chỉ
+// quản lý label cho chính badge, không phải câu văn đầy đủ dùng ở đây).
+const PRICE_SOURCE_LABEL: Record<PriceSource, string> = {
+  AUTO: "Tự động · vnstock",
+  MANUAL: "Nhập tay",
+};
+
+// Memo theo request (như getSession) — nhiều Suspense region (danh sách vị thế
+// open/closed) gọi độc lập vẫn chỉ tốn 1 DB round-trip/request.
 //
 // Đọc thuần materialized cache (quantity/avgCost) trên Holding — KHÔNG kéo cashflow.
 // Cache được 4 action ghi cashflow recompute-in-transaction nên luôn khớp nguồn sự thật
@@ -45,7 +76,6 @@ const getHoldingsRaw = cache(async (): Promise<HoldingsOverview> => {
 
   const open: HoldingSummary[] = [];
   const closed: HoldingSummary[] = [];
-  let totalInvested = new Decimal(0);
 
   for (const holding of holdings) {
     const quantity = new Decimal(holding.quantity.toString());
@@ -65,13 +95,12 @@ const getHoldingsRaw = cache(async (): Promise<HoldingsOverview> => {
 
     if (quantity.gt(0)) {
       open.push(summary);
-      totalInvested = totalInvested.plus(totalCostBasis);
     } else {
       closed.push(summary);
     }
   }
 
-  return { open, closed, totalInvested: totalInvested.toString() };
+  return { open, closed };
 });
 
 export async function getOpenHoldings(): Promise<HoldingSummary[]> {
@@ -80,10 +109,6 @@ export async function getOpenHoldings(): Promise<HoldingSummary[]> {
 
 export async function getClosedHoldings(): Promise<HoldingSummary[]> {
   return (await getHoldingsRaw()).closed;
-}
-
-export async function getTotalInvested(): Promise<string> {
-  return (await getHoldingsRaw()).totalInvested;
 }
 
 export async function hasAnyHolding(): Promise<boolean> {
@@ -176,8 +201,9 @@ export async function getHoldingDetail(
 
   // Vị thế TẠI THỜI ĐIỂM cutoff — KHÁC Holding.quantity/avgCost cache (luôn
   // là snapshot HIỆN TẠI, không đổi theo cutoff, dùng cho các nơi khác như
-  // TotalInvestedSection). Dùng để valuate/xác định isOpenPosition đúng thời
-  // điểm đang xem, nhất quán với cashflowsForXirr/dividends bên dưới.
+  // getOpenHoldings/getOpenHoldingsWithValuation). Dùng để valuate/xác định
+  // isOpenPosition đúng thời điểm đang xem, nhất quán với cashflowsForXirr/
+  // dividends bên dưới.
   const position = derivePosition(
     cashflowsUpToCutoff.map((cf) => ({
       type: cf.type,
@@ -202,18 +228,82 @@ export async function getHoldingDetail(
     ),
   ]);
 
-  const valuation = valuations.get(holding.id);
-  const currentNav = valuation?.status === "VALUED" ? valuation.nav : null;
+  // priceValuation (HoldingValuation, lib/valuation.ts) — KHÁC field trả về
+  // `valuation` (HoldingDetailValuation) build ở dưới, đặt tên riêng để tránh
+  // đụng nhau.
+  const priceValuation = valuations.get(holding.id);
+  const currentNav =
+    priceValuation?.status === "VALUED" ? priceValuation.nav : null;
 
-  const xirr = computeXirr(
-    buildXirrCashflows({
-      cashflows: cashflowsForXirr,
-      dividends,
-      isOpenPosition,
-      cutoffDate: resolvedCutoffDate,
-      currentNav,
-    }),
+  const points = buildXirrCashflows({
+    cashflows: cashflowsForXirr,
+    dividends,
+    isOpenPosition,
+    cutoffDate: resolvedCutoffDate,
+    currentNav,
+  });
+
+  const xirr = computeXirr(points);
+
+  // "NAV − tổng vốn ròng đã bỏ vào" tương đương đại số với tổng có dấu của
+  // đúng tập điểm đã đưa vào XIRR — cùng kỹ thuật computeXirrAndPnlCore
+  // (lib/portfolio-valuation.ts), không cần công thức riêng.
+  const absolutePnl = points.reduce(
+    (sum, p) => sum.plus(p.amount),
+    new Decimal(0),
   );
+
+  // Dòng CUTOFF_NAV chỉ được buildXirrCashflows ghép đúng lúc vị thế còn mở
+  // VÀ định giá được — dùng lại đúng điều kiện đó để timeline/footnote nhất
+  // quán với dòng tiền thật sự đưa vào XIRR (không tự suy luận riêng).
+  const appendedNavPoint = isOpenPosition && currentNav !== null;
+
+  const timeline: CashflowTimelineRow[] = cashflowsUpToCutoff.map((cf) => ({
+    id: cf.id,
+    kind: cf.type,
+    label: `${cf.type === "BUY" ? "Mua" : "Bán"} ${formatQuantity(cf.quantity.toString(), holding.unit)}`,
+    dateNote: `${formatDate(cf.date)} · giá ${formatMoney(cf.pricePerUnit.toString())}`,
+    amount: cf.amount.toString(),
+  }));
+
+  if (appendedNavPoint) {
+    // currentNav !== null đã xác nhận ở appendedNavPoint — non-null assertion an toàn.
+    timeline.push({
+      id: "cutoff-nav",
+      kind: "CUTOFF_NAV",
+      label: "NAV tại mốc chốt",
+      dateNote: `${formatDate(resolvedCutoffDate)} · dòng tiền giả định`,
+      amount: currentNav!.toString(),
+    });
+  }
+
+  const timelineFootnote = appendedNavPoint
+    ? "Dòng tiền giả định = NAV mốc chốt, tính lúc chạy — không lưu vào sổ."
+    : undefined;
+
+  // valuation chỉ xác định khi status VALUED — MISSING_PRICE để undefined
+  // (docs/domain/04 "Thiếu giá": không mặc định 0/giá trị nào cả). Vị thế
+  // CLOSED (SL=0) cũng CỐ Ý để undefined dù NAV=0 xác định được: HoldingDetailScreen
+  // (Presentational) chưa có biến thể hiển thị riêng cho vị thế đã đóng — nhánh
+  // "valuation" hiện chỉ có NAV hero + ReturnMetrics + timeline, KHÔNG hiện lại
+  // Số lượng/Giá vốn bình quân như nhánh Phase 1 fallback (đã xác nhận qua e2e:
+  // bán hết về 0 rồi thì "0 cổ phần" biến mất khỏi màn nếu ép hiện nhánh valuation).
+  // Rơi về Phase 1 (quantity/avgCost/totalCostBasis) vẫn đúng nghiệp vụ cho vị
+  // thế đã đóng; XIRR "chốt" cho vị thế đóng để dành cho lần thiết kế lại màn
+  // này (xem process/DECISION.md 2026-07-13).
+  let valuation: HoldingDetailValuation | undefined;
+  if (priceValuation?.status === "VALUED") {
+    valuation = {
+      navValue: priceValuation.nav.toString(),
+      priceSource: priceValuation.source,
+      priceSourceLabel: PRICE_SOURCE_LABEL[priceValuation.source],
+      priceNote: `Giá EOD ${formatDayMonth(priceValuation.priceDate)}: ${formatMoney(priceValuation.price.toString())} · vốn TB ${formatMoney(position.avgCost.toString())}`,
+      xirr: toUiXirr(xirr),
+      absolutePnl: absolutePnl.toString(),
+      timeline,
+      timelineFootnote,
+    };
+  }
 
   return {
     id: holding.id,
@@ -225,7 +315,7 @@ export async function getHoldingDetail(
     avgCost: position.avgCost.toString(),
     totalCostBasis: position.quantity.mul(position.avgCost).toString(),
     cashflows,
-    xirr,
+    valuation,
   };
 }
 
@@ -271,4 +361,179 @@ export async function getHoldingForPricing(holdingId: string): Promise<{
     quantity: quantity.toString(),
     totalCostBasis: quantity.mul(avgCost).toString(),
   };
+}
+
+// Batch cashflow/dividend theo tập holdingId cho NHIỀU vị thế cùng lúc, khác
+// getCashDividends (1 holdingId) — cùng pattern getAllCashflowsForXirr/
+// getAllCashDividendsForXirr (lib/portfolio-valuation.ts) nhưng thêm
+// holdingId vào select để group lại theo từng vị thế ở JS (portfolio-valuation
+// gộp XIRR CẢ danh mục nên không cần giữ holdingId riêng).
+async function getCashflowsForHoldings(
+  holdingIds: string[],
+  cutoffDate: Date,
+): Promise<{ holdingId: string; date: Date; amount: Decimal }[]> {
+  if (holdingIds.length === 0) return [];
+
+  const rows = await db.cashflow.findMany({
+    where: { holdingId: { in: holdingIds }, date: { lte: cutoffDate } },
+    select: { holdingId: true, date: true, amount: true },
+  });
+
+  return rows.map((row) => ({
+    holdingId: row.holdingId,
+    date: row.date,
+    amount: new Decimal(row.amount.toString()),
+  }));
+}
+
+async function getCashDividendsForHoldings(
+  holdingIds: string[],
+  cutoffDate: Date,
+): Promise<{ holdingId: string; date: Date; netAmount: Decimal }[]> {
+  if (holdingIds.length === 0) return [];
+
+  const rows = await db.dividend.findMany({
+    where: {
+      holdingId: { in: holdingIds },
+      type: "CASH",
+      netAmount: { not: null },
+      date: { lte: cutoffDate },
+    },
+    select: { holdingId: true, date: true, netAmount: true },
+  });
+
+  return rows.map((row) => ({
+    holdingId: row.holdingId,
+    date: row.date,
+    // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
+    netAmount: new Decimal(row.netAmount!.toString()),
+  }));
+}
+
+function groupByHoldingId<T extends { holdingId: string }>(
+  rows: T[],
+): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    const list = map.get(row.holdingId);
+    if (list) list.push(row);
+    else map.set(row.holdingId, [row]);
+  }
+  return map;
+}
+
+// Danh sách vị thế ĐANG MỞ + NAV/nguồn giá/XIRR riêng từng vị thế + NAV/%
+// thay đổi theo nhóm loại tài sản (mockup 2b/2d) — dùng cho HoldingsPositionsSection
+// khi status="open". Vị thế ĐÃ ĐÓNG cố ý KHÔNG mở rộng phạm vi này (getClosedHoldings
+// giữ nguyên Phase 1) — "market value" của vị thế đã bán hết không có ý nghĩa hiển thị
+// ở màn danh sách (docs/domain/04 "Vị thế đóng: NAV=0, không đóng góp").
+export async function getOpenHoldingsWithValuation(cutoffDate?: Date): Promise<{
+  holdings: HoldingWithValuation[];
+  groupValuations: Partial<Record<HoldingSummary["type"], GroupValuation>>;
+}> {
+  const resolvedCutoffDate =
+    cutoffDate ?? resolveCutoffDate(await getCutoffSelection());
+
+  const open = await getOpenHoldings();
+  const holdingIds = open.map((h) => h.id);
+
+  // Batch cả 3: valuateHoldings (giá) + cashflow + dividend cho TOÀN BỘ tập
+  // holdingIds trong 1 lượt gọi mỗi loại — không N+1 theo từng vị thế.
+  const [valuations, cashflows, dividends] = await Promise.all([
+    valuateHoldings(
+      open.map((h) => ({
+        id: h.id,
+        symbol: h.symbol,
+        quantity: new Decimal(h.quantity),
+      })),
+      resolvedCutoffDate,
+    ),
+    getCashflowsForHoldings(holdingIds, resolvedCutoffDate),
+    getCashDividendsForHoldings(holdingIds, resolvedCutoffDate),
+  ]);
+
+  const cashflowsByHolding = groupByHoldingId(cashflows);
+  const dividendsByHolding = groupByHoldingId(dividends);
+
+  const holdings: HoldingWithValuation[] = open.map((holding) => {
+    const valuation = valuations.get(holding.id);
+    const currentNav = valuation?.status === "VALUED" ? valuation.nav : null;
+
+    // isOpenPosition luôn true — `open` đến từ getOpenHoldings() (quantity > 0
+    // HÔM NAY, materialized cache), không phải vị thế-tại-cutoff (khác
+    // getHoldingDetail, nơi cutoff có thể rơi vào lúc vị thế đã đóng/chưa mở —
+    // phạm vi màn danh sách không cần chính xác tới mức đó).
+    const xirrResult = computeXirr(
+      buildXirrCashflows({
+        cashflows: cashflowsByHolding.get(holding.id) ?? [],
+        dividends: dividendsByHolding.get(holding.id) ?? [],
+        isOpenPosition: true,
+        cutoffDate: resolvedCutoffDate,
+        currentNav,
+      }),
+    );
+
+    const extras: Partial<HoldingValuationExtras> = {};
+    if (valuation?.status === "VALUED") {
+      extras.marketValue = valuation.nav.toString();
+      extras.currentPricePerUnit = valuation.price.toString();
+    }
+    if (xirrResult.ok) {
+      extras.annualReturnPercent = xirrResult.annualizedRate
+        .mul(100)
+        .toNumber();
+    }
+
+    return { ...holding, ...extras };
+  });
+
+  const groupValuations: Partial<
+    Record<HoldingSummary["type"], GroupValuation>
+  > = {};
+  for (const group of groupHoldingsByType(open)) {
+    const valuedNavs: Decimal[] = [];
+    const valuedCostBasis: Decimal[] = [];
+    for (const holding of group.holdings) {
+      const valuation = valuations.get(holding.id);
+      if (valuation?.status !== "VALUED") continue;
+      valuedNavs.push(valuation.nav);
+      valuedCostBasis.push(new Decimal(holding.totalCostBasis));
+    }
+
+    // Nhóm chưa có mã nào định giá được -> bỏ hẳn key này (component tự rơi
+    // về hiển thị Phase 1 khi groupValuations[type] undefined).
+    if (valuedNavs.length === 0) continue;
+
+    const sumMarketValue = valuedNavs.reduce(
+      (sum, nav) => sum.plus(nav),
+      new Decimal(0),
+    );
+    const sumCostBasis = valuedCostBasis.reduce(
+      (sum, cost) => sum.plus(cost),
+      new Decimal(0),
+    );
+
+    // % thay đổi CHỈ tính trên các mã ĐÃ định giá trong nhóm (docs/domain/04 —
+    // mã thiếu giá không được mặc định 0, trộn vào mẫu số sẽ làm sai %) —
+    // tránh chia 0 khi (hi hữu) tổng vốn của riêng các mã đã định giá = 0.
+    const changePercent = sumCostBasis.isZero()
+      ? 0
+      : sumMarketValue
+          .minus(sumCostBasis)
+          .div(sumCostBasis)
+          .mul(100)
+          .toNumber();
+
+    groupValuations[group.type] = {
+      // Nguồn giá của cả nhóm suy từ LOẠI tài sản (domain rule cố định —
+      // AUTO_PRICED_ASSET_TYPES), không phải suy diễn ngược từ dữ liệu từng
+      // mã (vd trộn AUTO/MANUAL nếu vài mã dùng NavOverride) — khớp cách
+      // missingPriceReasonLabel (lib/portfolio-valuation.ts) dùng cùng tập
+      // hằng số này.
+      priceSource: AUTO_PRICED_ASSET_TYPES.has(group.type) ? "AUTO" : "MANUAL",
+      changePercent,
+    };
+  }
+
+  return { holdings, groupValuations };
 }
