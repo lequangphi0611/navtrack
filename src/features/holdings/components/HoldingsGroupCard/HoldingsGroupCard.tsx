@@ -100,7 +100,7 @@ function HoldingsGroupCard({
           />
         ) : (
           <span className="font-mono text-[13.5px] font-semibold text-foreground tabular-nums">
-            {formatMoney(totalCostBasis)}
+            {formatMoney(totalCostBasis, { compact: true })}
           </span>
         )}
       </div>
@@ -125,14 +125,14 @@ function HoldingsGroupCard({
               <div className="mt-0.5 font-mono text-[11.5px] text-muted-faint">
                 {formatQuantity(holding.quantity, holding.unit)} ·{" "}
                 {hasValuation && holding.currentPricePerUnit !== undefined
-                  ? `giá ${formatMoney(holding.currentPricePerUnit)}`
-                  : `TB ${formatMoney(holding.avgCost)}`}
+                  ? `giá ${formatMoney(holding.currentPricePerUnit, { compact: true })}`
+                  : `TB ${formatMoney(holding.avgCost, { compact: true })}`}
               </div>
             </div>
             <div className="flex flex-col items-end gap-1">
               {hasValuation && holding.marketValue !== undefined ? (
                 <span className="font-mono text-[13px] font-semibold text-foreground tabular-nums">
-                  {formatMoney(holding.marketValue)}
+                  {formatMoney(holding.marketValue, { compact: true })}
                 </span>
               ) : groupValuation ? (
                 <span className="rounded-full bg-warning/14 px-2 py-0.5 text-[10.5px] font-semibold text-warning">
@@ -140,7 +140,7 @@ function HoldingsGroupCard({
                 </span>
               ) : (
                 <span className="font-mono text-[13.5px] font-semibold text-foreground tabular-nums">
-                  {formatMoney(holding.totalCostBasis)}
+                  {formatMoney(holding.totalCostBasis, { compact: true })}
                 </span>
               )}
               {holding.annualReturnPercent !== undefined ? (

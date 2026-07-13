@@ -43,7 +43,7 @@ function HoldingsSummaryCard({
         <div className="text-[11px] text-muted-faint">
           Vốn:{" "}
           <span className="font-mono tabular-nums">
-            {formatMoney(totalCostBasis, { hidden })}
+            {formatMoney(totalCostBasis, { hidden, compact: true })}
           </span>
         </div>
       </div>
@@ -57,7 +57,7 @@ function HoldingsSummaryCard({
           variant={pnlNegative ? "destructive" : "gain"}
           className="font-mono"
         >
-          {formatMoney(absolutePnl, { hidden })}
+          {formatMoney(absolutePnl, { hidden, compact: true })}
         </Badge>
         <PercentChange value={absolutePnlPercent} />
         {xirr.status === "OK" ? (

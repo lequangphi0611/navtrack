@@ -92,7 +92,10 @@ function CashflowTimeline({
                 )}
               >
                 {isNegative ? "−" : "+"}
-                {formatMoney(row.amount.replace("-", ""), { hidden })}
+                {formatMoney(row.amount.replace("-", ""), {
+                  hidden,
+                  compact: true,
+                })}
               </div>
             </div>
           );
