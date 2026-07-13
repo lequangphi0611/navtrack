@@ -69,6 +69,11 @@ export const deleteTransactionSchema = z.object({
   cashflowId: z.string().min(1, "Thiếu giao dịch"),
 });
 
+export const loadMoreCashflowsSchema = z.object({
+  holdingId: z.string().min(1, "Thiếu mã danh mục"),
+  cursor: z.string().min(1, "Thiếu cursor"),
+});
+
 export const navOverrideSchema = z.object({
   holdingId: z.string().min(1, "Thiếu vị thế"),
   price: positiveDecimal("Giá phải lớn hơn 0"),

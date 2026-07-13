@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
+import type { CashflowType } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { derivePosition } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
@@ -11,12 +12,45 @@ import { valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
 import { buildXirrCashflows } from "@/lib/xirr-cashflow";
 
+import { paginateRows } from "./cashflow-pagination";
 import type {
+  CashflowPage,
   CashflowRow,
   HoldingDetail,
   HoldingsOverview,
   HoldingSummary,
 } from "./types";
+
+// Số dòng lịch sử giao dịch mỗi trang (docs/rules/performance.md, mục pagination
+// lịch sử giao dịch). Cursor theo `id`, tie-break khớp thứ tự dùng khắp queries.ts/
+// actions.ts (date, createdAt, id) — nhưng đảo ngược (desc) vì hiển thị mới nhất trước.
+const CASHFLOW_PAGE_SIZE = 20;
+
+// Convert 1 row Cashflow (Decimal fields) sang CashflowRow hiển thị (string fields) —
+// biên server duy nhất làm việc này, dùng chung cho getHoldingCashflowPage.
+function toCashflowRow(cf: {
+  id: string;
+  type: CashflowType;
+  date: Date;
+  quantity: Decimal;
+  pricePerUnit: Decimal;
+  amount: Decimal;
+  feeAmount: Decimal;
+  taxAmount: Decimal;
+  note: string | null;
+}): CashflowRow {
+  return {
+    id: cf.id,
+    type: cf.type,
+    date: cf.date.toISOString(),
+    quantity: cf.quantity.toString(),
+    pricePerUnit: cf.pricePerUnit.toString(),
+    amount: cf.amount.toString(),
+    feeAmount: cf.feeAmount.toString(),
+    taxAmount: cf.taxAmount.toString(),
+    note: cf.note,
+  };
+}
 
 // Memo theo request (như getSession) — nhiều Suspense region (StatCard tổng vốn,
 // danh sách vị thế open/closed) gọi độc lập vẫn chỉ tốn 1 DB round-trip/request.
@@ -117,6 +151,60 @@ async function getCashDividends(
   }));
 }
 
+// Cursor pagination cho lịch sử giao dịch HIỂN THỊ (docs/rules/performance.md,
+// mục "Danh sách dài — pagination cho lịch sử giao dịch") — TÁCH biệt khỏi
+// cashflows full-history mà getHoldingDetail() dùng cho derivePosition/XIRR:
+// hiển thị chỉ cần trang hiện tại, tính toán cần toàn bộ lịch sử tới cutoff.
+// Trước đây gộp chung một `include` không `take` — phình vô hạn theo số giao
+// dịch đã ghi (bug #16).
+export async function getHoldingCashflowPage(
+  holdingId: string,
+  cursor?: string,
+): Promise<CashflowPage> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const holding = await db.holding.findUnique({
+    where: { id: holdingId },
+    select: { userId: true },
+  });
+  if (!holding || holding.userId !== session.user.id) notFound();
+
+  // Cursor do client gửi lên — KHÔNG tin nó thuộc holding này. Validate tường
+  // minh trước khi dùng làm Prisma `cursor`, tránh dùng id cashflow của
+  // holding/user khác để dò dữ liệu (IDOR qua cursor).
+  if (cursor) {
+    const owned = await db.cashflow.findFirst({
+      where: { id: cursor, holdingId },
+      select: { id: true },
+    });
+    if (!owned) throw new Error("Invalid cursor");
+  }
+
+  const rows = await db.cashflow.findMany({
+    where: { holdingId },
+    // Mới nhất trước — ngược hướng với tie-break "asc" mà derivePosition/XIRR
+    // dùng bên dưới, vì đây là danh sách hiển thị, không phải input tính toán.
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+    take: CASHFLOW_PAGE_SIZE + 1,
+    select: {
+      id: true,
+      type: true,
+      date: true,
+      quantity: true,
+      pricePerUnit: true,
+      amount: true,
+      feeAmount: true,
+      taxAmount: true,
+      note: true,
+    },
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+  });
+
+  const { page, nextCursor } = paginateRows(rows, CASHFLOW_PAGE_SIZE);
+  return { cashflows: page.map(toCashflowRow), nextCursor };
+}
+
 // cutoffDate: khi caller không truyền tường minh, tự đọc mốc chốt user đã
 // chọn qua cookie (getCutoffSelection() — cùng cách Dashboard/Settings dùng),
 // KHÔNG hard-code "TODAY" nữa (code review #4: 3 nơi gọi hàm này — trang chi
@@ -134,35 +222,35 @@ export async function getHoldingDetail(
 
   const holding = await db.holding.findUnique({
     where: { id: holdingId },
-    include: {
-      // Khớp thứ tự tie-break dùng ở actions.ts/migration backfill (date, createdAt, id) —
-      // derivePosition() chỉ sort theo date, cần thứ tự DB nhất quán khi trùng ngày để
-      // không lệch với Holding.quantity/avgCost đã materialize (docs/domain/02).
+    select: {
+      id: true,
+      userId: true,
+      symbol: true,
+      name: true,
+      type: true,
+      unit: true,
+      // select hẹp — derivePosition/XIRR chỉ cần 5 field này, KHÔNG kéo
+      // id/feeAmount/taxAmount/note (lịch sử hiển thị đã tách sang
+      // getHoldingCashflowPage riêng — docs/rules/data-prisma.md, mục
+      // "Chọn select hẹp thay vì include full-row").
       cashflows: {
+        // Khớp thứ tự tie-break dùng ở actions.ts/migration backfill (date, createdAt, id) —
+        // derivePosition() chỉ sort theo date, cần thứ tự DB nhất quán khi trùng ngày để
+        // không lệch với Holding.quantity/avgCost đã materialize (docs/domain/02).
         orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+        select: {
+          type: true,
+          date: true,
+          quantity: true,
+          pricePerUnit: true,
+          amount: true,
+        },
       },
     },
   });
 
   // Không tồn tại hoặc không thuộc user hiện tại: xử lý giống nhau, không lộ thông tin tồn tại.
   if (!holding || holding.userId !== session.user.id) notFound();
-
-  // Lịch sử giao dịch hiển thị mới nhất trước — đảo ngược mảng đã fetch theo thứ tự tăng dần.
-  // (Toàn bộ lịch sử, KHÔNG lọc theo cutoff — timeline hiển thị luôn đầy đủ,
-  // chỉ input XIRR/vị thế-tại-cutoff bên dưới mới cần lọc.)
-  const cashflows: CashflowRow[] = [...holding.cashflows]
-    .reverse()
-    .map((cf) => ({
-      id: cf.id,
-      type: cf.type,
-      date: cf.date.toISOString(),
-      quantity: cf.quantity.toString(),
-      pricePerUnit: cf.pricePerUnit.toString(),
-      amount: cf.amount.toString(),
-      feeAmount: cf.feeAmount.toString(),
-      taxAmount: cf.taxAmount.toString(),
-      note: cf.note,
-    }));
 
   // Cashflow TÍNH TỚI cutoffDate — dùng cho cả position-tại-cutoff lẫn XIRR,
   // hai input này PHẢI cùng phạm vi thời gian (code review #5: trước đây
@@ -194,12 +282,18 @@ export async function getHoldingDetail(
 
   const isOpenPosition = !position.quantity.isZero();
 
-  const [dividends, valuations] = await Promise.all([
+  // cashflowPage: trang đầu (mới nhất, tối đa CASHFLOW_PAGE_SIZE dòng) của lịch
+  // sử giao dịch HIỂN THỊ — round-trip DB riêng (getHoldingCashflowPage tự
+  // check ownership), gộp cùng dividends/valuations qua Promise.all để không
+  // tăng round-trip tuần tự. KHÔNG dùng để tính position/XIRR ở trên — hai
+  // phép tính đó dùng holding.cashflows (full history) đã fetch riêng.
+  const [dividends, valuations, cashflowPage] = await Promise.all([
     getCashDividends(holding.id, resolvedCutoffDate),
     valuateHoldings(
       [{ id: holding.id, symbol: holding.symbol, quantity: position.quantity }],
       resolvedCutoffDate,
     ),
+    getHoldingCashflowPage(holding.id),
   ]);
 
   const valuation = valuations.get(holding.id);
@@ -224,9 +318,49 @@ export async function getHoldingDetail(
     quantity: position.quantity.toString(),
     avgCost: position.avgCost.toString(),
     totalCostBasis: position.quantity.mul(position.avgCost).toString(),
-    cashflows,
+    cashflows: cashflowPage.cashflows,
+    cashflowsNextCursor: cashflowPage.nextCursor,
     xirr,
   };
+}
+
+// Tra 1 cashflow cụ thể để sửa (EditTransactionFormSection) — KHÔNG dựa vào
+// HoldingDetail.cashflows (chỉ là trang đầu tối đa 20 dòng kể từ khi tách
+// pagination, bug #16); sửa một giao dịch cũ hơn 20 dòng gần nhất phải vẫn
+// tìm được. Query round-trip riêng, scoped theo holdingId + userId.
+export async function getCashflowForEdit(
+  holdingId: string,
+  cashflowId: string,
+): Promise<CashflowRow | null> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const cashflow = await db.cashflow.findUnique({
+    where: { id: cashflowId },
+    select: {
+      id: true,
+      holdingId: true,
+      type: true,
+      date: true,
+      quantity: true,
+      pricePerUnit: true,
+      amount: true,
+      feeAmount: true,
+      taxAmount: true,
+      note: true,
+      holding: { select: { userId: true } },
+    },
+  });
+
+  if (
+    !cashflow ||
+    cashflow.holdingId !== holdingId ||
+    cashflow.holding.userId !== session.user.id
+  ) {
+    return null;
+  }
+
+  return toCashflowRow(cashflow);
 }
 
 // Query hẹp riêng cho màn nhập giá tay (NavOverrideForm) — không kéo cashflows

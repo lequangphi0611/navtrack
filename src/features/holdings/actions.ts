@@ -15,14 +15,16 @@ import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { ROUTES } from "@/lib/routes";
 
+import { getHoldingCashflowPage } from "./queries";
 import {
   addTransactionSchema,
   deleteTransactionSchema,
+  loadMoreCashflowsSchema,
   navOverrideSchema,
   newHoldingSchema,
   updateTransactionSchema,
 } from "./schemas";
-import type { NavOverrideFormState } from "./types";
+import type { CashflowPage, NavOverrideFormState } from "./types";
 
 function toCashflowInput(
   cf: Pick<Cashflow, "type" | "date" | "quantity" | "pricePerUnit">,
@@ -600,4 +602,37 @@ export async function saveNavOverride(
 
   revalidatePath(ROUTES.holdingDetail(holdingId));
   redirect(ROUTES.holdingDetail(holdingId));
+}
+
+// Đọc thuần (không mutate) — không cần revalidatePath. Bắt HẾT lỗi vào ok:false
+// (khác các action mutation ở trên vốn cho rethrow lỗi lạ ra error.tsx) vì đây
+// gọi từ 1 nút nhỏ trong TransactionHistoryList: rethrow sẽ crash cả trang chi
+// tiết vị thế qua error boundary chỉ vì tải thêm lịch sử thất bại. Không lộ lý
+// do chi tiết (vd "Invalid cursor") ra client — tránh gợi ý cursor đoán được
+// có match holding hay không.
+export async function loadMoreCashflows(
+  input: unknown,
+): Promise<ActionResult<CashflowPage>> {
+  const parsed = loadMoreCashflowsSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Dữ liệu không hợp lệ",
+      fieldErrors: toFieldErrors(parsed.error),
+    };
+  }
+
+  try {
+    const page = await getHoldingCashflowPage(
+      parsed.data.holdingId,
+      parsed.data.cursor,
+    );
+    return { ok: true, data: page };
+  } catch (err) {
+    logger.error(
+      { err, holdingId: parsed.data.holdingId },
+      "loadMoreCashflows failed",
+    );
+    return { ok: false, error: "Không tải được thêm giao dịch" };
+  }
 }

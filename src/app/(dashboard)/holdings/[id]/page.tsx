@@ -15,6 +15,10 @@ export default async function HoldingDetailPage({
   // chưa trả các field này (cần PriceQuote/NavOverride/lib/xirr.ts, xem
   // process/UI_phase_2.md). HoldingDetailScreen tự rơi về hiển thị Phase 1 khi thiếu.
   return (
-    <HoldingDetailScreen holding={holding} cashflows={holding.cashflows} />
+    <HoldingDetailScreen
+      holding={holding}
+      cashflows={holding.cashflows}
+      cashflowsNextCursor={holding.cashflowsNextCursor}
+    />
   );
 }

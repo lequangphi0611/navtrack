@@ -52,7 +52,11 @@ type HoldingValuation = {
 
 type HoldingDetailScreenProps = {
   holding: HoldingDetailScreenHolding;
+  // Chỉ trang đầu (tối đa 20 dòng mới nhất) — TransactionHistoryList tự tải
+  // thêm qua loadMoreCashflows() khi bấm "Xem thêm" (docs/rules/performance.md,
+  // mục pagination lịch sử giao dịch).
   cashflows: CashflowRow[];
+  cashflowsNextCursor: string | null;
   valuation?: HoldingValuation;
   hidden?: boolean;
 };
@@ -64,6 +68,7 @@ type HoldingDetailScreenProps = {
 function HoldingDetailScreen({
   holding,
   cashflows,
+  cashflowsNextCursor,
   valuation,
   hidden = false,
 }: HoldingDetailScreenProps) {
@@ -122,6 +127,10 @@ function HoldingDetailScreen({
               <h2 className="text-[12.5px] font-semibold text-muted-foreground">
                 Dòng tiền
               </h2>
+              {/* cashflows ở đây chỉ là TRANG ĐẦU (tối đa 20 dòng) — khi phase
+                  sau wiring `valuation` thật (hiện luôn undefined ở Phase 1),
+                  số đếm này sẽ chỉ phản ánh trang đầu chứ không phải tổng số
+                  giao dịch thật, cần đối chiếu lại nếu dùng cho hiển thị. */}
               <span className="text-[11px] text-muted-faint">
                 {cashflows.length} giao dịch + NAV mốc chốt
               </span>
@@ -175,6 +184,7 @@ function HoldingDetailScreen({
         holdingId={holding.id}
         unit={holding.unit}
         cashflows={cashflows}
+        initialNextCursor={cashflowsNextCursor}
       />
     </div>
   );

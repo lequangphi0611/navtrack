@@ -9,23 +9,33 @@ import { Button } from "@/components/ui/button";
 import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
 
-import { deleteTransaction } from "../../actions";
+import { deleteTransaction, loadMoreCashflows } from "../../actions";
 import type { CashflowRow } from "../../types";
 
 type TransactionHistoryListProps = {
   holdingId: string;
   unit: string;
   cashflows: CashflowRow[];
+  // Cursor của trang thứ 2 (null = trang đầu đã là toàn bộ lịch sử) — khởi tạo
+  // state "Xem thêm" cục bộ, xem docs/rules/performance.md mục pagination.
+  initialNextCursor: string | null;
 };
 
 function TransactionHistoryList({
   holdingId,
   unit,
-  cashflows,
+  cashflows: initialCashflows,
+  initialNextCursor,
 }: TransactionHistoryListProps) {
   const router = useRouter();
+  const [cashflows, setCashflows] = useState<CashflowRow[]>(initialCashflows);
+  const [nextCursor, setNextCursor] = useState<string | null>(
+    initialNextCursor,
+  );
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
 
   async function handleDelete(cashflowId: string) {
     if (!window.confirm("Xóa giao dịch này?")) return;
@@ -39,7 +49,27 @@ function TransactionHistoryList({
       setError(result.error);
       return;
     }
+    setCashflows((prev) => prev.filter((cf) => cf.id !== cashflowId));
+    // Vẫn cần — đồng bộ SL/giá vốn hiển thị ở component cha (HoldingDetailScreen),
+    // không chỉ danh sách giao dịch. Cursor theo `id` nên xóa 1 dòng giữa không
+    // làm lệch cursor các trang đã tải.
     router.refresh();
+  }
+
+  async function handleLoadMore() {
+    if (!nextCursor) return;
+
+    setIsLoadingMore(true);
+    setLoadMoreError(null);
+    const result = await loadMoreCashflows({ holdingId, cursor: nextCursor });
+    setIsLoadingMore(false);
+
+    if (!result.ok) {
+      setLoadMoreError(result.error);
+      return;
+    }
+    setCashflows((prev) => [...prev, ...result.data.cashflows]);
+    setNextCursor(result.data.nextCursor);
   }
 
   if (cashflows.length === 0) {
@@ -88,6 +118,20 @@ function TransactionHistoryList({
         </div>
       ))}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {nextCursor ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={isLoadingMore}
+          onClick={handleLoadMore}
+        >
+          {isLoadingMore ? "Đang tải..." : "Xem thêm"}
+        </Button>
+      ) : null}
+      {loadMoreError ? (
+        <p className="text-xs text-destructive">{loadMoreError}</p>
+      ) : null}
     </div>
   );
 }
