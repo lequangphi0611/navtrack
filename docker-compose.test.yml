@@ -1,0 +1,21 @@
+# DB riêng cho e2e — project name khác (`navtrack-test`) nên `down` ở đây không đụng
+# tới service `db` (dev) trong docker-compose.yml. Không dùng named volume: data nằm ở
+# tmpfs, container drop là mất sạch — đúng ý "mỗi lần chạy e2e là DB sạch từ đầu".
+name: navtrack-test
+
+services:
+  db-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: navtrack
+      POSTGRES_PASSWORD: navtrack
+      POSTGRES_DB: navtrack
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U navtrack -d navtrack"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

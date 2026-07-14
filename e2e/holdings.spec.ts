@@ -51,7 +51,7 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
       .locator("text=/Giá vốn bình quân/")
       .locator("..")
       .innerText();
-    expect(avgCostAfterBuy).toContain("110.000");
+    expect(avgCostAfterBuy).toContain("110k");
 
     // Bán một phần 50 @ 130k -> giá vốn bình quân giữ nguyên, SL giảm
     await page.goto(`${holdingUrl}/transactions/new`);
@@ -65,7 +65,7 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
       .locator("text=/Giá vốn bình quân/")
       .locator("..")
       .innerText();
-    expect(avgCostAfterSell).toContain("110.000");
+    expect(avgCostAfterSell).toContain("110k");
 
     // Bán vượt số lượng đang giữ -> bị chặn
     await page.goto(`${holdingUrl}/transactions/new`);
