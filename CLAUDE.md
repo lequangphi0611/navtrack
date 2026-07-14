@@ -25,7 +25,9 @@ Chỉ cần mở khi việc đang làm chạm đúng phần liên quan:
   - `curator` — làm gọn nhật ký `process/PROCESS.md` và rút gọn `process/DECISION.md`.
   - `planner` — lên kế hoạch triển khai (implementation plan) cho một task, dùng ở Phase 2 (Design) của Plan Mode thay cho Plan agent mặc định; viết dễ hiểu, plan luôn kết thúc bằng verify (`HARNESS.md`) → commit → push → tạo PR qua `issuer`.
   - `verifier` — kiểm chứng độc lập một task/phase đã hoàn thành thật hay chưa: chạy verify theo `HARNESS.md`, đối chiếu tiêu chí `phase-x.md` với bằng chứng thật, được viết thêm e2e/unit test còn thiếu; không sửa code production, không tự fix lỗi tìm thấy.
-- **Custom skill:** [`.claude/skills/dev-cycle/`](./.claude/skills/dev-cycle/SKILL.md) — điều phối tự động `planner` → `business-implementer`/`design-implementer` → `verifier` cho một task/phase, lặp lại implementer khi verifier báo gap (tối đa 3 lần), rồi tự commit → push → tạo PR qua `issuer` khi verifier xác nhận đạt. Dùng khi muốn giao hẳn một task để tự chạy hết chu trình.
+- **Custom skills:** [`.claude/skills/`](./.claude/skills/). Hiện có:
+  - `dev-cycle` — điều phối tự động `planner` → `business-implementer`/`design-implementer` → `verifier` cho một task/phase, lặp lại implementer khi verifier báo gap (tối đa 3 lần), rồi tự commit → push → tạo PR qua `issuer` khi verifier xác nhận đạt. Dùng khi muốn giao hẳn một task để tự chạy hết chu trình.
+  - `issue-breakdown` — chia một phase hoặc cụm việc lớn thành các GitHub issue đúng convention (template `.github/ISSUE_TEMPLATE/*`, nhãn `phase-N`, tách issue Design & UI riêng khi UI chưa có sẵn, ghi rõ phụ thuộc bằng số issue thật). Dùng khi mới bắt đầu một phase, trước khi giao việc cho `dev-cycle`.
 
 ## Tiến trình triển khai
 - **Theo dõi tại [`process/PROCESS.md`](./process/PROCESS.md)** — trỏ tới chi tiết từng phase (`process/phase-x.md`).
