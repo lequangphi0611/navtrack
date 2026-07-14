@@ -4,7 +4,7 @@
 Chụp và **đóng băng** giá trị danh mục tại các mốc (tháng/năm) để báo cáo lịch sử nhất quán và làm dữ liệu cho biểu đồ NAV.
 
 ## Công việc cần làm
-- [ ] Model `Snapshot` (`holdingId?`, `date`, `value`, `source`, `period`, `frozen`) + enum `SnapshotSource`, `SnapshotPeriod` + migration
+- [x] Model `Snapshot` (`holdingId?`, `date`, `value`, `source`, `period`, `frozen`) + enum `SnapshotSource`, `SnapshotPeriod` + migration
 - [ ] Cron **GitHub Actions workflow** (không chạy hằng ngày): lịch nằm trong cron expression. Tháng → fire ngày 01, ghi snapshot `PERIODIC` cho **cuối tháng liền trước**; tuần → theo day-of-week; cuối năm → `YEAR_END` (01/01 ghi cho 31/12 trước). `frozen = true`
 - [ ] Snapshot thủ công: khi có giao dịch mua/bán; nút **"Chốt số liệu hôm nay"** (`MANUAL`)
 - [ ] Snapshot **tổng danh mục** (`holdingId = null`) theo từng user

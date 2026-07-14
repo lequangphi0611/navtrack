@@ -196,6 +196,13 @@ model Snapshot {
 
   @@index([userId, date])
   @@index([holdingId, date])
+  // NOTE: dedup cho snapshot đã đóng băng — tối đa 1 dòng frozen cho mỗi
+  // (userId, date, period) khi holdingId null, và mỗi (holdingId, date, period)
+  // khi holdingId not null. KHÔNG khai báo bằng @@unique ở đây vì Prisma DSL
+  // không hỗ trợ WHERE cho @@unique (cần loại trừ NULL != NULL của Postgres
+  // trong unique index thường) — 2 partial unique index này chỉ tồn tại dưới
+  // dạng raw SQL trong migration `add_snapshot_unique_constraint`. Xem
+  // docs/02-data-model.md (mục "Ghi chú thiết kế").
 }
 
 model NavOverride {
