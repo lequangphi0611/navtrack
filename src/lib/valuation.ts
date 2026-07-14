@@ -39,16 +39,31 @@ export type HoldingValuation =
 
 type LatestQuoteRow = { date: Date; price: Decimal };
 
-// Pure — ưu tiên NavOverride (nhập tay), fallback PriceQuote (tự động) khi
-// không có override. Input đã là "dòng mới nhất <= D" cho từng nguồn (lọc ở
-// tầng query bằng getLatestNavOverrides/getLatestPriceQuotes bên dưới) — hàm
-// này không tự so sánh ngày giữa 2 nguồn, override luôn thắng nếu có, bất kể
-// PriceQuote có ngày mới hơn (đúng thứ tự ưu tiên trong domain doc, không phải
-// "giá mới nhất trong 2 nguồn").
+// Pure — so ngày giữa NavOverride (nhập tay) và PriceQuote (tự động), dùng
+// nguồn nào có `date` mới hơn (gần ngày định giá D nhất). Input đã là "dòng
+// mới nhất <= D" cho từng nguồn (lọc ở tầng query bằng
+// getLatestNavOverrides/getLatestPriceQuotes bên dưới). Chỉ có 1 nguồn ->
+// dùng nguồn đó (GOLD/BOND không có PriceQuote, hành vi giữ nguyên như cũ).
+// Cùng ngày -> ưu tiên NavOverride (issue #40: trước đây NavOverride luôn
+// thắng bất kể ngày, gây "shadow" vĩnh viễn PriceQuote mới hơn cho STOCK/FUND
+// — sửa để giá nhập tay cũ không còn che giá tự động mới hơn).
 export function resolvePrice(
   latestNavOverride: LatestQuoteRow | null,
   latestPriceQuote: LatestQuoteRow | null,
 ): ResolvedPrice | null {
+  if (latestNavOverride && latestPriceQuote) {
+    return latestNavOverride.date >= latestPriceQuote.date
+      ? {
+          price: latestNavOverride.price,
+          source: "MANUAL",
+          priceDate: latestNavOverride.date,
+        }
+      : {
+          price: latestPriceQuote.price,
+          source: "AUTO",
+          priceDate: latestPriceQuote.date,
+        };
+  }
   if (latestNavOverride) {
     return {
       price: latestNavOverride.price,

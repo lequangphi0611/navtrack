@@ -4,16 +4,40 @@ import { describe, expect, test } from "vitest";
 import { resolvePrice, valuateHolding } from "./valuation";
 
 describe("resolvePrice", () => {
-  test("có cả NavOverride lẫn PriceQuote -> chọn NavOverride (MANUAL), kể cả khi PriceQuote mới hơn", () => {
+  test("có cả NavOverride lẫn PriceQuote, PriceQuote mới hơn -> chọn PriceQuote (AUTO)", () => {
     const resolved = resolvePrice(
       { date: new Date("2026-06-30"), price: new Decimal(7_720_000) },
       { date: new Date("2026-07-11"), price: new Decimal(178_900) },
     );
 
     expect(resolved).not.toBeNull();
+    expect(resolved?.source).toBe("AUTO");
+    expect(resolved?.price.toString()).toBe("178900");
+    expect(resolved?.priceDate).toEqual(new Date("2026-07-11"));
+  });
+
+  test("có cả NavOverride lẫn PriceQuote, NavOverride mới hơn -> chọn NavOverride (MANUAL)", () => {
+    const resolved = resolvePrice(
+      { date: new Date("2026-07-11"), price: new Decimal(7_720_000) },
+      { date: new Date("2026-07-10"), price: new Decimal(178_900) },
+    );
+
+    expect(resolved).not.toBeNull();
     expect(resolved?.source).toBe("MANUAL");
     expect(resolved?.price.toString()).toBe("7720000");
-    expect(resolved?.priceDate).toEqual(new Date("2026-06-30"));
+    expect(resolved?.priceDate).toEqual(new Date("2026-07-11"));
+  });
+
+  test("có cả NavOverride lẫn PriceQuote, cùng ngày -> ưu tiên NavOverride (MANUAL)", () => {
+    const resolved = resolvePrice(
+      { date: new Date("2026-07-11"), price: new Decimal(7_720_000) },
+      { date: new Date("2026-07-11"), price: new Decimal(178_900) },
+    );
+
+    expect(resolved).not.toBeNull();
+    expect(resolved?.source).toBe("MANUAL");
+    expect(resolved?.price.toString()).toBe("7720000");
+    expect(resolved?.priceDate).toEqual(new Date("2026-07-11"));
   });
 
   test("chỉ có PriceQuote -> AUTO", () => {

@@ -22,13 +22,13 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 
 Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọng kèm lý do ghi ở [`DECISION.md`](./DECISION.md), không lặp lại chi tiết ở đây.
 
-- 2026-07-09: Phase 1 — Auth.js + Google OAuth + allowlist + `resolveSetting` + mời thành viên; nhập vị thế + CRUD giao dịch mua/bán xong; kiểm chứng unit test + e2e + cách ly 2 tài khoản.
-- 2026-07-10: Phase 1 — UI mockup (6 màn), loading/skeleton/animation, schema `User` fix, tách route `/settings/*`, constants `ROUTES`/`SETTING_KEYS` — xem [DECISION.md](./DECISION.md).
-- 2026-07-11: Phase 1 — PWA (manifest, icon, sw, offline); gom danh sách theo `AssetType` — xem [DECISION.md](./DECISION.md).
-- 2026-07-11: Điều tra nghi vấn session regression → không phải bug thật — xem [DECISION.md](./DECISION.md).
-- 2026-07-11: Phase 1 — issue #18: tách route `/holdings` ↔ `/holdings/closed`, materialize `Holding.quantity`/`avgCost`, backfill — xem [DECISION.md](./DECISION.md).
-- 2026-07-11: Phase 1 — issue #12: Suspense cho 2 route transactions, giữ async page cho `settings/members/*` — xem [DECISION.md](./DECISION.md).
+- 2026-07-09: Phase 1 — nền tảng + Auth.js Google OAuth + allowlist + `resolveSetting`; nhập vị thế + CRUD mua/bán; unit test + e2e + cách ly dữ liệu 2 user.
+- 2026-07-10: Phase 1 — UI mockup 6 màn + loading/skeleton + schema `User` fix + tách route `/settings/*`.
+- 2026-07-11: Phase 1 — PWA (manifest, icon, sw, offline); gom danh sách theo `AssetType`.
+- 2026-07-11: Kiểm tra session regression — không phải bug (tránh tranh luận lại ở phase sau).
+- 2026-07-11: Phase 1 — issue #18 + #12: tách route `/holdings/closed`, materialize `quantity`/`avgCost`, Suspense transactions.
 - 2026-07-11: **Phase 1 hoàn thành** — toàn bộ tiêu chí ở [phase-1.md](./phase-1.md) đạt.
-- 2026-07-12: Phase 2 — thêm `lib/valuation.ts` + `lib/portfolio-valuation.ts` (định giá Holding tại ngày D, batched); `NavOverride` nhập tay + wire cutoff selection qua cookie — xem [DECISION.md](./DECISION.md).
-- 2026-07-13: Phase 2 — wire NAV/XIRR/PnL thật vào chi tiết vị thế (`/holdings/[id]`) và danh sách vị thế (`/holdings`, theo nhóm loại tài sản) + thay `TotalInvestedSection` bằng `HoldingsSummaryCard` toàn danh mục — xem [DECISION.md](./DECISION.md).
-- 2026-07-13: **Phase 2 hoàn thành** — job Python price-fetcher đã deploy lên GitHub Actions chạy theo lịch; toàn bộ tiêu chí ở [phase-2.md](./phase-2.md) đạt.
+- 2026-07-12: Phase 2 — `lib/valuation.ts` + batched pricing; `NavOverride` nhập tay; cutoff selection cookie; lệnh ưu tiên giá đơn vị.
+- 2026-07-13: Phase 2 — wire NAV/XIRR/PnL thật vào `/holdings/[id]` + danh sách + thay `TotalInvestedSection` → `HoldingsSummaryCard`.
+- 2026-07-14: Đổi rule ưu tiên giá: so `date` giữa NavOverride vs PriceQuote; e2e dùng DB riêng ephemeral.
+- 2026-07-13: **Phase 2 hoàn thành** — job Python price-fetcher deploy GitHub Actions; toàn bộ tiêu chí ở [phase-2.md](./phase-2.md) đạt.

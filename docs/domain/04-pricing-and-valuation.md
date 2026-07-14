@@ -13,7 +13,7 @@
   - STOCK, FUND: **tự động** (vnstock), vẫn cho sửa tay khi cần. `FUND` gồm cả ETF niêm yết sàn (nguồn VCI) lẫn quỹ mở không niêm yết (fallback nguồn fmarket khi VCI không có dữ liệu — không phủ hết mọi quỹ mở VN, xem `process/DECISION.md` 2026-07-12); job thử VCI trước rồi mới fallback fmarket, không đoán trước loại quỹ.
   - GOLD, BOND: **mặc định nhập tay** (nguồn tự động kém ổn định).
 - **Đơn vị giá theo nguồn (job Python quy đổi về VND thô trước khi ghi `PriceQuote`):** VCI trả **nghìn đồng** (nhân 1000); fmarket trả **VND thô** (không nhân) — 2 nguồn khác đơn vị dù cùng nằm trong thư viện `vnstock`, xem `process/DECISION.md` 2026-07-12.
-- **Ưu tiên giá tại ngày D:** nếu có `NavOverride` (mã đó, ngày ≤ D gần nhất) → dùng **giá nhập tay**; nếu không → tra `PriceQuote` của mã đó, lấy **giá có `date` gần nhất ≤ D** (cho ngày nghỉ/lễ không có giá đúng ngày). UI ghi rõ nguồn ("Tự động (vnstock)" / "Nhập tay").
+- **Ưu tiên giá tại ngày D:** lấy `NavOverride` gần nhất ≤ D và `PriceQuote` gần nhất ≤ D (mỗi nguồn lọc độc lập theo D, cho ngày nghỉ/lễ không có giá đúng ngày). Chỉ có 1 trong 2 nguồn → dùng nguồn đó. Có cả 2 → so `date`, nguồn nào **mới hơn** (gần D hơn) thắng; cùng ngày → ưu tiên **NavOverride**. (Đổi ngày 2026-07-14, issue #40 — trước đây NavOverride luôn thắng bất kể ngày, khiến giá nhập tay cũ shadow vĩnh viễn giá tự động mới hơn cho STOCK/FUND.) UI ghi rõ nguồn ("Tự động (vnstock)" / "Nhập tay").
 - **Vàng:** dùng **giá mua vào** (giá bạn bán ra được), lưu ý đơn vị chỉ/lượng khớp với `Holding.unit`.
 - App TypeScript **chỉ đọc** giá; **không** gọi vnstock trực tiếp.
 
@@ -32,3 +32,4 @@
 ## Ví dụ
 - 150 FPT, giá vnstock hôm nay 130k → NAV = 19.500.000, nguồn "Tự động".
 - 2 lượng SJC, nhập tay 80.000.000/lượng → NAV = 160.000.000, nguồn "Nhập tay".
+- FPT: nhập tay 130.000/CP ngày 01/07, sau đó vnstock ghi giá tự động ngày 20/07 → từ 20/07 trở đi, NAV dùng giá vnstock (mới hơn), không còn dùng giá nhập tay 01/07 nữa.
