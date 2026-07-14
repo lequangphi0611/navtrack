@@ -33,3 +33,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-13: **Phase 2 hoàn thành** — job Python price-fetcher deploy GitHub Actions; toàn bộ tiêu chí ở [phase-2.md](./phase-2.md) đạt.
 - 2026-07-14: Đổi rule ưu tiên giá: so `date` giữa NavOverride vs PriceQuote; e2e dùng DB riêng ephemeral.
 - 2026-07-14: Phase 3 — issue #34: thêm dedup constraint cho `Snapshot` đã đóng băng (2 partial unique index, migration `add_snapshot_unique_constraint`) — xem [DECISION.md](./DECISION.md).
+- 2026-07-14: Phase 3 — issue #36: job Python `jobs/snapshot-cron/` + workflow GitHub Actions riêng, chốt `Snapshot{PERIODIC}` hằng tháng + `{YEAR_END}` đầu năm cho từng Holding đang mở và tổng danh mục mỗi user — xem [DECISION.md](./DECISION.md).

@@ -86,6 +86,10 @@ pooled/direct, biến môi trường, tự áp migration khi deploy, seed admin 
 vào Postgres dùng chung. Xem [`jobs/price-fetcher/README.md`](./jobs/price-fetcher/README.md) để
 setup, và [`docs/rules/python-job.md`](./docs/rules/python-job.md) cho quy ước.
 
+`jobs/snapshot-cron/` là job Python **riêng biệt** (workflow GitHub Actions riêng, không phụ
+thuộc `vnstock`), chốt (đóng băng) `Snapshot` định kỳ (tháng + cuối năm) cho từng Holding đang mở
+và tổng danh mục mỗi user. Xem [`jobs/snapshot-cron/README.md`](./jobs/snapshot-cron/README.md).
+
 ## Cấu trúc thư mục
 
 Xem [`docs/rules/project-structure.md`](./docs/rules/project-structure.md) cho quy ước đầy đủ
@@ -98,7 +102,8 @@ src/
 ├─ components/   # ui/ (shadcn) + component dùng chung
 └─ lib/          # db.ts, logger.ts, format.ts, xirr.ts...
 prisma/          # schema.prisma + migrations/
-jobs/price-fetcher/  # job Python (tách riêng khỏi app Next)
+jobs/price-fetcher/  # job Python lấy giá (tách riêng khỏi app Next)
+jobs/snapshot-cron/  # job Python chốt snapshot định kỳ (tách riêng, workflow riêng)
 e2e/             # test Playwright
 ```
 

@@ -27,11 +27,15 @@
 
 ## Cách tính
 - Giá trị snapshot = NAV tại mốc (xem `04-pricing-and-valuation.md`) — với snapshot tổng danh mục là Σ NAV mọi `Holding` của user.
+- **`source` của snapshot tổng danh mục (`holdingId = null`) luôn là `AUTO`**, bất kể các Holding đóng góp dùng giá `MANUAL` hay `AUTO` — tổng danh mục là một con số **tính toán** (sum), không phải giá trị lấy thẳng từ 1 dòng `NavOverride`. `MANUAL` chỉ dành cho giá trị đúng bằng 1 giá nhập tay (cấp Holding).
 - Biểu đồ NAV theo thời gian dựng từ chuỗi snapshot tổng danh mục đã lưu.
 
 ## Ca biên
-- **Thiếu giá tại mốc cron:** nếu một mã không có giá lúc chốt, ghi rõ (không mặc định 0). Cân nhắc dùng giá gần nhất + đánh dấu.
-- **Chốt lại một mốc đã đóng băng / chốt "hôm nay" nhiều lần trong ngày — đã chốt:** đúng **một** dòng frozen cho mỗi mốc theo khóa `(userId, holdingId-hoặc-null, date, period)` (ràng buộc DB, xem mục "Quy tắc & bất biến"). Chốt lại cùng một mốc (vd bấm "Chốt số liệu hôm nay" nhiều lần trong ngày, hoặc cron chạy lại) **phải** là **upsert idempotent** theo đúng khóa này — ghi đè giá trị dòng đã có, không tạo dòng mới. *(Lưu ý phạm vi: bản thân logic upsert-khi-ghi — Server Action, cron workflow — là một issue Phase 3 riêng sau, không thuộc issue #34; #34 chỉ đảm bảo ràng buộc schema/DB đã sẵn sàng trước khi viết logic ghi đó.)*
+- **Thiếu giá tại mốc cron (issue #36, `jobs/snapshot-cron/`):**
+  - Một `Holding` đang mở nhưng không resolve được giá tại mốc chốt (không có `NavOverride`/`PriceQuote` nào ≤ ngày chốt) → **không ghi dòng Snapshot cho Holding đó** (không mặc định 0); log rõ `holdingId`/`userId`/`symbol`/ngày/`period`.
+  - Snapshot tổng danh mục của user đó: còn **ít nhất 1** Holding resolve được giá → vẫn ghi tổng = tổng các Holding đã biết (PARTIAL), kèm log liệt kê mã còn thiếu giá. **Toàn bộ** Holding đang mở của user đều thiếu giá → **bỏ qua hẳn** dòng tổng ở mốc đó (0 sẽ sai). User không có `Holding` nào đang mở (đã bán hết/chưa từng mua) → NAV = 0 là số thật, vẫn ghi.
+  - **Giới hạn đã biết:** schema `Snapshot` (khóa ở #34) không có cờ boolean đánh dấu một dòng tổng đã lưu là "PARTIAL" — bằng chứng duy nhất là log GitHub Actions tại thời điểm job chạy. Không mở rộng schema cho việc này ở issue #36 (xem `process/DECISION.md`, mục 2026-07-14).
+- **Chốt lại một mốc đã đóng băng / chốt "hôm nay" nhiều lần trong ngày — đã chốt:** đúng **một** dòng frozen cho mỗi mốc theo khóa `(userId, holdingId-hoặc-null, date, period)` (ràng buộc DB, xem mục "Quy tắc & bất biến"). Chốt lại cùng một mốc (vd bấm "Chốt số liệu hôm nay" nhiều lần trong ngày, hoặc cron chạy lại) **phải** là **upsert idempotent** theo đúng khóa này — ghi đè giá trị dòng đã có, không tạo dòng mới. *(Cron `PERIODIC`/`YEAR_END` đã implement upsert idempotent ở issue #36; Server Action "Chốt số liệu hôm nay" — `period = MANUAL` — vẫn là issue Phase 3 riêng sau.)*
 
 ## Ví dụ
 - Cron `0 0 1 * *` fire 01/03/2025 → ghi `Snapshot{ date: 28/02/2025, period: PERIODIC, frozen: true }` (cuối tháng 2, giá EOD 28/02).
