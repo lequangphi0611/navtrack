@@ -8,7 +8,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 |---|---|---|---|
 | 1 | Nền tảng + đăng nhập + nhập vị thế | ✅ | [phase-1.md](./phase-1.md) |
 | 2 | Lõi XIRR + giá tự động | ✅ | [phase-2.md](./phase-2.md) |
-| 3 | Snapshot tự động | ⬜ | [phase-3.md](./phase-3.md) |
+| 3 | Snapshot tự động | 🟨 | [phase-3.md](./phase-3.md) |
 | 4 | Cổ tức | ⬜ | [phase-4.md](./phase-4.md) |
 | 5 | Thuế bán (áp dụng) | ⬜ | [phase-5.md](./phase-5.md) |
 | 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
@@ -32,3 +32,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-12: Phase 2 — thêm `lib/valuation.ts` + `lib/portfolio-valuation.ts` (định giá Holding tại ngày D, batched); `NavOverride` nhập tay + wire cutoff selection qua cookie — xem [DECISION.md](./DECISION.md).
 - 2026-07-13: Phase 2 — wire NAV/XIRR/PnL thật vào chi tiết vị thế (`/holdings/[id]`) và danh sách vị thế (`/holdings`, theo nhóm loại tài sản) + thay `TotalInvestedSection` bằng `HoldingsSummaryCard` toàn danh mục — xem [DECISION.md](./DECISION.md).
 - 2026-07-13: **Phase 2 hoàn thành** — job Python price-fetcher đã deploy lên GitHub Actions chạy theo lịch; toàn bộ tiêu chí ở [phase-2.md](./phase-2.md) đạt.
+- 2026-07-14: Phase 3 — issue #34: thêm dedup constraint cho `Snapshot` đã đóng băng (2 partial unique index, migration `add_snapshot_unique_constraint`) — xem [DECISION.md](./DECISION.md).

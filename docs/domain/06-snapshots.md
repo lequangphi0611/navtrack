@@ -13,6 +13,7 @@
 - **Mốc "hôm nay" là động, KHÔNG lưu** (`period = TODAY`): tính runtime mỗi lần xem, không tạo bản ghi thừa mỗi ngày.
 - **`holdingId = null`** = snapshot **tổng danh mục** của một user tại một mốc (cần cho biểu đồ NAV). Snapshot theo từng `Holding` cũng có thể lưu.
 - **`source`** ghi rõ giá trị đến từ nguồn tự động hay nhập tay tại thời điểm chốt.
+- **Dedup ở tầng DB:** tối đa **một** dòng snapshot đã đóng băng cho mỗi `(userId, holdingId-hoặc-null, date, period)` — ràng buộc bằng 2 partial unique index (không phải `@@unique` thường, vì `holdingId` nullable). Chi tiết đầy đủ ở `docs/02-data-model.md` (mục "Ghi chú thiết kế").
 
 ## Khi nào lưu snapshot
 - **Tự động (`PERIODIC`) — lịch nằm trong cron workflow, không chạy hằng ngày:**
@@ -30,8 +31,7 @@
 
 ## Ca biên
 - **Thiếu giá tại mốc cron:** nếu một mã không có giá lúc chốt, ghi rõ (không mặc định 0). Cân nhắc dùng giá gần nhất + đánh dấu.
-- **Chốt lại một mốc đã đóng băng:** mặc định không cho ghi đè; nếu cần sửa (dữ liệu sai) phải là hành động rõ ràng, có ghi vết.
-- **Nhiều lần "chốt hôm nay" trong ngày:** cân nhắc gộp về một bản ghi/ngày để tránh trùng.
+- **Chốt lại một mốc đã đóng băng / chốt "hôm nay" nhiều lần trong ngày — đã chốt:** đúng **một** dòng frozen cho mỗi mốc theo khóa `(userId, holdingId-hoặc-null, date, period)` (ràng buộc DB, xem mục "Quy tắc & bất biến"). Chốt lại cùng một mốc (vd bấm "Chốt số liệu hôm nay" nhiều lần trong ngày, hoặc cron chạy lại) **phải** là **upsert idempotent** theo đúng khóa này — ghi đè giá trị dòng đã có, không tạo dòng mới. *(Lưu ý phạm vi: bản thân logic upsert-khi-ghi — Server Action, cron workflow — là một issue Phase 3 riêng sau, không thuộc issue #34; #34 chỉ đảm bảo ràng buộc schema/DB đã sẵn sàng trước khi viết logic ghi đó.)*
 
 ## Ví dụ
 - Cron `0 0 1 * *` fire 01/03/2025 → ghi `Snapshot{ date: 28/02/2025, period: PERIODIC, frozen: true }` (cuối tháng 2, giá EOD 28/02).

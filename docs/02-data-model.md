@@ -173,6 +173,13 @@ model Snapshot {
 
   @@index([userId, date])
   @@index([holdingId, date])
+  // NOTE: dedup cho snapshot đã đóng băng — tối đa 1 dòng frozen cho mỗi
+  // (userId, date, period) khi holdingId null, và mỗi (holdingId, date, period)
+  // khi holdingId not null. KHÔNG khai báo bằng @@unique ở đây vì Prisma DSL
+  // không hỗ trợ WHERE cho @@unique (cần loại trừ NULL != NULL của Postgres
+  // trong unique index thường) — 2 partial unique index này chỉ tồn tại dưới
+  // dạng raw SQL trong migration `add_snapshot_unique_constraint`. Xem
+  // mục "Ghi chú thiết kế" bên dưới.
 }
 
 model NavOverride {
@@ -244,6 +251,7 @@ model Setting {
 - **`Dividend`** tách khỏi `Cashflow` vì cổ tức cổ phiếu không phải dòng tiền — chỉ tăng `stockQuantity` nắm giữ, không ảnh hưởng XIRR trực tiếp (chỉ ảnh hưởng gián tiếp qua NAV tăng do số lượng tăng).
 - **Cổ tức tiền mặt tự khấu trừ thuế:** khi ghi cổ tức tiền mặt, app tự trừ thuế TNCN (~5% ở VN) → lưu `grossAmount`, `taxAmount`, `netAmount`. **Dòng tiền dương đưa vào XIRR là `netAmount` (số thực nhận sau thuế)**. Cổ tức bằng cổ phiếu chỉ tăng số lượng, thuế xử lý khi bán (để sau).
 - **`Snapshot.holdingId = null`** dùng cho snapshot tổng danh mục (tổng NAV mọi tài sản tại 1 mốc) — cần cho biểu đồ NAV theo thời gian ở mục 03-roadmap.
+- **Dedup snapshot đã đóng băng — 2 partial unique index, không phải `@@unique`.** Khóa duy nhất là `(userId, date, period)` cho snapshot tổng danh mục (`holdingId = null`) và `(holdingId, date, period)` cho snapshot theo từng vị thế. `period` **phải** nằm trong khóa vì cùng một `date` lịch (vd 31/12) có thể hợp lệ sinh ra **2 dòng khác nhau**: cron tháng (`PERIODIC`, fire 01/01 ghi cho 31/12 năm trước) và cron cuối năm (`YEAR_END`, cũng fire 01/01 ghi cho cùng 31/12) — không phải trùng lặp mà là 2 mốc báo cáo khác mục đích. Vì `holdingId` nullable và Postgres coi mỗi `NULL` là khác biệt trong unique index thường (không tự loại trùng khi `holdingId` đều null), một `@@unique([userId, date, period])` khai trong `schema.prisma` **không** chặn được nhiều dòng snapshot tổng danh mục trùng mốc. Prisma DSL cũng không hỗ trợ `WHERE` cho `@@unique` nên không thể tự thu hẹp bằng field. Giải pháp: 2 **partial unique index** viết tay bằng raw SQL (`CREATE UNIQUE INDEX ... WHERE "holdingId" IS NULL` / `WHERE "holdingId" IS NOT NULL`) trong migration `add_snapshot_unique_constraint`, chỉ đánh dấu bằng comment `// NOTE:` cạnh model `Snapshot` trong `schema.prisma` (không có block `@@unique` tương ứng). Vì đây không phải cấu trúc khai báo được ở DSL, các lần `prisma migrate dev` sau không diff/drop nhầm 2 index này. Xem `process/DECISION.md` (2026-07-14).
 - **`NavOverride`** tách bảng riêng thay vì 1 field `nav_override` trên `Holding`, vì giá override có thể thay đổi theo từng ngày (không chỉ 1 giá cố định) — quan trọng với vàng/trái phiếu nhập tay thường xuyên. `date` là **`@db.Date`** (không có giờ, khớp `PriceQuote.date`) và có **`@@unique([holdingId, date])`** — 1 giá nhập tay/vị thế/ngày, làm đích `upsert` idempotent cho Server Action `saveNavOverride` (sửa giá cùng ngày ghi đè, không tạo dòng trùng). Xem `process/DECISION.md` (2026-07-12).
 - **`PriceQuote` (giá tự động):** job Python ghi giá EOD từ vnstock vào đây, app **chỉ đọc**. Là bảng **dùng chung theo `symbol`** (không theo user, không gắn `Holding`) — nhiều user giữ cùng mã chia sẻ một giá. Định giá một `Holding` tại ngày D: ưu tiên `NavOverride` (nhập tay), nếu không có thì tra `PriceQuote` của mã đó (giá có `date` gần nhất ≤ D — cho ngày nghỉ/lễ). `@@unique([symbol, date])` là đích upsert idempotent của job. `symbol` ở đây là mã vnstock; nếu sau này cần phân biệt trùng mã khác loại, thêm cột thị trường/loại.
 - **`Setting` (bảng master cấu hình):** thay `TaxRule`, gom mọi tham số chính sách chỉnh được mà không sửa code. Thuế bán để theo key mỗi loại (`SALE_TAX_STOCK`, `SALE_TAX_FUND`, `SALE_TAX_BOND`, `SALE_TAX_GOLD`), thuế cổ tức `DIVIDEND_TAX_RATE`.
@@ -251,4 +259,4 @@ model Setting {
   - `valueType` bắt buộc để parse an toàn (thuế là `DECIMAL`). `updatedBy`/`updatedAt` để audit thay đổi chính sách.
   - **Vẫn cần xác nhận mức % cụ thể** trước khi seed (điểm còn mở): bán ~0.1%, cổ tức ~5%.
 
-Đây là bản nháp — sẽ tinh chỉnh khi bắt đầu code (vd cân nhắc `Decimal` precision, index theo `holdingId + date`, unique constraint cho snapshot theo mốc đã đóng băng).
+Ba điểm "sẽ tinh chỉnh khi bắt đầu code" ghi ở bản nháp gốc nay đã chốt: `Decimal` precision (`@db.Decimal(20, 4)` trên mọi field tiền), index theo `holdingId + date` (`@@index([holdingId, date])` ở `Cashflow`/`Dividend`/`Snapshot`), và unique constraint cho snapshot theo mốc đã đóng băng (2 partial unique index, xem mục "Ghi chú thiết kế" phía trên).
