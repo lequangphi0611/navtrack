@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
+import { daysAgo, isoDate } from "./support/dates";
 import {
   cleanupTestUser,
   createTestSession,
@@ -13,21 +14,8 @@ import {
 // PriceQuote không có UI ghi (chỉ job Python ghi được, xem
 // jobs/price-fetcher/**) — seed trực tiếp qua Prisma trong spec, cùng cách
 // test-session.ts đã seed Session. Dùng PrismaClient riêng (không export từ
-// test-session.ts) vì chỉ dùng ở đúng file này.
+// test-session.ts) vì dùng ở nhiều file spec (dashboard, nav-override).
 const db = new PrismaClient();
-
-// Ngày tương đối so với "bây giờ" (không hardcode năm cụ thể) — tránh spec
-// vỡ khi chạy ở thời điểm khác ngày hiện tại lúc viết test.
-function daysAgo(days: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
 
 test.afterAll(async () => {
   await db.$disconnect();

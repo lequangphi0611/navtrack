@@ -50,7 +50,7 @@ Mở http://localhost:3000.
 | `pnpm typecheck`            | `tsc --noEmit`                                                                       |
 | `pnpm format`               | Prettier ghi đè                                                                      |
 | `pnpm test`                 | Unit test (Vitest) — chỉ test logic thuần, xem `docs/rules/testing.md`               |
-| `pnpm e2e`                  | E2e test (Playwright) — tự khởi động dev server nếu chưa chạy                        |
+| `pnpm e2e`                  | E2e test (Playwright) — tự khởi động dev server, tự docker compose DB test riêng     |
 | `pnpm db:migrate`           | Tạo/áp migration Prisma lúc dev (`prisma migrate dev`)                               |
 | `pnpm db:migrate:deploy`    | Áp migration đã có, không tạo mới — dùng cho CI/production (`prisma migrate deploy`) |
 | `pnpm db:seed`              | Seed dữ liệu mặc định (`prisma/seed.ts`) — cần `SEED_ADMIN_EMAIL`                    |
@@ -58,9 +58,14 @@ Mở http://localhost:3000.
 ## Chạy e2e (Playwright)
 
 ```bash
-docker compose up -d --wait   # DB phải đang chạy — một số luồng e2e sau này sẽ cần ghi/đọc DB
 pnpm e2e
 ```
+
+`pnpm e2e` (`scripts/e2e.mjs`) tự lo hết: `docker compose -f docker-compose.test.yml up`
+một Postgres riêng (service `db-test`, cổng 5434, dữ liệu ở tmpfs) → áp migration → chạy
+Playwright → `down` container đó khi xong (kể cả khi test fail). DB này **tách biệt hoàn
+toàn** với DB dev ở `docker-compose.yml`/`.env` (cổng 5433) — không cần DB dev đang chạy,
+và data dev không bao giờ bị e2e đụng tới. Cấu hình kết nối ở `.env.test`.
 
 Lần đầu chạy trên máy mới, cài trình duyệt Playwright:
 

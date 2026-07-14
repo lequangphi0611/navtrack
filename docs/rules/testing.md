@@ -48,6 +48,7 @@ expect(screen.getByText("...")).toBeInTheDocument();
 
 - Dùng **Playwright** cho các luồng chính: đăng nhập Google, nhập vị thế ban đầu, ghi giao dịch, xem dashboard, bật/tắt ẩn số tiền.
 - Đặt trong thư mục `e2e/` riêng.
+- **DB riêng, ephemeral, tách khỏi DB dev:** `pnpm e2e` tự `docker compose -f docker-compose.test.yml up` một Postgres riêng (service `db-test`, cổng 5434, `.env.test`), áp migration, chạy test, rồi `down` khi xong — kể cả lúc fail. Không bao giờ chạy e2e nhắm vào DB dev (`.env`, cổng 5433): tránh sinh data test lẫn vào data thật đang dùng để dev tay.
 
 ```ts
 // ✅ Good — e2e/dashboard.spec.ts (luồng thật, không mock logic)
