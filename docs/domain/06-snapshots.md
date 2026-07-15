@@ -42,3 +42,9 @@
 - Cron `0 0 * * 0` → chốt mỗi Chủ Nhật, `period: PERIODIC`.
 - Cron 01/01/2025 → ghi `Snapshot{ date: 31/12/2024, period: YEAR_END, frozen: true }`.
 - Xem dashboard hôm nay → tính NAV động, **không** tạo snapshot.
+
+## Đọc lịch sử / chi tiết (issue #46)
+- **Badge/label ở danh sách "Các mốc đã chốt" (`/snapshots`) suy TRỰC TIẾP từ `period`** — không thêm field schema mới cho việc này (đúng tinh thần đã chốt ở #34/#36/#37: không mở rộng schema chỉ để phục vụ hiển thị). `PERIODIC` → "ĐỊNH KỲ"/badge mặc định, `YEAR_END` → "CUỐI NĂM"/badge accent, `MANUAL` → "THỦ CÔNG"/badge warning — model không phân biệt được "MANUAL do giao dịch" với "MANUAL do user tự bấm nút", cả hai trigger gộp chung 1 badge.
+- **Liên kết breakdown per-holding với dòng tổng ở `/snapshots/[id]`:** cùng `(userId, date, period)`, khác `holdingId` — đúng khóa dedup đã có từ #34, không cần thêm FK/index mới. `@@index([userId, date])` sẵn có đủ dùng cho cả truy vấn danh sách lẫn truy vấn chi tiết.
+- **`recomputedComparison` (mockup 3f — "giá đã đổi từ khi chốt"):** với mỗi holding trong breakdown, suy ngược `quantity = frozenValue / historicalPrice` (giá đã resolve tại `snapshot.date`, đúng công thức `nav = quantity * price` đã dùng lúc chốt — không replay lại `Cashflow`), rồi `recomputedValue = quantity * currentPrice` (giá đã resolve tại hôm nay). Kết quả chỉ phản ánh ảnh hưởng của **giá**, không phản ánh thay đổi vị thế (mua/bán thêm) từ lúc chốt tới nay. Thiếu giá lịch sử/hiện tại, hoặc giá lịch sử = 0 → giữ nguyên `frozenValue` cho holding đó (fallback an toàn).
+- **Ngưỡng hiện khối so sánh: `|Σrecomputed − frozenAggregateValue| ≥ 1 VND`** (dưới ngưỡng → coi như không đổi, chỉ hiện biến thể 3c). VND không có đơn vị lẻ dưới đồng nên ngưỡng này đủ nhạy để bắt mọi lệch giá thật, đồng thời tránh 3f giả do sai số làm tròn khi suy ngược `quantity`.
