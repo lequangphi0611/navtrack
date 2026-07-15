@@ -6,7 +6,7 @@ docs/rules/testing.md + docs/rules/python-job.md.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 
@@ -389,6 +389,50 @@ def test_run_snapshot_isolates_unexpected_error_per_holding(monkeypatch: pytest.
     portfolio_snap.assert_called_once_with(
         conn, "u1", date(2026, 1, 31), Decimal("400000"), "PERIODIC"
     )
+
+
+def test_run_snapshot_isolates_unexpected_error_per_portfolio_user(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Lỗi bất ngờ khi ghi dòng tổng danh mục của 1 user (vd deadlock) không
+    được chặn user còn lại trong cùng lượt chạy — connection phải rollback
+    để dùng lại được, cùng pattern cô lập lỗi với vòng lặp per-Holding."""
+    conn = MagicMock()
+    holdings = [
+        {"id": "h1", "userId": "u1", "symbol": "VNM", "quantity": Decimal("10")},
+        {"id": "h2", "userId": "u2", "symbol": "FPT", "quantity": Decimal("5")},
+    ]
+    monkeypatch.setattr(main, "get_all_holding_user_ids", MagicMock(return_value={"u1", "u2"}))
+    monkeypatch.setattr(main, "get_open_holdings", MagicMock(return_value=holdings))
+    monkeypatch.setattr(main, "get_latest_nav_overrides", MagicMock(return_value={}))
+    monkeypatch.setattr(
+        main,
+        "get_latest_price_quotes",
+        MagicMock(
+            return_value={
+                "VNM": (date(2026, 1, 31), Decimal("50000")),
+                "FPT": (date(2026, 1, 31), Decimal("80000")),
+            }
+        ),
+    )
+    monkeypatch.setattr(main, "upsert_holding_snapshot", MagicMock())
+
+    def fake_upsert_portfolio(conn, user_id, snapshot_date, value, period):
+        if user_id == "u1":
+            raise RuntimeError("db write error")
+
+    monkeypatch.setattr(
+        main, "upsert_portfolio_snapshot", MagicMock(side_effect=fake_upsert_portfolio)
+    )
+
+    main.run_snapshot(conn, "PERIODIC", date(2026, 1, 31))  # không được raise ra ngoài
+
+    assert conn.rollback.call_count == 1
+    # u1 lỗi khi ghi dòng tổng -> vẫn phải ghi được dòng tổng của u2.
+    assert main.upsert_portfolio_snapshot.call_args_list == [
+        call(conn, "u1", date(2026, 1, 31), Decimal("500000"), "PERIODIC"),
+        call(conn, "u2", date(2026, 1, 31), Decimal("400000"), "PERIODIC"),
+    ]
 
 
 # ---------------------------------------------------------------------------
