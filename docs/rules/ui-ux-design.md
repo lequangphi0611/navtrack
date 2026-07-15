@@ -56,6 +56,14 @@ Quy tắc giao diện cho Navtrack: theme màu, typography, icon, và kho atoms/
 | `arrow_back` / `close` | `ArrowLeft` / `X` |
 | `lock` | `Lock` |
 | `logout` | `LogOut` |
+| `ac_unit` | `Snowflake` |
+| `bolt` | `Zap` |
+| `south_west` / `north_east` | `ArrowDownLeft` / `ArrowUpRight` |
+| `history` | `History` |
+| `schedule` | `Clock` |
+| `calendar_view_month` | `CalendarRange` |
+| `event_available` | `CalendarCheck2` |
+| `verified` | `ShieldCheck` |
 
 ## Primitives
 
@@ -71,10 +79,11 @@ Tái dùng trước khi tạo mới trùng lặp. Cấu trúc/pattern (thư mụ
 | Atom | Ghi chú |
 |---|---|
 | `button.tsx` | variants: default/secondary/ghost/destructive/outline/link |
-| `badge.tsx` | variants: default/gain/destructive/neutral (dạng "tint": `bg-{color}/14` + `text-{color}`) |
+| `badge.tsx` | variants: default/gain/destructive/warning/neutral/accent (dạng "tint": `bg-{color}/14` + `text-{color}`) — `accent` (teal, token `--accent`) dùng cho "CUỐI NĂM" (khác `default` = primary/indigo, dùng cho "ĐỊNH KỲ") |
 | `input.tsx` | bọc `@base-ui/react/input` |
 | `select.tsx` | **native `<select>`** styled + icon `ChevronDown` (không dùng `@base-ui/react/select` — listbox tuỳ biến quá nặng cho nhu cầu hiện tại); giữ form semantics `name`/`value` |
 | `avatar.tsx` | bọc `@base-ui/react/avatar`; **vuông bo góc** (`rounded-md`), không tròn |
+| `sheet.tsx` | Bottom sheet — bọc `@base-ui/react/dialog` (`Root/Trigger/Portal/Backdrop/Popup/Close`, Portal+Backdrop lồng sẵn trong `SheetPopup`); `rounded-t-3xl`, backdrop mờ đen; animation qua `data-open`/`data-closed` (Base UI tự gắn, đúng cặp key cho keyframe animation của tw-animate-css — khác `data-starting-style`/`data-ending-style` vốn dành cho CSS transition thuần) |
 | `skeleton.tsx` | `animate-pulse bg-muted`, dùng cho `Suspense`/`loading.tsx` fallback — quy tắc bắt buộc về loading/skeleton (checklist page, naming `ComponentNameSkeleton`, colocation) xem [`component-architecture.md`](./component-architecture.md#quy-tắc-bắt-buộc-khi-thêmsửa-page-checklist) |
 
 **Molecules** (`src/components/<Name>/`, dùng chung nhiều feature):
@@ -87,7 +96,7 @@ Tái dùng trước khi tạo mới trùng lặp. Cấu trúc/pattern (thư mụ
 | `AssetTypeBadge` | Pill tint theo màu asset (nền `asset-*` mờ + chữ màu asset, mockup 2d) + chấm màu; nguồn tạm cho union `AssetType` (thay bằng enum Prisma khi Phase 1 có schema thật) |
 | `SymbolAvatar` | Avatar chữ viết tắt mã, màu suy ra từ hash(mã) — khớp quyết định ở [`04-tech-stack.md`](../04-tech-stack.md) (không dùng logo ảnh) |
 | `UserAvatar` | Avatar initials người dùng/thành viên (bo `30%`, nền gradient secondary→card) — suy initials từ tên hoặc email |
-| `PageHeader` | Thanh đầu trang: nút back (`variant: "back"`) hoặc close (`"close"`) + tiêu đề render bằng `h1` |
+| `PageHeader` | Thanh đầu trang: nút back (`variant: "back"`) hoặc close (`"close"`) + tiêu đề render bằng `h1` + `trailing?: ReactNode` (composition slot bên phải, vd Badge "Chỉ xem" — mockup 3e) |
 | `SegmentedControl` | Control pill trượt nền, controlled (`value`/`onChange`) — không tự giữ state; hỗ trợ `stretch` (full width), `thumbClassName` (đổi màu thumb, vd Mua/Bán → `gain`/`destructive`), `activeClassName` per-option |
 | `StatCard` | Label + `MoneyValue` + `PercentChange` + `note?` (ghi chú mờ dưới giá trị) |
 | `HoldingListItem` | Dòng danh mục: `SymbolAvatar` + `AssetTypeBadge` + `MoneyValue` + `PercentChange` |

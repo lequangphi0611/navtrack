@@ -1,7 +1,8 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Khớp khung DashboardScreen: header, chip mốc chốt, NAV hero, 2 thẻ XIRR/PnL,
-// phân bổ, note nguồn giá — dùng cho loading.tsx của route "/" khi được wiring.
+// Khớp khung DashboardScreen: header, chip mốc chốt, NAV hero, entry point
+// "Lịch sử NAV", 2 thẻ XIRR/PnL, phân bổ, note nguồn giá — dùng cho loading.tsx
+// của route "/" khi được wiring.
 function DashboardScreenSkeleton() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-3.5 p-5 pb-28">
@@ -14,6 +15,7 @@ function DashboardScreenSkeleton() {
       </div>
       <Skeleton className="h-11 w-full rounded-xl" />
       <Skeleton className="h-32 w-full rounded-2xl" />
+      <Skeleton className="h-11 w-full rounded-xl" />
       <div className="grid grid-cols-2 gap-3">
         <Skeleton className="h-24 rounded-2xl" />
         <Skeleton className="h-24 rounded-2xl" />

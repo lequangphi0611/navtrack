@@ -2,6 +2,8 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
+  ChevronRight,
+  History,
   Sigma,
   SlidersHorizontal,
   Zap,
@@ -19,6 +21,10 @@ import {
   MissingPriceList,
   type MissingPriceHolding,
 } from "@/features/dashboard/components/MissingPriceList";
+import {
+  SnapshotTodayCard,
+  type SnapshotTodayCardProps,
+} from "@/features/dashboard/components/SnapshotTodayCard";
 import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -48,6 +54,9 @@ type DashboardScreenProps = {
   // Rỗng = happy path (2a); có phần tử = biến thể "không tính được XIRR" (2f).
   missingPriceHoldings: MissingPriceHolding[];
   hidden?: boolean;
+  // Vắng mặt = ẩn card CTA "Chốt số liệu hôm nay" (issue #35 — Container chưa
+  // cấp, xem process/UI_phase_3.md).
+  snapshotToday?: SnapshotTodayCardProps;
 };
 
 // Organism Phase 2 cho "/" (Dashboard NAV + XIRR, mockup 2a) — cũng tái dùng cho
@@ -72,6 +81,7 @@ function DashboardScreen({
   priceFreshnessNote,
   missingPriceHoldings,
   hidden = false,
+  snapshotToday,
 }: DashboardScreenProps) {
   const hasMissingPrices = missingPriceHoldings.length > 0;
   const navDeltaNumber = Number(navDeltaAmount);
@@ -145,6 +155,20 @@ function DashboardScreen({
           </div>
         )}
       </div>
+
+      <Link
+        href={ROUTES.snapshots}
+        className="flex items-center gap-2.25 rounded-xl border border-border bg-card px-3.25 py-2.5"
+      >
+        <History className="size-4.25 text-primary" />
+        <span className="text-[13px] font-semibold text-foreground">
+          Lịch sử NAV
+        </span>
+        <span className="flex-1" />
+        <ChevronRight className="size-4 text-muted-faint" />
+      </Link>
+
+      {snapshotToday ? <SnapshotTodayCard {...snapshotToday} /> : null}
 
       <ReturnMetrics
         xirr={xirr}

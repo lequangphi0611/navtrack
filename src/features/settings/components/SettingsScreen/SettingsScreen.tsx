@@ -1,4 +1,4 @@
-import { LogOut, Users } from "lucide-react";
+import { History, LogOut, Users } from "lucide-react";
 
 import { BottomNav } from "@/components/BottomNav";
 import { PageHeader } from "@/components/PageHeader";
@@ -31,6 +31,11 @@ function SettingsScreen({ cutoff, onSignOut }: SettingsScreenProps) {
           href={ROUTES.members}
           icon={Users}
           label="Thành viên"
+        />
+        <SettingsMenuItem
+          href={ROUTES.snapshotSchedule}
+          icon={History}
+          label="Lịch chốt tự động"
         />
 
         {cutoff ? (
