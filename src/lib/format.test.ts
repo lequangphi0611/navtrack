@@ -7,6 +7,7 @@ import {
   formatPercent,
   formatQuantity,
   formatSignedPercent,
+  formatTime,
   signColorClass,
 } from "./format";
 
@@ -105,6 +106,22 @@ describe("formatDate", () => {
 describe("formatDayMonth", () => {
   test("format dd/MM theo giờ Asia/Ho_Chi_Minh, không kèm năm", () => {
     expect(formatDayMonth(new Date("2026-07-09T00:00:00.000Z"))).toBe("09/07");
+  });
+});
+
+describe("formatTime", () => {
+  test("format HH:mm theo giờ Asia/Ho_Chi_Minh, nhận Date", () => {
+    // 08:30 UTC = 15:30 ICT cùng ngày.
+    expect(formatTime(new Date("2026-07-12T08:30:00Z"))).toBe("15:30");
+  });
+
+  test("nhận string ISO", () => {
+    expect(formatTime("2026-07-12T08:30:00Z")).toBe("15:30");
+  });
+
+  test("biên qua nửa đêm ICT vẫn tính đúng giờ (không phụ thuộc timezone máy chạy test)", () => {
+    // 18:00 UTC = 01:00 ICT ngày hôm sau.
+    expect(formatTime(new Date("2026-07-12T18:00:00Z"))).toBe("01:00");
   });
 });
 

@@ -211,16 +211,22 @@ def upsert_holding_snapshot(
     """Upsert idempotent theo khóa của partial unique index
     `Snapshot_holding_unique` (`"holdingId", "date", "period"` WHERE
     `"holdingId" IS NOT NULL` — migration `20260714075356_add_snapshot_unique_constraint`).
-    Chạy lại cùng mốc ghi đè `value`/`source`, không tạo dòng mới."""
+    Chạy lại cùng mốc ghi đè `value`/`source`/`updatedAt`, không tạo dòng mới.
+
+    `"updatedAt"` PHẢI được set thủ công ở đây (mirror `save_price`,
+    jobs/price-fetcher/main.py) — cột này KHÔNG có default ở DB (Prisma
+    `@default(now())` chỉ áp dụng cho backfill lúc migrate, ghi mới qua Prisma
+    Client mới tự set; raw SQL từ job Python không đi qua Prisma Client nên
+    phải tự set, nếu không sẽ NULL/giữ giá trị cũ khi upsert)."""
     snapshot_id = uuid.uuid4().hex
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO "Snapshot"
-                ("id", "userId", "holdingId", "date", "value", "source", "period", "frozen", "createdAt")
-            VALUES (%s, %s, %s, %s, %s, %s, %s, true, now())
+                ("id", "userId", "holdingId", "date", "value", "source", "period", "frozen", "createdAt", "updatedAt")
+            VALUES (%s, %s, %s, %s, %s, %s, %s, true, now(), now())
             ON CONFLICT ("holdingId", "date", "period") WHERE "holdingId" IS NOT NULL
-            DO UPDATE SET "value" = EXCLUDED."value", "source" = EXCLUDED."source"
+            DO UPDATE SET "value" = EXCLUDED."value", "source" = EXCLUDED."source", "updatedAt" = now()
             """,
             (snapshot_id, user_id, holding_id, snapshot_date, value, source, period),
         )
@@ -236,16 +242,17 @@ def upsert_portfolio_snapshot(
     """Upsert idempotent cho dòng tổng danh mục (`holdingId IS NULL`) — khóa
     của partial unique index `Snapshot_portfolio_unique` (`"userId", "date",
     "period"` WHERE `"holdingId" IS NULL`). `source` luôn AUTO (xem
-    PORTFOLIO_SNAPSHOT_SOURCE)."""
+    PORTFOLIO_SNAPSHOT_SOURCE). `"updatedAt"` set thủ công — xem ghi chú ở
+    upsert_holding_snapshot phía trên."""
     snapshot_id = uuid.uuid4().hex
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO "Snapshot"
-                ("id", "userId", "holdingId", "date", "value", "source", "period", "frozen", "createdAt")
-            VALUES (%s, %s, NULL, %s, %s, %s, %s, true, now())
+                ("id", "userId", "holdingId", "date", "value", "source", "period", "frozen", "createdAt", "updatedAt")
+            VALUES (%s, %s, NULL, %s, %s, %s, %s, true, now(), now())
             ON CONFLICT ("userId", "date", "period") WHERE "holdingId" IS NULL
-            DO UPDATE SET "value" = EXCLUDED."value"
+            DO UPDATE SET "value" = EXCLUDED."value", "updatedAt" = now()
             """,
             (snapshot_id, user_id, snapshot_date, value, PORTFOLIO_SNAPSHOT_SOURCE, period),
         )

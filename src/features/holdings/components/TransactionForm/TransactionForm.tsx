@@ -10,7 +10,7 @@ import { SymbolAvatar } from "@/components/SymbolAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney, formatQuantity } from "@/lib/format";
-import { ROUTES } from "@/lib/routes";
+import { holdingDetailAfterTransaction } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 import { addTransaction, updateTransaction } from "../../actions";
@@ -110,7 +110,12 @@ function TransactionForm(props: TransactionFormProps) {
       };
     }
 
-    router.push(ROUTES.holdingDetail(result.data.holdingId));
+    router.push(
+      holdingDetailAfterTransaction(
+        result.data.holdingId,
+        result.data.cashflowId,
+      ),
+    );
     return { ok: true };
   }
 

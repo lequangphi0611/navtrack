@@ -64,7 +64,10 @@ test("Dashboard hiển thị đúng NAV/XIRR/lãi-lỗ khi vị thế có giá t
     await page.locator('input[name="pricePerUnit"]').fill("100000");
     await page.locator('input[name="date"]').fill(buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
+    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
+    await page.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
 
     await page.goto("/");
 
@@ -129,7 +132,10 @@ test("Dashboard hiển thị đúng màu/mũi tên khi NAV lỗ so với vốn",
     await page.locator('input[name="pricePerUnit"]').fill("100000");
     await page.locator('input[name="date"]').fill(buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
+    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
+    await page.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
 
     await page.goto("/");
 

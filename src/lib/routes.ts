@@ -28,3 +28,13 @@ export const ROUTES = {
   snapshotDetail: (snapshotId: string) => `/snapshots/${snapshotId}`,
   snapshotSchedule: "/settings/snapshot-schedule",
 } as const;
+
+// Khai NGOÀI object ROUTES (tham chiếu ROUTES.holdingDetail — object literal không tự
+// tham chiếu chính nó được lúc khởi tạo). Query param `cashflowId` cho page.tsx biết
+// "vừa ghi giao dịch xong" để dựng TransactionSnapshotBanner (issue #37) — không dùng
+// cookie, page.tsx tự verify cashflowId thuộc đúng holding trước khi tin (xem
+// features/holdings/queries.ts::getJustRecordedBanner).
+export const holdingDetailAfterTransaction = (
+  holdingId: string,
+  cashflowId: string,
+): string => `${ROUTES.holdingDetail(holdingId)}?cashflowId=${cashflowId}`;

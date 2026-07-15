@@ -1,11 +1,15 @@
+import { createManualSnapshot } from "@/features/snapshots/actions";
 import { SnapshotHistoryScreen } from "@/features/snapshots/components/SnapshotHistoryScreen";
+import { getSnapshotFreezePreview } from "@/features/snapshots/queries";
 import { ROUTES } from "@/lib/routes";
 
-// TODO(business-implementer): thay bằng getSnapshotHistory() thật — đọc
-// Snapshot{holdingId: null} theo user, tính heightPercent từ max(values) của 8
-// điểm gần nhất, ghép "hôm nay" tính động (không lưu) làm row đầu kind "live"
-// (xem process/UI_phase_3.md).
-export default function SnapshotHistoryPage() {
+// TODO(business-implementer): thay `chart`/`rows` bằng getSnapshotHistory() thật — đọc
+// Snapshot{holdingId: null} theo user, tính heightPercent từ max(values) của 8 điểm gần
+// nhất, ghép "hôm nay" tính động (không lưu) làm row đầu kind "live" (issue #46, xem
+// process/UI_phase_3.md). `freezeSheet` đã wiring thật (issue #37).
+export default async function SnapshotHistoryPage() {
+  const freezePreview = await getSnapshotFreezePreview();
+
   return (
     <SnapshotHistoryScreen
       backHref={ROUTES.dashboard}
@@ -24,16 +28,10 @@ export default function SnapshotHistoryPage() {
         ],
       }}
       freezeSheet={{
-        navValue: "3723986000",
-        cutoffDateLabel: "11/07/2026",
-        breakdown: [
-          { type: "STOCK", value: "1201830000" },
-          { type: "FUND", value: "498170000" },
-          { type: "BOND", value: "310500000" },
-          { type: "GOLD", value: "353250000" },
-        ],
-        // TODO(business-implementer): thay bằng createManualSnapshot() thật.
-        action: async () => ({ ok: true, snapshotAt: "15:42" }),
+        navValue: freezePreview.navValue,
+        cutoffDateLabel: freezePreview.cutoffDateLabel,
+        breakdown: freezePreview.breakdown,
+        action: createManualSnapshot,
       }}
       rows={[
         {
