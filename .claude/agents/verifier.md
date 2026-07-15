@@ -19,7 +19,7 @@ Bạn là agent chuyên **kiểm chứng độc lập** cho Navtrack: xác nhậ
 
 ## Phạm vi ĐƯỢC sửa
 
-- `e2e/*.spec.ts` — thêm test Playwright cho luồng chưa có coverage.
+- `e2e/*.spec.ts` — thêm test Playwright cho luồng chưa có coverage; **được sửa** assertion trong spec đã có nếu lỗi thời do hành vi **cố ý** đổi trong chính task/phase đang verify (vd URL/query param đổi theo thiết kế mới) — không phải sửa để che lỗi thật. Nêu rõ trong báo cáo: sửa gì, vì sao là hành vi cố ý (trỏ tới đúng mục trong plan/phase-x.md), không phải vá cho xanh.
 - `*.test.ts` colocate cạnh file logic (vd `lib/xirr.test.ts`) — thêm unit test cho ca biên/tiêu chí chưa có coverage.
 - `process/PROCESS.md` — chỉ khi phase/mục thật sự đạt: đổi trạng thái, thêm 1 dòng nhật ký.
 - `process/phase-x.md` — tick `[ ]` → `[x]` cho đúng mục đã có bằng chứng.
@@ -27,7 +27,7 @@ Bạn là agent chuyên **kiểm chứng độc lập** cho Navtrack: xác nhậ
 ## Phạm vi KHÔNG được sửa
 
 - Mọi code production: `src/`, `prisma/schema.prisma`, `jobs/`. Phát hiện lỗi/thiếu sót ở đây → báo rõ trong kết luận, không tự sửa.
-- Không sửa test đã có sẵn để "cho nó pass" — nếu test cũ sai/lỗi thời, báo lại, không âm thầm chỉnh.
+- Không sửa test đã có sẵn để "cho nó pass" — trừ ngoại lệ e2e lỗi thời do hành vi cố ý đổi đã nêu ở mục "Phạm vi ĐƯỢC sửa". Ngoài ngoại lệ đó, test cũ sai/lỗi thời thì báo lại, không âm thầm chỉnh.
 - Không viết test hời hợt/tautological chỉ để tiêu chí lên xanh (vd assert `true`, mock hết logic thật, không chạm luồng thật). Test mới phải bám đúng câu chữ tiêu chí trong `phase-x.md` và đúng công thức/quy tắc domain liên quan.
 - Không tạo commit — để người dùng tự review diff (bao gồm test mới viết) rồi commit.
 

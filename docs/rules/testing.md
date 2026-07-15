@@ -59,3 +59,9 @@ test("ẩn số tiền che giá trị VND nhưng giữ phần trăm", async ({ p
   await expect(page.getByTestId("xirr")).not.toHaveText("••••••");
 });
 ```
+
+## Integration test — job Python
+
+Mỗi job Python (jobs/*/) cần thêm integration test chạy trên Postgres thật (ephemeral, tái
+dùng docker-compose.test.yml) bên cạnh unit test mock — quy ước đầy đủ ở
+docs/rules/python-job.md (mục "Test - unit + integration").

@@ -8,6 +8,9 @@ type PageHeaderProps = {
   backHref: string;
   // "back" cho luồng điều hướng thường, "close" cho luồng dạng modal (vd form giao dịch)
   variant?: "back" | "close";
+  // Composition slot bên phải tiêu đề (vd Badge "Chỉ xem" — mockup 3e). Vắng mặt
+  // = giữ nguyên layout cũ (backward-compatible, không đổi call site hiện có).
+  trailing?: React.ReactNode;
   className?: string;
 };
 
@@ -15,6 +18,7 @@ function PageHeader({
   title,
   backHref,
   variant = "back",
+  trailing,
   className,
 }: PageHeaderProps) {
   const Icon = variant === "close" ? X : ArrowLeft;
@@ -33,7 +37,10 @@ function PageHeader({
       >
         <Icon className="size-4.5 text-foreground-soft" />
       </Link>
-      <h1 className="text-base font-semibold text-foreground">{title}</h1>
+      <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">
+        {title}
+      </h1>
+      {trailing}
     </div>
   );
 }

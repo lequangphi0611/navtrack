@@ -6,6 +6,10 @@ import { redirect } from "next/navigation";
 
 import { Prisma } from "@prisma/client";
 import type { Cashflow } from "@prisma/client";
+// Trigger tự động chốt Snapshot{period: MANUAL} sau mỗi giao dịch (docs/domain/06-snapshots.md
+// "Khi nào lưu snapshot") — snapshots feature không phụ thuộc ngược vào holdings/actions.ts
+// (chỉ holdings/queries.ts, xem features/snapshots/actions.ts) nên import chiều này không tạo vòng.
+import { freezeManualSnapshot } from "@/features/snapshots/actions";
 import type { ActionResult } from "@/lib/action-result";
 import { toFieldErrors } from "@/lib/action-result";
 import { getSession } from "@/lib/auth";
@@ -52,9 +56,25 @@ async function persistPosition(
   });
 }
 
+// Gọi sau MỖI action ghi cashflow (mua/bán/sửa/xoá) — hiệu ứng phụ, KHÔNG làm fail action
+// chính nếu freeze lỗi: giao dịch vẫn phải báo thành công cho user, tách lỗi freeze khỏi
+// lỗi giao dịch (docs/rules/error-handling.md "cô lập lỗi", cùng triết lý với job Python).
+async function triggerManualSnapshot(
+  actionName: string,
+  holdingId: string,
+): Promise<void> {
+  const freezeResult = await freezeManualSnapshot();
+  if (!freezeResult.ok) {
+    logger.warn(
+      { error: freezeResult.error, holdingId, action: actionName },
+      "freezeManualSnapshot after transaction failed",
+    );
+  }
+}
+
 export async function createHolding(
   input: unknown,
-): Promise<ActionResult<{ holdingId: string }>> {
+): Promise<ActionResult<{ holdingId: string; cashflowId: string }>> {
   const parsed = newHoldingSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -138,7 +158,7 @@ export async function createHolding(
             data: { userId, symbol, type, unit, name },
           }));
 
-        await tx.cashflow.create({
+        const cashflow = await tx.cashflow.create({
           data: {
             holdingId: holding.id,
             type: cashflowType,
@@ -154,7 +174,11 @@ export async function createHolding(
 
         await persistPosition(tx, holding.id, position);
 
-        return { ok: true as const, holdingId: holding.id };
+        return {
+          ok: true as const,
+          holdingId: holding.id,
+          cashflowId: cashflow.id,
+        };
       },
       // Serializable — cùng lý do với addTransaction: đọc cashflows để derive vị thế
       // rồi ghi persistPosition phải atomic với đọc, kể cả khi merge vào holding đã có
@@ -164,10 +188,15 @@ export async function createHolding(
 
     if (!result.ok) return result;
 
+    await triggerManualSnapshot("createHolding", result.holdingId);
+
     revalidatePath(ROUTES.holdingDetail(result.holdingId));
     revalidatePath(ROUTES.holdings);
     revalidatePath(ROUTES.holdingsClosed);
-    return { ok: true, data: { holdingId: result.holdingId } };
+    return {
+      ok: true,
+      data: { holdingId: result.holdingId, cashflowId: result.cashflowId },
+    };
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError) {
       if (err.code === "P2002") {
@@ -199,7 +228,7 @@ export async function createHolding(
 
 export async function addTransaction(
   input: unknown,
-): Promise<ActionResult<{ holdingId: string }>> {
+): Promise<ActionResult<{ holdingId: string; cashflowId: string }>> {
   const parsed = addTransactionSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -273,7 +302,7 @@ export async function addTransaction(
           taxAmount: new Decimal(taxAmount),
         });
 
-        await tx.cashflow.create({
+        const cashflow = await tx.cashflow.create({
           data: {
             holdingId,
             type: cashflowType,
@@ -289,7 +318,7 @@ export async function addTransaction(
 
         await persistPosition(tx, holdingId, position);
 
-        return { ok: true as const };
+        return { ok: true as const, cashflowId: cashflow.id };
       },
       // Serializable — đọc cashflows để derive vị thế rồi ghi phải cùng transaction,
       // tránh hai request đồng thời cùng thấy vị thế cũ rồi cùng bán vượt (docs/rules/data-prisma.md).
@@ -298,10 +327,12 @@ export async function addTransaction(
 
     if (!result.ok) return result;
 
+    await triggerManualSnapshot("addTransaction", holdingId);
+
     revalidatePath(ROUTES.holdingDetail(holdingId));
     revalidatePath(ROUTES.holdings);
     revalidatePath(ROUTES.holdingsClosed);
-    return { ok: true, data: { holdingId } };
+    return { ok: true, data: { holdingId, cashflowId: result.cashflowId } };
   } catch (err) {
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -320,7 +351,7 @@ export async function addTransaction(
 
 export async function updateTransaction(
   input: unknown,
-): Promise<ActionResult<{ holdingId: string }>> {
+): Promise<ActionResult<{ holdingId: string; cashflowId: string }>> {
   const parsed = updateTransactionSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -432,10 +463,13 @@ export async function updateTransaction(
 
     if (!result.ok) return result;
 
+    await triggerManualSnapshot("updateTransaction", result.holdingId);
+
     revalidatePath(ROUTES.holdingDetail(result.holdingId));
     revalidatePath(ROUTES.holdings);
     revalidatePath(ROUTES.holdingsClosed);
-    return { ok: true, data: { holdingId: result.holdingId } };
+    // cashflowId đã có sẵn từ input (parsed.data) — không cần query lại.
+    return { ok: true, data: { holdingId: result.holdingId, cashflowId } };
   } catch (err) {
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -527,6 +561,11 @@ export async function deleteTransaction(
     );
 
     if (!result.ok) return result;
+
+    // Xoá vẫn kích hoạt trigger tự động (docs/domain/06-snapshots.md áp dụng cho cả 4
+    // action) — chỉ riêng banner UI (TransactionSnapshotBanner) không hiện cho ca xoá
+    // (không điều hướng đi đâu, không có cashflowId để gắn vào query string).
+    await triggerManualSnapshot("deleteTransaction", result.holdingId);
 
     revalidatePath(ROUTES.holdingDetail(result.holdingId));
     revalidatePath(ROUTES.holdings);

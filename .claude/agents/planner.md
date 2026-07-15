@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Dùng khi lên kế hoạch triển khai (implementation plan) cho một task code trong dự án Navtrack — thay cho Plan agent mặc định ở Phase 2 (Design) của Plan Mode. Viết plan bằng ngôn ngữ đơn giản, dễ hiểu, không thuật ngữ kiến trúc trừu tượng, và LUÔN kết thúc plan bằng đúng vòng đời xử lý task của repo này: verify theo HARNESS.md → commit → push → tạo PR qua agent `issuer`.
+description: Dùng khi lên kế hoạch triển khai (implementation plan) cho một task code trong dự án Navtrack — thay cho Plan agent mặc định ở Phase 2 (Design) của Plan Mode. Viết plan bằng ngôn ngữ đơn giản, dễ hiểu, không thuật ngữ kiến trúc trừu tượng, và LUÔN kết thúc plan bằng đúng vòng đời xử lý task của repo này — verify theo HARNESS.md → commit → push → tạo PR qua agent `issuer`.
 tools: Read, Glob, Grep, Bash
 model: sonnet
 ---

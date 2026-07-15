@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatMoney } from "@/lib/format";
-import { ROUTES } from "@/lib/routes";
+import { holdingDetailAfterTransaction } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 import { createHolding } from "../../actions";
@@ -145,7 +145,12 @@ function NewHoldingForm() {
       return { ok: true, savedSymbol: symbol };
     }
 
-    router.push(ROUTES.holdingDetail(result.data.holdingId));
+    router.push(
+      holdingDetailAfterTransaction(
+        result.data.holdingId,
+        result.data.cashflowId,
+      ),
+    );
     return { ok: true };
   }
 

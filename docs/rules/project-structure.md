@@ -29,7 +29,8 @@ navtrack/
 │  │     └─ index.ts
 │  └─ lib/                 # db, auth, format, xirr (kebab: db.ts, format.ts...)
 ├─ prisma/                 # schema.prisma + migrations/
-├─ jobs/price-fetcher/     # job Python (requirements.txt, README)
+├─ jobs/price-fetcher/     # job Python lấy giá (requirements.txt, README)
+├─ jobs/snapshot-cron/     # job Python chốt snapshot định kỳ — workflow riêng, tách khỏi price-fetcher
 ├─ scripts/                # script bảo trì chạy tay (vd generate-pwa-icons.mjs), kebab-case
 ├─ public/                 # static asset phục vụ nguyên trạng: icons/, sw.js, offline.html
 └─ e2e/                    # test Playwright

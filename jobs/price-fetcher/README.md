@@ -68,3 +68,34 @@ VCI không có dữ liệu (chỉ áp dụng cho `type = FUND`, STOCK không fal
 không có dữ liệu) bị bắt và trả `None` (không raise, không tự retry — tin vào tenacity nội bộ
 của `Quote.history()`); câu SQL upsert của `save_price`; và cô lập lỗi từng mã ở `main()`
 (một mã lỗi không chặn các mã còn lại, rollback đúng khi ghi DB lỗi).
+
+### Integration test
+
+```bash
+pnpm test:python-integration   # chạy ở gốc repo, không phải trong jobs/price-fetcher
+```
+
+`test_integration.py` (marker `@pytest.mark.integration`, bị `pytest` thường loại qua
+`addopts` trong `pyproject.toml`) chạy trên Postgres **thật** — không mock `psycopg`. Job này
+gọi `vnstock` (mạng thật) nên `fetch_price` bị **monkeypatch** trong test — integration test
+chỉ verify phần **ghi/đọc Postgres thật**, không gọi mạng thật (xem process/DECISION.md, mục
+2026-07-15). 4 test:
+
+- `test_save_price_upsert_is_idempotent_on_real_db` — gọi `save_price()` 2 lần cùng
+  `(symbol, date)` với giá khác nhau, assert chỉ 1 dòng và giá là giá mới nhất, dựa vào
+  constraint `@@unique([symbol, date])` thật.
+- `test_get_symbols_to_fetch_reads_real_holdings` — insert Holding thật đủ loại (STOCK/FUND
+  đang mở, GOLD, STOCK đã đóng), assert `get_symbols_to_fetch()` chỉ trả đúng STOCK/FUND đang
+  mở.
+- `test_main_isolates_one_symbol_failure_and_persists_the_rest_on_real_db` — 3 Holding thật,
+  1 mã fail (`fetch_price` mock trả `None`), assert mã fail không có dòng `PriceQuote`, các mã
+  còn lại có giá đúng.
+- `test_main_run_twice_does_not_duplicate_price_quote_rows` — gọi `main()` 2 lần liên tiếp,
+  assert không sinh dòng `PriceQuote` trùng qua toàn bộ đường đi thật.
+
+`pnpm test:python-integration` (`scripts/python-integration-test.mjs`) tự lo hết: `docker
+compose -f docker-compose.test.yml up` DB test (tái dùng đúng hạ tầng của `pnpm e2e`, cổng
+5434, KHÔNG dựng compose riêng) → `prisma migrate deploy` → chạy `pytest -m integration`
+trong thư mục job này → `docker compose down` khi xong (kể cả khi test fail). Không truyền
+argv thì lệnh này tự quét và chạy luôn cả `jobs/snapshot-cron/` trong cùng 1 lượt. Xem thêm
+[`docs/rules/python-job.md`](../../docs/rules/python-job.md) (mục "Test — unit + integration").

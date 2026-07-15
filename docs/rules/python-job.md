@@ -30,6 +30,14 @@ with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
 # ❌ Bad — INSERT thẳng → trùng mỗi lần chạy lại
 ```
 
+## Test — unit + integration
+- **Unit test** (`test_main.py`) mock hoàn toàn `psycopg`/DB — không gọi mạng/DB thật, luôn nhanh. Phủ logic thuần: xác định mốc/ngày, công thức tính toán, câu SQL đọc/upsert, orchestration (cô lập lỗi, ca biên).
+- **Bắt buộc thêm integration test** (`test_integration.py`, đánh dấu `@pytest.mark.integration`) verify điều unit test mock **không chứng minh được** — điển hình: idempotent thật trên constraint DB thật (chạy hàm ghi 2 lần liên tiếp, assert `COUNT(*)` không tăng), giá trị tính toán đúng khi đọc dữ liệu thật từ DB (không phải giá trị mock trả sẵn).
+- DB dùng cho integration test **tái dùng đúng hạ tầng ephemeral đã có cho Playwright e2e** (`docker-compose.test.yml`, service `db-test`, cổng 5434, `.env.test`) — **không dựng compose riêng cho job Python**. Tuyệt đối **không bao giờ** chạy nhắm vào DB dev (`.env`, cổng 5433) hay DB prod (Neon) — vì `.env` không cố định host, mọi file `test_integration.py` phải có guard chặn cứng nếu `DATABASE_URL` không trỏ đúng DB test (kiểm tra cổng `5434`) trước khi cho phép bất kỳ câu lệnh ghi (TRUNCATE/INSERT) nào chạy tiếp.
+- Chạy qua `pnpm test:python-integration` ở gốc repo (`scripts/python-integration-test.mjs`) — tự `docker compose up` DB test → `prisma migrate deploy` → `pytest -m integration` trong đúng thư mục job → `docker compose down` (kể cả khi test fail). **Không** chạy `pytest -m integration` trực tiếp trừ khi đã tự đảm bảo `DATABASE_URL` đang trỏ đúng DB test.
+- `pyproject.toml` của mỗi job cần `addopts = "-m 'not integration'"` để `pytest` mặc định (không tham số) tự loại integration test — giữ vòng lặp dev nhanh, không kéo Docker mỗi lần chạy unit test.
+- Áp dụng cho **mọi job Python hiện tại/tương lai**, không riêng `jobs/snapshot-cron/` — job mới có logic ghi DB đáng để verify thật (idempotent, giá trị tính toán) nên thêm `test_integration.py` theo cùng quy ước.
+
 ## Cô lập lỗi
 - **Một mã lỗi KHÔNG làm sập cả job** — `try/except` từng mã rồi `continue`; log rõ mã fail và có fallback không.
 

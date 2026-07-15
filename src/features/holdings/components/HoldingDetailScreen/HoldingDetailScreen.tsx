@@ -15,6 +15,10 @@ import {
   type CashflowTimelineRow,
 } from "@/features/holdings/components/CashflowTimeline";
 import { TransactionHistoryList } from "@/features/holdings/components/TransactionHistoryList";
+import {
+  TransactionSnapshotBanner,
+  type TransactionSnapshotBannerProps,
+} from "@/features/holdings/components/TransactionSnapshotBanner";
 import type { CashflowRow } from "@/features/holdings/types";
 import { formatQuantity, formatMoney } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
@@ -54,6 +58,11 @@ type HoldingDetailScreenProps = {
   holding: HoldingDetailScreenHolding;
   cashflows: CashflowRow[];
   valuation?: HoldingValuation;
+  // Banner "vừa ghi giao dịch & tự động chốt snapshot" (mockup 3d) — vắng mặt =
+  // ẩn hẳn (cùng pattern valuation/snapshotToday). Container quyết định cách
+  // biết "vừa giao dịch xong" (TBD, xem process/UI_phase_3.md) — page.tsx/
+  // TransactionForm.tsx CHƯA wiring cờ này, chỉ Props sẵn sàng ở đây.
+  justRecorded?: TransactionSnapshotBannerProps;
   hidden?: boolean;
 };
 
@@ -65,11 +74,14 @@ function HoldingDetailScreen({
   holding,
   cashflows,
   valuation,
+  justRecorded,
   hidden = false,
 }: HoldingDetailScreenProps) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4.5 p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
       <PageHeader title={holding.symbol} backHref={ROUTES.holdings} />
+
+      {justRecorded ? <TransactionSnapshotBanner {...justRecorded} /> : null}
 
       <div className="flex items-center gap-2">
         <AssetTypeBadge assetType={holding.type} />

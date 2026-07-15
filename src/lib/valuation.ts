@@ -47,6 +47,10 @@ type LatestQuoteRow = { date: Date; price: Decimal };
 // Cùng ngày -> ưu tiên NavOverride (issue #40: trước đây NavOverride luôn
 // thắng bất kể ngày, gây "shadow" vĩnh viễn PriceQuote mới hơn cho STOCK/FUND
 // — sửa để giá nhập tay cũ không còn che giá tự động mới hơn).
+//
+// ĐỒNG BỘ THỦ CÔNG với jobs/snapshot-cron/main.py (`resolve_price`, Python
+// không import được hàm này) — sửa công thức ưu tiên giá ở đây thì nhớ soát
+// lại hàm cùng tên bên đó (issue #36, process/DECISION.md 2026-07-14).
 export function resolvePrice(
   latestNavOverride: LatestQuoteRow | null,
   latestPriceQuote: LatestQuoteRow | null,
@@ -85,6 +89,9 @@ export function resolvePrice(
 // SL=0 -> CLOSED (docs/domain/01 "Vị thế đóng": NAV=0 dù có giá hay không,
 // không đóng góp vào tổng NAV). SL>0 & không định giá được -> MISSING_PRICE,
 // KHÔNG mặc định 0 (0 sẽ làm sai tổng NAV/XIRR — docs/domain/04 "Thiếu giá").
+// NAV = quantity * price ĐỒNG BỘ THỦ CÔNG với jobs/snapshot-cron/main.py
+// (`run_snapshot`, cùng công thức, không import chéo được) — xem comment ở
+// resolvePrice phía trên.
 export function valuateHolding(
   quantity: Decimal,
   resolved: ResolvedPrice | null,

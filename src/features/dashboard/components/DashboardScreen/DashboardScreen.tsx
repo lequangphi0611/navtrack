@@ -2,6 +2,8 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
+  ChevronRight,
+  History,
   Sigma,
   SlidersHorizontal,
   Zap,
@@ -19,6 +21,10 @@ import {
   MissingPriceList,
   type MissingPriceHolding,
 } from "@/features/dashboard/components/MissingPriceList";
+import {
+  SnapshotTodayCard,
+  type SnapshotTodayCardProps,
+} from "@/features/dashboard/components/SnapshotTodayCard";
 import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -48,14 +54,17 @@ type DashboardScreenProps = {
   // Rỗng = happy path (2a); có phần tử = biến thể "không tính được XIRR" (2f).
   missingPriceHoldings: MissingPriceHolding[];
   hidden?: boolean;
+  // Vắng mặt = ẩn card CTA "Chốt số liệu hôm nay" (issue #35 — Container chưa
+  // cấp, xem process/UI_phase_3.md).
+  snapshotToday?: SnapshotTodayCardProps;
 };
 
 // Organism Phase 2 cho "/" (Dashboard NAV + XIRR, mockup 2a) — cũng tái dùng cho
 // biến thể "không tính được XIRR" (2f) khi missingPriceHoldings không rỗng, thay
 // vì tách 2 component riêng (cùng một khung dữ liệu, chỉ khác nhánh hiển thị).
 //
-// LƯU Ý: route "/" hiện `redirect(ROUTES.holdings)` (Phase 1, cố ý không sửa —
-// xem process/UI_phase_2.md) nên component này CHƯA được wiring vào page thật.
+// Route "/" (`src/app/(dashboard)/page.tsx`) render component này trực tiếp,
+// truyền props từ `getPortfolioValuation` + `getManualSnapshotToday`.
 function DashboardScreen({
   displayName,
   cutoffLabel,
@@ -72,6 +81,7 @@ function DashboardScreen({
   priceFreshnessNote,
   missingPriceHoldings,
   hidden = false,
+  snapshotToday,
 }: DashboardScreenProps) {
   const hasMissingPrices = missingPriceHoldings.length > 0;
   const navDeltaNumber = Number(navDeltaAmount);
@@ -112,8 +122,18 @@ function DashboardScreen({
       </Link>
 
       <div className="rounded-2xl border border-primary/28 bg-linear-to-br from-primary/16 to-card p-5">
-        <div className="mb-1.75 text-[12.5px] font-semibold text-muted-foreground">
-          Giá trị thị trường (NAV)
+        <div className="mb-1.75 flex items-center justify-between gap-2">
+          <div className="text-[12.5px] font-semibold text-muted-foreground">
+            Giá trị thị trường (NAV)
+          </div>
+          <Link
+            href={ROUTES.snapshots}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-primary/14 px-2.5 py-1 text-[11px] font-semibold text-primary"
+          >
+            <History className="size-3.25" />
+            Lịch sử
+            <ChevronRight className="size-3.25" />
+          </Link>
         </div>
         <div className="font-mono text-[28px] leading-none font-semibold tracking-tight text-foreground tabular-nums">
           {formatMoney(navValue, { hidden })}
@@ -145,6 +165,8 @@ function DashboardScreen({
           </div>
         )}
       </div>
+
+      {snapshotToday ? <SnapshotTodayCard {...snapshotToday} /> : null}
 
       <ReturnMetrics
         xirr={xirr}

@@ -23,4 +23,18 @@ export const ROUTES = {
   // src/app/api/cutoff/route.ts. Chỉ nhận 3 key cố định (CUSTOM chưa wiring).
   cutoffAction: (key: "TODAY" | "END_OF_MONTH" | "END_OF_YEAR") =>
     `/api/cutoff?key=${key}`,
+  // Phase 3 (issue #35) — chuỗi snapshot NAV + chi tiết + cài đặt lịch chốt tự động.
+  snapshots: "/snapshots",
+  snapshotDetail: (snapshotId: string) => `/snapshots/${snapshotId}`,
+  snapshotSchedule: "/settings/snapshot-schedule",
 } as const;
+
+// Khai NGOÀI object ROUTES (tham chiếu ROUTES.holdingDetail — object literal không tự
+// tham chiếu chính nó được lúc khởi tạo). Query param `cashflowId` cho page.tsx biết
+// "vừa ghi giao dịch xong" để dựng TransactionSnapshotBanner (issue #37) — không dùng
+// cookie, page.tsx tự verify cashflowId thuộc đúng holding trước khi tin (xem
+// features/holdings/queries.ts::getJustRecordedBanner).
+export const holdingDetailAfterTransaction = (
+  holdingId: string,
+  cashflowId: string,
+): string => `${ROUTES.holdingDetail(holdingId)}?cashflowId=${cashflowId}`;
