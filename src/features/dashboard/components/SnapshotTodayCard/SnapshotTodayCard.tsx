@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import type { SnapshotTodayState } from "../../types";
+import type { SnapshotTodayState } from "@/features/snapshots/types";
 
 type SnapshotTodayCardProps = {
   // Server xác nhận đã có Snapshot{period: MANUAL} hôm nay — độc lập với

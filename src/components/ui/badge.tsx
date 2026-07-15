@@ -12,6 +12,9 @@ const badgeVariants = cva(
         destructive: "bg-destructive/14 text-destructive",
         warning: "bg-warning/14 text-warning",
         neutral: "bg-muted text-muted-foreground",
+        // Teal thật (token accent) — dùng cho badge "CUỐI NĂM" (mockup Phase 3 Screens
+        // 3a/3e), khác với "default" (primary/indigo, dùng cho "ĐỊNH KỲ").
+        accent: "bg-accent/14 text-accent",
       },
     },
     defaultVariants: {

@@ -23,4 +23,8 @@ export const ROUTES = {
   // src/app/api/cutoff/route.ts. Chỉ nhận 3 key cố định (CUSTOM chưa wiring).
   cutoffAction: (key: "TODAY" | "END_OF_MONTH" | "END_OF_YEAR") =>
     `/api/cutoff?key=${key}`,
+  // Phase 3 (issue #35) — chuỗi snapshot NAV + chi tiết + cài đặt lịch chốt tự động.
+  snapshots: "/snapshots",
+  snapshotDetail: (snapshotId: string) => `/snapshots/${snapshotId}`,
+  snapshotSchedule: "/settings/snapshot-schedule",
 } as const;

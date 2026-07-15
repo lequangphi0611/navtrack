@@ -2,6 +2,8 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
+  ChevronRight,
+  History,
   Sigma,
   SlidersHorizontal,
   Zap,
@@ -153,6 +155,18 @@ function DashboardScreen({
           </div>
         )}
       </div>
+
+      <Link
+        href={ROUTES.snapshots}
+        className="flex items-center gap-2.25 rounded-xl border border-border bg-card px-3.25 py-2.5"
+      >
+        <History className="size-4.25 text-primary" />
+        <span className="text-[13px] font-semibold text-foreground">
+          Lịch sử NAV
+        </span>
+        <span className="flex-1" />
+        <ChevronRight className="size-4 text-muted-faint" />
+      </Link>
 
       {snapshotToday ? <SnapshotTodayCard {...snapshotToday} /> : null}
 
