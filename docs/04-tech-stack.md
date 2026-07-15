@@ -16,14 +16,22 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 │  - Biểu đồ           │        │   giới               │
 └─────────────────────┘        └──────────▲───────────┘
                                           │ ghi
-                               ┌──────────┴───────────┐
-                               │  Job Python + vnstock │
-                               │  (GitHub Actions,     │
-                               │   chạy theo lịch)     │
-                               │  - Lấy giá hằng ngày  │
-                               │  - Chốt snapshot      │
-                               └──────────────────────┘
+                        ┌─────────────────┴─────────────────┐
+                        │                                    │
+             ┌──────────┴───────────┐            ┌───────────┴──────────┐
+             │  Job Python + vnstock │            │  Job snapshot-cron   │
+             │  (GitHub Actions,     │            │  (GitHub Actions,    │
+             │   chạy theo lịch)     │            │   chạy theo lịch)    │
+             │  - Lấy giá hằng ngày  │            │  - Không gọi vnstock │
+             │    (jobs/price-fetcher)│           │  - Chốt snapshot     │
+             │                       │            │    (jobs/snapshot-cron)│
+             └──────────────────────┘            └──────────────────────┘
 ```
+
+Hai job Python **tách biệt hoàn toàn**, mỗi job một workflow riêng
+(`.github/workflows/price-fetcher.yml` / `snapshot-cron.yml`) — job snapshot-cron chỉ đọc lại
+`Holding`/`NavOverride`/`PriceQuote` đã có sẵn trong Postgres để tính NAV tại mốc chốt, không phụ
+thuộc `vnstock`.
 
 **Nguyên tắc cốt lõi:** app TypeScript **chỉ đọc** giá từ DB, không bao giờ gọi vnstock trực tiếp. Job Python **chỉ ghi** vào DB, không đi qua app. Vì hai thế giới không gọi nhau, **schema database trở thành hợp đồng chung** — thay đổi schema phải đồng bộ cả hai phía.
 
@@ -45,10 +53,11 @@ Ba mảnh tách biệt, nối với nhau qua PostgreSQL:
 
 ## Ghi chú triển khai
 
-### Job Python (GitHub Actions)
+### Job Python (GitHub Actions) — hai workflow tách biệt
 - Kết nối Neon qua connection string, lưu trong **GitHub Secrets** (không hardcode).
 - Chạy theo lịch (cron của GitHub Actions) — lưu ý lịch này lệch vài phút, không chính xác từng phút, nhưng không sao với snapshot ngày/tháng/năm.
-- Nhiệm vụ: lấy giá hằng ngày cho cổ phiếu/quỹ; chốt snapshot định kỳ. **Lịch chốt snapshot nằm trong cron của workflow** (không chạy hằng ngày): tháng → fire ngày 01 ghi cho cuối tháng trước; năm → 01/01 ghi cho 31/12 trước (xem `domain/06-snapshots.md`). Vàng/trái phiếu chủ yếu nhập tay.
+- **`jobs/price-fetcher/`** (`.github/workflows/price-fetcher.yml`): lấy giá hằng ngày cho cổ phiếu/quỹ qua `vnstock`, ghi `PriceQuote`. Vàng/trái phiếu chủ yếu nhập tay.
+- **`jobs/snapshot-cron/`** (`.github/workflows/snapshot-cron.yml`, độc lập, **không** phụ thuộc `vnstock`): chốt snapshot định kỳ, chỉ đọc lại `Holding`/`NavOverride`/`PriceQuote` đã có sẵn để tính NAV tại mốc chốt. **Lịch chốt snapshot nằm trong cron của workflow** (không chạy hằng ngày): tháng → fire ngày 01 ghi cho cuối tháng trước; năm → 01/01 ghi cho 31/12 trước (xem `domain/06-snapshots.md`).
 
 ### XIRR (lớp bọc kiểm tra)
 - Trước khi tính: kiểm tra chuỗi dòng tiền có ít nhất một giá trị âm và một dương — nếu không, trả về trạng thái "không tính được" rõ ràng, **không** trả -100% hay NaN âm thầm.

@@ -51,3 +51,6 @@ next-env.d.ts
 jobs/*/.venv/
 jobs/*/__pycache__/
 jobs/*/*.egg-info/
+
+# scratch notes (không commit)
+/tmp/

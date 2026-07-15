@@ -5,7 +5,7 @@ Chụp và **đóng băng** giá trị danh mục tại các mốc (tháng/năm)
 
 ## Công việc cần làm
 - [x] Model `Snapshot` (`holdingId?`, `date`, `value`, `source`, `period`, `frozen`) + enum `SnapshotSource`, `SnapshotPeriod` + migration
-- [ ] Cron **GitHub Actions workflow** (không chạy hằng ngày): lịch nằm trong cron expression. Tháng → fire ngày 01, ghi snapshot `PERIODIC` cho **cuối tháng liền trước**; tuần → theo day-of-week; cuối năm → `YEAR_END` (01/01 ghi cho 31/12 trước). `frozen = true`
+- [x] Cron **GitHub Actions workflow** (không chạy hằng ngày): lịch nằm trong cron expression. Tháng → fire ngày 01, ghi snapshot `PERIODIC` cho **cuối tháng liền trước**; cuối năm → `YEAR_END` (01/01 ghi cho 31/12 trước). `frozen = true`. *(Nhánh tuần chưa implement — ngoài phạm vi issue #36, xem `jobs/snapshot-cron/README.md`.)*
 - [ ] Snapshot thủ công: khi có giao dịch mua/bán; nút **"Chốt số liệu hôm nay"** (`MANUAL`)
 - [ ] Snapshot **tổng danh mục** (`holdingId = null`) theo từng user
 - [ ] Mốc "hôm nay" tính động, **không lưu**
