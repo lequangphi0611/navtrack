@@ -19,6 +19,10 @@ import {
   MissingPriceList,
   type MissingPriceHolding,
 } from "@/features/dashboard/components/MissingPriceList";
+import {
+  SnapshotTodayCard,
+  type SnapshotTodayCardProps,
+} from "@/features/dashboard/components/SnapshotTodayCard";
 import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -48,6 +52,9 @@ type DashboardScreenProps = {
   // Rỗng = happy path (2a); có phần tử = biến thể "không tính được XIRR" (2f).
   missingPriceHoldings: MissingPriceHolding[];
   hidden?: boolean;
+  // Vắng mặt = ẩn card CTA "Chốt số liệu hôm nay" (issue #35 — Container chưa
+  // cấp, xem process/UI_phase_3.md).
+  snapshotToday?: SnapshotTodayCardProps;
 };
 
 // Organism Phase 2 cho "/" (Dashboard NAV + XIRR, mockup 2a) — cũng tái dùng cho
@@ -72,6 +79,7 @@ function DashboardScreen({
   priceFreshnessNote,
   missingPriceHoldings,
   hidden = false,
+  snapshotToday,
 }: DashboardScreenProps) {
   const hasMissingPrices = missingPriceHoldings.length > 0;
   const navDeltaNumber = Number(navDeltaAmount);
@@ -145,6 +153,8 @@ function DashboardScreen({
           </div>
         )}
       </div>
+
+      {snapshotToday ? <SnapshotTodayCard {...snapshotToday} /> : null}
 
       <ReturnMetrics
         xirr={xirr}
