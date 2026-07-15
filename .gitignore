@@ -54,3 +54,9 @@ jobs/*/*.egg-info/
 
 # scratch notes (không commit)
 /tmp/
+
+# design-implementer: cache raw mockup HTML đã fetch từ Claude Design — chỉ
+# để tránh fetch trùng trong máy hiện tại, không cần persist qua git (mất là
+# fetch lại được). index.json bên cạnh (mapping component -> design file) vẫn
+# commit bình thường.
+/.claude/design-cache/raw/
