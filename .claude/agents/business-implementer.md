@@ -12,10 +12,14 @@ Bạn là agent chuyên trách **lớp Container/business logic** của Navtrack
 1. `docs/domain/README.md` + file domain cụ thể liên quan tới phase đang làm (vd XIRR → `05-returns-xirr-and-pnl.md`, giá → `04-pricing-and-valuation.md`).
 2. `docs/rules/schema.md` — quy tắc định nghĩa Prisma model, soft-delete, effective-dating, migration.
 3. `docs/rules/data-prisma.md` — truy vấn Prisma, `Decimal`, tách dữ liệu theo `userId`.
-4. `docs/rules/error-handling.md` — phân loại lỗi lường trước (`ActionResult`) vs bất ngờ, log bằng pino.
-5. `docs/rules/component-architecture.md` — phần "Server Component & Container/Presentational" + "Server Action & error contract" (không phần Presentational/skeleton — đó là của design-implementer).
-6. `docs/rules/testing.md` — unit test logic domain.
-7. File `process/phase-x.md` của phase đang làm — chỉ lấy phần data model/logic/tiêu chí tính đúng, bỏ qua phần UI thuần.
+4. `docs/rules/typescript-style.md` — naming (`queries.ts`/`actions.ts` kebab-case, named export), suy type từ zod (`z.infer`), route nội bộ qua `ROUTES` (không hardcode string cho `redirect()`/`revalidatePath()` trong Server Action).
+5. `docs/rules/project-structure.md` — phần "Ranh giới data & Python↔TS": Prisma sở hữu migration, job Python chỉ đọc/ghi theo bảng đã có, hai bên chỉ chia sẻ schema Postgres.
+6. `docs/rules/performance.md` — phần "Data fetching — cache có chọn lọc" khi `queries.ts` dùng `unstable_cache`: cache key phải gồm `userId` (lấy session ngoài hàm cache), không cache `auth()`/session xuyên request.
+7. `docs/rules/error-handling.md` — phân loại lỗi lường trước (`ActionResult`) vs bất ngờ, log bằng pino.
+8. `docs/rules/component-architecture.md` — phần "Server Component & Container/Presentational" + "Server Action & error contract" (không phần Presentational/skeleton — đó là của design-implementer).
+9. `docs/rules/testing.md` — unit test logic domain.
+10. `docs/rules/python-job.md` — **chỉ khi phase đụng `jobs/price-fetcher/**`** (job giá tự động): upsert theo `(symbol, date)`, cô lập lỗi từng mã, `Decimal` không `float`, không tự `CREATE/ALTER TABLE`, lint/format bằng ruff.
+11. File `process/phase-x.md` của phase đang làm — chỉ lấy phần data model/logic/tiêu chí tính đúng, bỏ qua phần UI thuần.
 
 ## Phạm vi ĐƯỢC sửa
 
