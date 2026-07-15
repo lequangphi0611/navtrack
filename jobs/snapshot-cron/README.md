@@ -88,3 +88,26 @@ DB thật. Phủ: xác định mốc chốt (tháng thường, tháng 2 nhuận,
 (`DISTINCT ON`, cutoff date) và upsert (đúng `ON CONFLICT ... WHERE ...` khớp 2 partial unique
 index); orchestration `run_snapshot` (cô lập lỗi từng Holding, ca biên thiếu giá ở cả cấp
 Holding lẫn tổng danh mục, user không có Holding mở vẫn ghi NAV = 0).
+
+### Integration test
+
+```bash
+pnpm test:python-integration   # chạy ở gốc repo, không phải trong jobs/snapshot-cron
+```
+
+`test_integration.py` (marker `@pytest.mark.integration`, bị `pytest` thường loại qua
+`addopts` trong `pyproject.toml`) chạy `run_snapshot()` trên Postgres **thật** — không mock —
+để chứng minh 2 điều `test_main.py` (mock hoàn toàn) không chứng minh được:
+
+- Gọi `run_snapshot()` 2 lần liên tiếp trên cùng dữ liệu **không sinh dòng `Snapshot` trùng**
+  (dựa vào 2 partial unique index thật của migration `add_snapshot_unique_constraint`, không
+  phải giả định câu SQL).
+- Giá trị NAV ghi thật đúng bằng `quantity * price` đọc từ `PriceQuote` thật.
+
+`pnpm test:python-integration` (`scripts/python-integration-test.mjs`) tự lo hết: `docker
+compose -f docker-compose.test.yml up` DB test (tái dùng đúng hạ tầng của `pnpm e2e`, cổng
+5434, KHÔNG dựng compose riêng) → `prisma migrate deploy` → chạy `pytest -m integration`
+trong thư mục job này → `docker compose down` khi xong (kể cả khi test fail). Cần chạy khi
+sửa `run_snapshot()`/`upsert_*` hoặc migration liên quan `Snapshot` — unit test mock không
+bắt được lỗi idempotent/giá trị thật. Xem thêm
+[`docs/rules/python-job.md`](../../docs/rules/python-job.md) (mục "Test — unit + integration").

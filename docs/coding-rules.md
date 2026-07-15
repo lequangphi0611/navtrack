@@ -12,7 +12,7 @@ Bộ quy tắc coding cho Navtrack, tách theo từng mảng. File này là **ch
 | Truy vấn Prisma, tiền tệ/Decimal, tách dữ liệu theo user | [`rules/data-prisma.md`](./rules/data-prisma.md) |
 | Job Python lấy giá (vnstock, GitHub Actions, ghi DB) | [`rules/python-job.md`](./rules/python-job.md) |
 | Package manager, TS config, ESLint/Prettier | [`rules/tooling.md`](./rules/tooling.md) |
-| Test: unit (logic), end-to-end (Playwright) | [`rules/testing.md`](./rules/testing.md) |
+| Test: unit (logic), end-to-end (Playwright), integration (job Python) | [`rules/testing.md`](./rules/testing.md) |
 | Xử lý lỗi, phân loại lỗi, ghi log (pino) | [`rules/error-handling.md`](./rules/error-handling.md) |
 | Cache dữ liệu, memoization, code splitting, danh sách dài (ưu tiên mobile) | [`rules/performance.md`](./rules/performance.md) |
 

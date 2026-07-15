@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "node scripts/e2e.mjs",
+    "test:python-integration": "node scripts/python-integration-test.mjs jobs/snapshot-cron",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
