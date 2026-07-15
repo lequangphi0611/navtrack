@@ -50,19 +50,26 @@ function NavHistoryChart({
         </span>
       </div>
 
-      <div className="flex h-18.5 items-end gap-1.75">
+      <div className="flex items-end gap-1.75">
         {points.map((point, index) => (
           <div
             key={`${point.label}-${index}`}
             className="flex flex-1 flex-col items-center gap-1.25"
           >
-            <div
-              className={cn(
-                "w-full rounded-t-sm rounded-b-[2px]",
-                point.isLive ? LIVE_BAR_CLASS : "bg-primary/40",
-              )}
-              style={{ height: `${point.heightPercent}%` }}
-            />
+            {/* h-18.5 cố định ở đây (không phải ở container ngoài) — cột
+                cha cần chiều cao XÁC ĐỊNH thì height:% mới resolve được;
+                container ngoài dùng items-end nên không stretch xuống các
+                cột con, height:% trên đó tính ra auto/0 (bug quan sát
+                được: bar không hiện dù data đúng). */}
+            <div className="flex h-18.5 w-full items-end">
+              <div
+                className={cn(
+                  "w-full rounded-t-sm rounded-b-[2px]",
+                  point.isLive ? LIVE_BAR_CLASS : "bg-primary/40",
+                )}
+                style={{ height: `${point.heightPercent}%` }}
+              />
+            </div>
             <span
               className={cn(
                 "font-mono text-[8.5px]",

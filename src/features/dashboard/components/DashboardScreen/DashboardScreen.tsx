@@ -63,8 +63,8 @@ type DashboardScreenProps = {
 // biến thể "không tính được XIRR" (2f) khi missingPriceHoldings không rỗng, thay
 // vì tách 2 component riêng (cùng một khung dữ liệu, chỉ khác nhánh hiển thị).
 //
-// LƯU Ý: route "/" hiện `redirect(ROUTES.holdings)` (Phase 1, cố ý không sửa —
-// xem process/UI_phase_2.md) nên component này CHƯA được wiring vào page thật.
+// Route "/" (`src/app/(dashboard)/page.tsx`) render component này trực tiếp,
+// truyền props từ `getPortfolioValuation` + `getManualSnapshotToday`.
 function DashboardScreen({
   displayName,
   cutoffLabel,
@@ -122,8 +122,18 @@ function DashboardScreen({
       </Link>
 
       <div className="rounded-2xl border border-primary/28 bg-linear-to-br from-primary/16 to-card p-5">
-        <div className="mb-1.75 text-[12.5px] font-semibold text-muted-foreground">
-          Giá trị thị trường (NAV)
+        <div className="mb-1.75 flex items-center justify-between gap-2">
+          <div className="text-[12.5px] font-semibold text-muted-foreground">
+            Giá trị thị trường (NAV)
+          </div>
+          <Link
+            href={ROUTES.snapshots}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-primary/14 px-2.5 py-1 text-[11px] font-semibold text-primary"
+          >
+            <History className="size-3.25" />
+            Lịch sử
+            <ChevronRight className="size-3.25" />
+          </Link>
         </div>
         <div className="font-mono text-[28px] leading-none font-semibold tracking-tight text-foreground tabular-nums">
           {formatMoney(navValue, { hidden })}
@@ -155,18 +165,6 @@ function DashboardScreen({
           </div>
         )}
       </div>
-
-      <Link
-        href={ROUTES.snapshots}
-        className="flex items-center gap-2.25 rounded-xl border border-border bg-card px-3.25 py-2.5"
-      >
-        <History className="size-4.25 text-primary" />
-        <span className="text-[13px] font-semibold text-foreground">
-          Lịch sử NAV
-        </span>
-        <span className="flex-1" />
-        <ChevronRight className="size-4 text-muted-faint" />
-      </Link>
 
       {snapshotToday ? <SnapshotTodayCard {...snapshotToday} /> : null}
 
