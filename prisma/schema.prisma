@@ -193,6 +193,14 @@ model Snapshot {
   period    SnapshotPeriod
   frozen    Boolean        @default(true) // false chỉ cho period = TODAY (tính động, không lưu thật)
   createdAt DateTime       @default(now())
+  // Re-chốt cùng mốc (MANUAL) là upsert idempotent, ghi đè value/source — updatedAt
+  // phản ánh đúng lần chốt GẦN NHẤT cho "Đã chốt lúc HH:mm" (docs/domain/06-snapshots.md
+  // mục "Ca biên"). @default(now()) (khác các updatedAt khác trong schema) cần thiết để
+  // backfill NOT NULL cho các dòng đã có sẵn ở DB (bảng không rỗng khi cột này được thêm
+  // vào — cron #36 đã chạy trước đó) — Prisma Client vẫn luôn set giá trị tường minh qua
+  // create/update, hiếm khi thật sự rơi vào nhánh dùng default này. jobs/snapshot-cron/main.py
+  // ghi trực tiếp qua raw SQL nên PHẢI set cột này thủ công (now()) ở cả INSERT lẫn DO UPDATE SET.
+  updatedAt DateTime       @default(now()) @updatedAt
 
   @@index([userId, date])
   @@index([holdingId, date])

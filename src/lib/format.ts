@@ -14,6 +14,13 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
   year: "numeric",
 });
 
+const TIME_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
 const PERCENT_FORMATTER = new Intl.NumberFormat("vi-VN", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
@@ -66,6 +73,13 @@ export function formatQuantity(value: string, unit: string): string {
 export function formatDate(value: string | Date): string {
   const date = typeof value === "string" ? new Date(value) : value;
   return DATE_FORMATTER.format(date);
+}
+
+// "15:42" — HH:mm giờ Việt Nam, dùng cho "Đã chốt lúc HH:mm" (SnapshotTodayCard,
+// SnapshotFreezeSheet — features/snapshots). Nhận string ISO hoặc Date, giống formatDate.
+export function formatTime(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return TIME_FORMATTER.format(date);
 }
 
 // Ngắn gọn hơn formatDate (không năm) — dùng cho ghi chú kiểu "EOD 10/07" nơi

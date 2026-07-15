@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { resolveCutoffDate } from "./cutoff";
+import { resolveCutoffDate, todayIctDateOnly } from "./cutoff";
 
 // Mọi assertion dùng toISOString() (UTC tuyệt đối) thay vì getFullYear()/
 // getHours() v.v. — các getter đó đọc theo timezone LOCAL của máy chạy test,
@@ -93,6 +93,57 @@ describe("resolveCutoffDate — neo theo giờ Việt Nam (Asia/Ho_Chi_Minh), kh
 
   test("không truyền now -> mặc định dùng thời điểm hệ thống hiện tại (không throw, trả về Date hợp lệ)", () => {
     const resolved = resolveCutoffDate({ key: "TODAY" });
+
+    expect(resolved).toBeInstanceOf(Date);
+    expect(Number.isNaN(resolved.getTime())).toBe(false);
+  });
+});
+
+// Dùng cho khóa ghi/đọc Snapshot{period: MANUAL} — Snapshot.date là TIMESTAMP(3)
+// (KHÔNG @db.Date), dedup theo GIÁ TRỊ CHÍNH XÁC nên hàm phải ổn định tuyệt
+// đối trong cùng 1 ngày ICT (cùng input -> cùng output, gọi lại nhiều lần
+// không lệch giờ/phút/giây).
+describe("todayIctDateOnly — 00:00:00.000 UTC của đúng ngày dương lịch ICT, ổn định để dedup theo (holdingId|userId, date, period)", () => {
+  test("now nằm giữa ngày ICT (input UTC buổi sáng, chưa lệch ngày) -> 00:00 UTC cùng ngày", () => {
+    const now = new Date("2026-07-12T08:30:00Z"); // 15:30 ICT cùng ngày 12/07
+    const resolved = todayIctDateOnly(now);
+
+    expect(resolved.toISOString()).toBe("2026-07-12T00:00:00.000Z");
+  });
+
+  test("now rơi vào khung UTC 17:00–23:59 (00:00–06:59 ICT NGÀY HÔM SAU) phải tính là ngày hôm sau theo ICT", () => {
+    // 2026-07-12T18:00:00Z = 2026-07-13T01:00 ICT.
+    const now = new Date("2026-07-12T18:00:00Z");
+    const resolved = todayIctDateOnly(now);
+
+    expect(resolved.toISOString()).toBe("2026-07-13T00:00:00.000Z");
+  });
+
+  test("biên 17:00:00.000Z (00:00:00.000 ICT hôm sau) đã sang ngày mới theo ICT", () => {
+    const now = new Date("2026-07-12T17:00:00.000Z");
+    const resolved = todayIctDateOnly(now);
+
+    expect(resolved.toISOString()).toBe("2026-07-13T00:00:00.000Z");
+  });
+
+  test("biên 16:59:59.999Z (23:59:59.999 ICT cùng ngày) vẫn thuộc ngày hiện tại", () => {
+    const now = new Date("2026-07-12T16:59:59.999Z");
+    const resolved = todayIctDateOnly(now);
+
+    expect(resolved.toISOString()).toBe("2026-07-12T00:00:00.000Z");
+  });
+
+  test("gọi 2 lần với cùng input (kể cả 2 instant khác nhau cùng ngày ICT) trả về cùng giá trị — idempotent theo ngày", () => {
+    const morning = new Date("2026-07-12T01:00:00Z"); // 08:00 ICT
+    const evening = new Date("2026-07-12T16:00:00Z"); // 23:00 ICT, vẫn cùng ngày ICT
+
+    expect(todayIctDateOnly(morning).toISOString()).toBe(
+      todayIctDateOnly(evening).toISOString(),
+    );
+  });
+
+  test("không truyền now -> mặc định dùng thời điểm hệ thống hiện tại (không throw, trả về Date hợp lệ)", () => {
+    const resolved = todayIctDateOnly();
 
     expect(resolved).toBeInstanceOf(Date);
     expect(Number.isNaN(resolved.getTime())).toBe(false);

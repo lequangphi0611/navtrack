@@ -68,6 +68,18 @@ function endOfDay(date: Date): Date {
   return endOfDayFromIctParts(year, month, day);
 }
 
+// Instant 00:00:00.000 UTC của đúng ngày dương lịch ICT của `now` — KHÁC
+// endOfDay() (dùng để LỌC "nhỏ hơn hoặc bằng cutoffDate", trả 23:59:59.999
+// ICT). Dùng làm khóa ghi/đọc Snapshot{period: MANUAL} (features/snapshots) —
+// Snapshot.date là TIMESTAMP(3) (KHÔNG @db.Date, khác NavOverride/PriceQuote),
+// 2 partial unique index dedup khóa theo GIÁ TRỊ CHÍNH XÁC của cột này nên
+// hàm phải trả về đúng CÙNG MỘT Date instant mỗi lần gọi trong cùng 1 ngày
+// ICT (idempotent theo ngày) — ổn định độc lập với thời điểm gọi trong ngày.
+export function todayIctDateOnly(now: Date = new Date()): Date {
+  const { year, month, day } = getIctDateParts(now);
+  return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+}
+
 function endOfMonth(now: Date): Date {
   const { year, month } = getIctDateParts(now);
   // Ngày 0 của tháng sau (UTC, thuần lấy số ngày trong tháng) = ngày cuối cùng

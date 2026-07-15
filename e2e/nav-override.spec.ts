@@ -10,6 +10,7 @@ import {
   disconnectTestDb,
   signInAs,
 } from "./support/test-session";
+import { stripQuery } from "./support/urls";
 
 // PriceQuote không có UI ghi — seed trực tiếp qua Prisma (cùng cách
 // dashboard.spec.ts), cần cho test dưới (STOCK/FUND có cả PriceQuote lẫn
@@ -45,8 +46,13 @@ test("nhập giá tay (NavOverride) cho vị thế Vàng cập nhật NAV toàn 
     await page.locator('input[name="quantity"]').fill("10");
     await page.locator('input[name="pricePerUnit"]').fill("7000000");
     await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
-    const holdingUrl = page.url();
+    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
+    await page.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
+    // Bỏ query string — saveNavOverride bên dưới redirect KHÔNG gắn cashflowId
+    // (không phải 1 trong 4 action mua/bán), cần base URL sạch để so khớp đúng.
+    const holdingUrl = stripQuery(page.url());
 
     // Trước khi nhập giá tay: Dashboard liệt vị thế vào "thiếu giá" (chưa có
     // cả PriceQuote lẫn NavOverride).
@@ -135,8 +141,13 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
     await page.locator('input[name="pricePerUnit"]').fill("100000");
     await page.locator('input[name="date"]').fill(buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
-    const holdingUrl = page.url();
+    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
+    await page.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
+    // Bỏ query string — saveNavOverride bên dưới redirect KHÔNG gắn cashflowId
+    // (không phải 1 trong 4 action mua/bán), cần base URL sạch để so khớp đúng.
+    const holdingUrl = stripQuery(page.url());
 
     // Baseline: chỉ có AUTO -> NAV = 10 * 100.000 = 1.000.000.
     await page.goto("/");

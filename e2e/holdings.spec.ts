@@ -6,6 +6,7 @@ import {
   disconnectTestDb,
   signInAs,
 } from "./support/test-session";
+import { afterTransactionUrl, stripQuery } from "./support/urls";
 
 test.afterAll(async () => {
   await disconnectTestDb();
@@ -30,11 +31,15 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     await page.locator('input[name="quantity"]').fill("100");
     await page.locator('input[name="pricePerUnit"]').fill("100000");
     await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
+    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
+    await page.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
     await expect(page.getByRole("heading", { name: "FPT" })).toBeVisible();
     await expect(page.getByText("100 cổ phần", { exact: true })).toBeVisible();
 
-    const holdingUrl = page.url();
+    // Bỏ query string — dùng làm base URL cho các điều hướng/so khớp tiếp theo.
+    const holdingUrl = stripQuery(page.url());
 
     // Xuất hiện trong danh sách vị thế mở
     await page.goto("/holdings");
@@ -45,7 +50,7 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     await page.locator('input[name="quantity"]').fill("100");
     await page.locator('input[name="pricePerUnit"]').fill("120000");
     await page.getByRole("button", { name: "Ghi nhận giao dịch mua" }).click();
-    await page.waitForURL(holdingUrl);
+    await page.waitForURL(afterTransactionUrl(holdingUrl));
     await expect(page.getByText("200 cổ phần", { exact: true })).toBeVisible();
     const avgCostAfterBuy = await page
       .locator("text=/Giá vốn bình quân/")
@@ -59,7 +64,7 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     await page.locator('input[name="quantity"]').fill("50");
     await page.locator('input[name="pricePerUnit"]').fill("130000");
     await page.getByRole("button", { name: "Ghi nhận giao dịch bán" }).click();
-    await page.waitForURL(holdingUrl);
+    await page.waitForURL(afterTransactionUrl(holdingUrl));
     await expect(page.getByText("150 cổ phần", { exact: true })).toBeVisible();
     const avgCostAfterSell = await page
       .locator("text=/Giá vốn bình quân/")
@@ -81,7 +86,7 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     await page.locator('input[name="quantity"]').fill("10");
     await page.locator('input[name="pricePerUnit"]').fill("140000");
     await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(holdingUrl);
+    await page.waitForURL(afterTransactionUrl(holdingUrl));
     await expect(page.getByText("160 cổ phần", { exact: true })).toBeVisible();
   } finally {
     await context.close();
@@ -103,8 +108,12 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
     await page.locator('input[name="quantity"]').fill("50");
     await page.locator('input[name="pricePerUnit"]').fill("80000");
     await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
-    const holdingUrl = page.url();
+    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
+    await page.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
+    // Bỏ query string — dùng làm base URL cho các điều hướng/so khớp tiếp theo.
+    const holdingUrl = stripQuery(page.url());
 
     // Bán hết toàn bộ -> SL về 0
     await page.goto(`${holdingUrl}/transactions/new`);
@@ -112,7 +121,7 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
     await page.locator('input[name="quantity"]').fill("50");
     await page.locator('input[name="pricePerUnit"]').fill("90000");
     await page.getByRole("button", { name: "Ghi nhận giao dịch bán" }).click();
-    await page.waitForURL(holdingUrl);
+    await page.waitForURL(afterTransactionUrl(holdingUrl));
     await expect(page.getByText("0 cổ phần", { exact: true })).toBeVisible();
 
     // Vị thế đóng (SL=0) không còn hiện trong danh sách vị thế mở
@@ -166,8 +175,12 @@ test("cách ly dữ liệu giữa hai tài khoản", async ({ browser }) => {
     await pageA.locator('input[name="quantity"]').fill("20");
     await pageA.locator('input[name="pricePerUnit"]').fill("25000");
     await pageA.getByRole("button", { name: "Xong", exact: true }).click();
-    await pageA.waitForURL(/\/holdings\/(?!new)[a-z0-9]+$/);
-    const holdingUrl = pageA.url();
+    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
+    await pageA.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
+    // Bỏ query string — dùng làm base URL cho việc so khớp 404 ở account B.
+    const holdingUrl = stripQuery(pageA.url());
 
     // Account B không thấy danh mục của Account A
     await pageB.goto("/holdings");

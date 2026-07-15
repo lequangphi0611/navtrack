@@ -8,6 +8,13 @@ import type {
   HoldingValuationExtras,
   HoldingWithValuation,
 } from "@/features/holdings/components/HoldingsGroupCard";
+import type { TransactionSnapshotBannerProps } from "@/features/holdings/components/TransactionSnapshotBanner";
+// Cross-feature import (holdings -> snapshots). Cùng lý do đã chấp nhận cho toUiXirr
+// ngay dưới đây: getJustRecordedBanner() (thân hàm) gọi getManualSnapshotToday(), trong
+// khi snapshots/actions.ts (KHÔNG phải file này) gọi getOpenHoldings() từ file này — 2
+// module khác nhau trong feature snapshots, không có usage nào ở top-level module, ES
+// module xử lý an toàn (live binding), không phải "true" circular init dependency.
+import { getManualSnapshotToday } from "@/features/snapshots/queries";
 import { getSession } from "@/lib/auth";
 import { derivePosition } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
@@ -27,6 +34,7 @@ import {
 // top-level module — ES module xử lý tham chiếu vòng kiểu này an toàn
 // (live binding), không phải "true" circular init dependency.
 import { toUiXirr } from "@/lib/portfolio-valuation";
+import { ROUTES } from "@/lib/routes";
 import type { PriceSource } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
@@ -536,4 +544,33 @@ export async function getOpenHoldingsWithValuation(cutoffDate?: Date): Promise<{
   }
 
   return { holdings, groupValuations };
+}
+
+// Props cho TransactionSnapshotBanner (mockup 3d, /holdings/[id]) — hiện khi vừa ghi
+// một giao dịch VÀ trigger tự động (holdings/actions.ts gọi freezeManualSnapshot()) đã
+// chốt xong snapshot hôm nay. `cashflowId` đến từ query param `?cashflowId=` trên URL
+// (không phải cookie — xem lib/routes.ts::holdingDetailAfterTransaction), page.tsx
+// KHÔNG tin thẳng query string: hàm này tự verify cashflowId thuộc đúng
+// `holding.cashflows` ĐÃ FETCH (không query DB lại) trước khi dựng banner. Sai/không
+// tồn tại/chưa có snapshot hôm nay -> trả undefined (ẩn banner, không lỗi).
+export async function getJustRecordedBanner(
+  holding: { unit: string; cashflows: CashflowRow[] },
+  cashflowId: string,
+): Promise<TransactionSnapshotBannerProps | undefined> {
+  const cashflow = holding.cashflows.find((cf) => cf.id === cashflowId);
+  if (!cashflow) return undefined;
+
+  const snapshot = await getManualSnapshotToday();
+  if (!snapshot) return undefined;
+
+  return {
+    // Cùng cách build label/dateNote với timeline trong getHoldingDetail() phía trên —
+    // "Mua 5.000 cổ phần" / "11/07/2026 · giá 27.300".
+    transactionLabel: `${cashflow.type === "BUY" ? "Mua" : "Bán"} ${formatQuantity(cashflow.quantity, holding.unit)}`,
+    transactionDateNote: `${formatDate(cashflow.date)} · giá ${formatMoney(cashflow.pricePerUnit)}`,
+    transactionAmount: cashflow.amount,
+    transactionKind: cashflow.type,
+    snapshotNavValue: snapshot.value,
+    navHistoryHref: ROUTES.snapshots,
+  };
 }

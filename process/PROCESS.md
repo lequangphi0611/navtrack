@@ -8,7 +8,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 |---|---|---|---|
 | 1 | Nền tảng + đăng nhập + nhập vị thế | ✅ | [phase-1.md](./phase-1.md) |
 | 2 | Lõi XIRR + giá tự động | ✅ | [phase-2.md](./phase-2.md) |
-| 3 | Snapshot tự động | 🟨 | [phase-3.md](./phase-3.md) |
+| 3 | Snapshot tự động | ✅ | [phase-3.md](./phase-3.md) |
 | 4 | Cổ tức | ⬜ | [phase-4.md](./phase-4.md) |
 | 5 | Thuế bán (áp dụng) | ⬜ | [phase-5.md](./phase-5.md) |
 | 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
@@ -38,3 +38,5 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-15: Phase 3 — mở rộng sang `jobs/price-fetcher/`: thêm `test_integration.py` mock `vnstock` (monkeypatch `main.fetch_price`, chỉ verify ghi/đọc Postgres thật), `scripts/python-integration-test.mjs` giờ tự quét `jobs/*/test_integration.py` (chạy chung 1 lần docker compose up/down cho mọi job) thay vì hardcode 1 job — xem [DECISION.md](./DECISION.md).
 - 2026-07-15: Phase 3 — issue #35: hoàn thành layer Presentational cho CTA "Chốt số liệu hôm nay" (SnapshotTodayCard trên Dashboard) + Props contract trong `process/UI_phase_3.md` cho issue #37.
 - 2026-07-15: Phase 3 — issue #35 (mở rộng, verify độc lập): thêm 6 màn Phase 3 Screens (3a/3c/3d/3e/3f + entry point Dashboard) thuần Presentational, đối chiếu khớp plan + `process/UI_phase_3.md`; vẫn để lại `phase-3.md` chưa tick (business logic thuộc issue #37).
+- 2026-07-15: Phase 3 — issue #37: hiện thực Snapshot thủ công (`MANUAL`) — `freezeManualSnapshot()`/`createManualSnapshot()` (`features/snapshots/actions.ts`, upsert idempotent check-before-insert trong transaction Serializable), trigger tự động sau mỗi giao dịch mua/bán/sửa/xoá (`features/holdings/actions.ts`), wiring `SnapshotTodayCard` (Dashboard) + `SnapshotFreezeSheet`/`freezeSheet` (`/snapshots`) + `TransactionSnapshotBanner` (`/holdings/[id]`, cờ `?cashflowId=`) vào dữ liệu thật; thêm `Snapshot.updatedAt` (migration `add_snapshot_updated_at`) + đồng bộ `jobs/snapshot-cron/main.py` — xem [DECISION.md](./DECISION.md). **Phase 3 hoàn thành** phần business logic — tick hết mục "Công việc cần làm" ở [phase-3.md](./phase-3.md) (mục "Tiêu chí hoàn thành" để verifier xác nhận).
+- 2026-07-15: Phase 3 — verify độc lập issue #37: sửa 7 assertion `waitForURL` lỗi thời trong `e2e/{dashboard,holdings,nav-override}.spec.ts` (redirect sau mua/bán giờ gắn `?cashflowId=`, hành vi cố ý #37) + thêm helper `e2e/support/urls.ts`; viết mới `e2e/manual-snapshot.spec.ts` (4 test: banner + Snapshot DB sau mua, đóng băng không đổi khi giá cập nhật, "Chốt ngay" Dashboard server truth, đóng băng nhiều lần trên `/snapshots` vẫn 1 dòng/mốc). **Phase 3 hoàn thành** — tick hết "Tiêu chí hoàn thành" ở [phase-3.md](./phase-3.md).
