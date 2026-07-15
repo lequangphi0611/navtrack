@@ -1,20 +1,42 @@
-// Chạy integration test của một job Python trên Postgres thật, ephemeral
+// Chạy integration test của (các) job Python trên Postgres thật, ephemeral
 // (docker-compose.test.yml, service db-test, cổng 5434) — tự up + migrate trước, tự down
 // sau khi xong, kể cả khi test fail. Tái dùng đúng hạ tầng DB test đã có cho Playwright e2e
 // (scripts/e2e.mjs) — không dựng compose riêng cho job Python. Chạy qua
-// `pnpm test:python-integration` (job mặc định: jobs/snapshot-cron, xem package.json).
+// `pnpm test:python-integration` (xem package.json).
+//
+// Truyền job path qua argv để chỉ chạy riêng job đó (vd
+// `pnpm test:python-integration -- jobs/price-fetcher`, có thể truyền nhiều path). Không
+// truyền gì thì tự quét toàn bộ `jobs/*/test_integration.py` đang có sẵn — job Python mới
+// sau này tự động được gộp vào một lượt chạy, không cần sửa script hay package.json.
 //
 // Chỉ chạy pytest -m integration (test_integration.py, đánh dấu @pytest.mark.integration) —
 // unit test thường (test_main.py) đã bị loại khỏi lệnh `pytest` mặc định qua `addopts` trong
 // pyproject.toml, không kéo Docker.
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { config as loadEnv } from "dotenv";
 
-const jobDir = process.argv[2];
-if (!jobDir) {
-  console.error("Usage: node scripts/python-integration-test.mjs <job-dir>");
+function discoverJobDirs() {
+  const jobsRoot = "jobs";
+  if (!existsSync(jobsRoot)) return [];
+  return readdirSync(jobsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.posix.join(jobsRoot, entry.name))
+    .filter((jobDir) => existsSync(path.join(jobDir, "test_integration.py")));
+}
+
+// `pnpm test:python-integration -- jobs/price-fetcher` khiến Node nhận nguyên văn "--" trong
+// process.argv (không tự lược bỏ như npm) — lọc bỏ để không bị hiểu nhầm thành 1 job path.
+const argvJobDirs = process.argv.slice(2).filter((arg) => arg !== "--");
+const jobDirs = argvJobDirs.length > 0 ? argvJobDirs : discoverJobDirs();
+
+if (jobDirs.length === 0) {
+  console.error(
+    "Khong tim thay job Python nao co test_integration.py duoi jobs/*. " +
+      "Truyen truc tiep path neu muon chi dinh, vd: " +
+      "node scripts/python-integration-test.mjs jobs/price-fetcher",
+  );
   process.exit(1);
 }
 
@@ -55,16 +77,23 @@ const upStatus = run("docker", [
 ]);
 if (upStatus !== 0) process.exit(upStatus);
 
-let exitCode;
+let exitCode = 0;
 try {
   const migrateStatus = run("pnpm", ["exec", "prisma", "migrate", "deploy"]);
   if (migrateStatus !== 0) {
     exitCode = migrateStatus;
   } else {
-    const python = resolvePythonExecutable(jobDir);
-    exitCode = run(python, ["-m", "pytest", "-m", "integration"], {
-      cwd: jobDir,
-    });
+    // Chạy hết tất cả job dù có job fail giữa chừng — muốn thấy đủ lỗi trong 1 lần chạy,
+    // không dừng ở job đầu tiên fail. Giữ lại mã lỗi khác 0 đầu tiên gặp được.
+    for (const jobDir of jobDirs) {
+      const python = resolvePythonExecutable(jobDir);
+      const jobExitCode = run(python, ["-m", "pytest", "-m", "integration"], {
+        cwd: jobDir,
+      });
+      if (jobExitCode !== 0 && exitCode === 0) {
+        exitCode = jobExitCode;
+      }
+    }
   }
 } finally {
   run("docker", ["compose", "-f", composeFile, "down"]);

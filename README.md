@@ -42,19 +42,19 @@ Mở http://localhost:3000.
 
 ## Lệnh thường dùng
 
-| Lệnh                           | Mục đích                                                                                                                                 |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                     | Chạy Next.js dev server                                                                                                                  |
-| `pnpm build` / `pnpm start`    | Build & chạy bản production                                                                                                              |
-| `pnpm lint`                    | ESLint                                                                                                                                   |
-| `pnpm typecheck`               | `tsc --noEmit`                                                                                                                           |
-| `pnpm format`                  | Prettier ghi đè                                                                                                                          |
-| `pnpm test`                    | Unit test (Vitest) — chỉ test logic thuần, xem `docs/rules/testing.md`                                                                   |
-| `pnpm e2e`                     | E2e test (Playwright) — tự khởi động dev server, tự docker compose DB test riêng                                                         |
-| `pnpm test:python-integration` | Integration test job Python (`jobs/snapshot-cron/`) trên Postgres thật — tự docker compose DB test riêng, xem `docs/rules/python-job.md` |
-| `pnpm db:migrate`              | Tạo/áp migration Prisma lúc dev (`prisma migrate dev`)                                                                                   |
-| `pnpm db:migrate:deploy`       | Áp migration đã có, không tạo mới — dùng cho CI/production (`prisma migrate deploy`)                                                     |
-| `pnpm db:seed`                 | Seed dữ liệu mặc định (`prisma/seed.ts`) — cần `SEED_ADMIN_EMAIL`                                                                        |
+| Lệnh                           | Mục đích                                                                                                                                                              |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                     | Chạy Next.js dev server                                                                                                                                               |
+| `pnpm build` / `pnpm start`    | Build & chạy bản production                                                                                                                                           |
+| `pnpm lint`                    | ESLint                                                                                                                                                                |
+| `pnpm typecheck`               | `tsc --noEmit`                                                                                                                                                        |
+| `pnpm format`                  | Prettier ghi đè                                                                                                                                                       |
+| `pnpm test`                    | Unit test (Vitest) — chỉ test logic thuần, xem `docs/rules/testing.md`                                                                                                |
+| `pnpm e2e`                     | E2e test (Playwright) — tự khởi động dev server, tự docker compose DB test riêng                                                                                      |
+| `pnpm test:python-integration` | Integration test cho mọi job Python có `test_integration.py` (tự quét `jobs/*/`) trên Postgres thật — tự docker compose DB test riêng, xem `docs/rules/python-job.md` |
+| `pnpm db:migrate`              | Tạo/áp migration Prisma lúc dev (`prisma migrate dev`)                                                                                                                |
+| `pnpm db:migrate:deploy`       | Áp migration đã có, không tạo mới — dùng cho CI/production (`prisma migrate deploy`)                                                                                  |
+| `pnpm db:seed`                 | Seed dữ liệu mặc định (`prisma/seed.ts`) — cần `SEED_ADMIN_EMAIL`                                                                                                     |
 
 ## Chạy e2e (Playwright)
 
