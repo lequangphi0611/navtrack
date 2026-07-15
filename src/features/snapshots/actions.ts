@@ -72,34 +72,56 @@ export async function freezeManualSnapshot(): Promise<
   try {
     await db.$transaction(
       async (tx) => {
-        for (const write of plan.holdingWrites) {
-          const existing = await tx.snapshot.findFirst({
-            where: {
+        // Không có @@unique cho (holdingId, date, period) ở Prisma DSL (partial unique
+        // index, xem prisma/schema.prisma) nên không dùng được tx.snapshot.upsert() thẳng.
+        // Thay vì findFirst + create/update tuần tự cho TỪNG holding (N+1 round-trip), gom
+        // "còn dòng nào chưa" thành 1 findMany, rồi createMany 1 lượt cho phần chưa có —
+        // chỉ update từng dòng (không batch được, value khác nhau mỗi dòng) cho phần re-chốt
+        // thật (hiếm, chỉ khi bấm "Chốt số liệu hôm nay" > 1 lần cùng ngày).
+        const holdingIds = plan.holdingWrites.map((write) => write.holdingId);
+        const existingRows = holdingIds.length
+          ? await tx.snapshot.findMany({
+              where: {
+                userId,
+                holdingId: { in: holdingIds },
+                date,
+                period: "MANUAL",
+              },
+              select: { id: true, holdingId: true },
+            })
+          : [];
+        const existingIdByHoldingId = new Map(
+          existingRows.map((row) => [row.holdingId, row.id]),
+        );
+
+        const toCreate = plan.holdingWrites.filter(
+          (write) => !existingIdByHoldingId.has(write.holdingId),
+        );
+        const toUpdate = plan.holdingWrites.filter((write) =>
+          existingIdByHoldingId.has(write.holdingId),
+        );
+
+        if (toCreate.length > 0) {
+          await tx.snapshot.createMany({
+            data: toCreate.map((write) => ({
               userId,
               holdingId: write.holdingId,
               date,
-              period: "MANUAL",
-            },
-            select: { id: true },
+              value: write.value.toString(),
+              source: write.source,
+              period: "MANUAL" as const,
+              frozen: true,
+            })),
           });
-          if (existing) {
-            await tx.snapshot.update({
-              where: { id: existing.id },
-              data: { value: write.value.toString(), source: write.source },
-            });
-          } else {
-            await tx.snapshot.create({
-              data: {
-                userId,
-                holdingId: write.holdingId,
-                date,
-                value: write.value.toString(),
-                source: write.source,
-                period: "MANUAL",
-                frozen: true,
-              },
-            });
-          }
+        }
+
+        for (const write of toUpdate) {
+          const id = existingIdByHoldingId.get(write.holdingId);
+          if (id === undefined) continue;
+          await tx.snapshot.update({
+            where: { id },
+            data: { value: write.value.toString(), source: write.source },
+          });
         }
 
         const existingAggregate = await tx.snapshot.findFirst({

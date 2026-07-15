@@ -285,3 +285,90 @@ test("bấm 'Đóng băng số liệu' trên /snapshots nhiều lần trong ngà
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
 });
+
+test("2 tab bấm 'Đóng băng số liệu' CÙNG LÚC (Promise.all, không qua tải trang tuần tự) vẫn chỉ tạo đúng 1 dòng Snapshot/mốc — race thật trên transaction Serializable, không phải giả lập", async ({
+  browser,
+}) => {
+  // Khác test "nhiều lần trong ngày" phía trên (tuần tự qua nhiều lần tải trang,
+  // không bao giờ thật sự overlap 2 transaction) — test này bắn 2 request freeze
+  // từ 2 tab CÙNG một user thật sự đồng thời, để nhánh bắt P2002/P2034 trong
+  // freezeManualSnapshot() (src/features/snapshots/actions.ts) có cơ hội chạy
+  // qua ít nhất 1 lần, không chỉ được suy luận qua đọc code.
+  const session = await createTestSession("manual-snapshot-concurrent");
+  const contextA = await browser.newContext();
+  const contextB = await browser.newContext();
+  await signInAs(contextA, session.sessionToken);
+  await signInAs(contextB, session.sessionToken);
+  const pageA = await contextA.newPage();
+  const pageB = await contextB.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const quoteDate = daysAgo(3);
+
+  try {
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol, date: quoteDate } },
+      create: { symbol, date: quoteDate, price: "50000", source: "vnstock" },
+      update: { price: "50000", source: "vnstock" },
+    });
+
+    // Tạo 1 Holding đang mở (quantity > 0) qua UI ở tab A — cũng tự trigger 1
+    // lần chốt MANUAL đầu tiên (side effect của createHolding), giống các test
+    // phía trên.
+    await pageA.goto("/holdings/new");
+    await pageA.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
+    await pageA.locator('input[name="quantity"]').fill("20");
+    await pageA.locator('input[name="pricePerUnit"]').fill("50000");
+    await pageA.getByRole("button", { name: "Xong", exact: true }).click();
+    await pageA.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
+
+    await pageA.goto("/snapshots");
+    await pageB.goto("/snapshots");
+    await pageA.getByRole("button", { name: "Chốt số liệu hôm nay" }).click();
+    await pageB.getByRole("button", { name: "Chốt số liệu hôm nay" }).click();
+    await expect(
+      pageA.getByRole("button", { name: "Đóng băng số liệu" }),
+    ).toBeVisible();
+    await expect(
+      pageB.getByRole("button", { name: "Đóng băng số liệu" }),
+    ).toBeVisible();
+
+    // Bắn 2 submit CÙNG LÚC qua Promise.all (không await tuần tự) — 2 request
+    // POST tới Server Action gần như overlap, khác hẳn cách tải-lại-trang-rồi-bấm
+    // tuần tự ở test phía trên.
+    await Promise.all([
+      pageA.getByRole("button", { name: "Đóng băng số liệu" }).click(),
+      pageB.getByRole("button", { name: "Đóng băng số liệu" }).click(),
+    ]);
+
+    // Mỗi tab phải kết thúc ở 1 trong 2 trạng thái hợp lệ: chốt thành công
+    // (badge "Đã chốt lúc") hoặc thua trong đua tranh, được báo thử lại (Alert
+    // "Không chốt được") — KHÔNG được crash/treo/hiện lỗi khác.
+    const settleStates = [
+      pageA
+        .getByText(/Đã chốt lúc \d{2}:\d{2}/)
+        .or(pageA.getByText("Không chốt được")),
+      pageB
+        .getByText(/Đã chốt lúc \d{2}:\d{2}/)
+        .or(pageB.getByText("Không chốt được")),
+    ];
+    await Promise.all(
+      settleStates.map((locator) => expect(locator).toBeVisible()),
+    );
+
+    // Bất biến idempotent (khóa dedup (holdingId|userId, date, period)) phải giữ
+    // đúng dù 2 transaction overlap thật — vẫn chỉ 1 dòng per-holding + 1 dòng
+    // tổng danh mục, không nhân đôi do race.
+    const rows = await db.snapshot.findMany({
+      where: { userId: session.userId, period: "MANUAL" },
+    });
+    expect(rows).toHaveLength(2);
+  } finally {
+    await contextA.close();
+    await contextB.close();
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
+  }
+});

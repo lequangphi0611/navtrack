@@ -329,38 +329,51 @@ def run_snapshot(conn: psycopg.Connection, period: str, snapshot_date: date) -> 
             continue
 
     for user_id in all_user_ids:
-        if user_id not in open_user_ids:
-            # Không có Holding nào đang mở — NAV = 0 là số thật (đã bán hết,
-            # hoặc mọi Holding đã tạo đều đóng).
-            upsert_portfolio_snapshot(conn, user_id, snapshot_date, Decimal(0), period)
+        try:
+            if user_id not in open_user_ids:
+                # Không có Holding nào đang mở — NAV = 0 là số thật (đã bán hết,
+                # hoặc mọi Holding đã tạo đều đóng).
+                upsert_portfolio_snapshot(conn, user_id, snapshot_date, Decimal(0), period)
+                conn.commit()
+                continue
+
+            nav = nav_by_user.get(user_id)
+            if nav is None:
+                # Có Holding đang mở nhưng KHÔNG mã nào resolve được giá — 0 sẽ
+                # sai, bỏ qua hẳn dòng tổng cho user này ở mốc này.
+                logger.warning(
+                    "all open Holdings missing price for user=%s date=%s period=%s "
+                    "— skipping portfolio snapshot entirely",
+                    user_id,
+                    snapshot_date,
+                    period,
+                )
+                continue
+
+            missing = missing_symbols_by_user.get(user_id, [])
+            if missing:
+                logger.warning(
+                    "PARTIAL portfolio snapshot for user=%s date=%s period=%s — missing price for: %s",
+                    user_id,
+                    snapshot_date,
+                    period,
+                    ", ".join(missing),
+                )
+
+            upsert_portfolio_snapshot(conn, user_id, snapshot_date, nav, period)
             conn.commit()
-            continue
-
-        nav = nav_by_user.get(user_id)
-        if nav is None:
-            # Có Holding đang mở nhưng KHÔNG mã nào resolve được giá — 0 sẽ
-            # sai, bỏ qua hẳn dòng tổng cho user này ở mốc này.
-            logger.warning(
-                "all open Holdings missing price for user=%s date=%s period=%s "
-                "— skipping portfolio snapshot entirely",
+        except Exception:
+            # Lỗi bất ngờ (vd deadlock khi ghi DB) — cô lập, không chặn các user
+            # còn lại trong vòng lặp (docs/rules/python-job.md "Cô lập lỗi"), cùng
+            # pattern với vòng lặp per-Holding phía trên.
+            logger.exception(
+                "unexpected error writing portfolio snapshot for user=%s date=%s period=%s",
                 user_id,
                 snapshot_date,
                 period,
             )
+            conn.rollback()
             continue
-
-        missing = missing_symbols_by_user.get(user_id, [])
-        if missing:
-            logger.warning(
-                "PARTIAL portfolio snapshot for user=%s date=%s period=%s — missing price for: %s",
-                user_id,
-                snapshot_date,
-                period,
-                ", ".join(missing),
-            )
-
-        upsert_portfolio_snapshot(conn, user_id, snapshot_date, nav, period)
-        conn.commit()
 
 
 def _today() -> date:
