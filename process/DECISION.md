@@ -15,8 +15,7 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 
 ## 2026-07-11
 
-**Session regression: không phải bug — tránh tranh luận lại ở phase sau bảo mật middleware.**
-- Triệu chứng thoáng qua (redirect `/sign-in` dù session hợp lệ) không tái hiện, lỗi môi trường nhất thời.
+**Session regression: không phải bug** — triệu chứng thoáng qua không tái hiện, lỗi môi trường nhất thời.
 
 **PWA gộp vào Phase 1 — phạm vi cố ý tối giản.**
 - Ràng buộc bền: (1) **không cache số liệu tài chính offline** (app tài chính — tránh hiện số sai/cũ khi mất mạng); chỉ installable + cache asset tĩnh. (2) **Chưa làm Web Push/VAPID** — cảnh báo giá vẫn ở Backlog. (3) Service worker **viết tay** (`public/sw.js`), không dùng `next-pwa`/Serwist — tránh rủi ro tương thích Next 16 + Turbopack.
@@ -35,30 +34,21 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - Route tách `/holdings` ↔ `/holdings/closed` qua route group. Backfill đã áp.
 - Docs: `docs/rules/data-prisma.md` (mục "Materialized cache").
 
-**Issue #12: Suspense routes — chỉ 2/6 route tách Suspense (rule #2 vs #3).**
-- Chỉ `holdings/[id]/transactions/{new,edit}` tách; `settings/members/*` giữ async page (query quyết định toàn bộ render).
-- Docs: `docs/rules/component-architecture.md` (rule #2 vs #3).
+**Issue #12: Suspense routes — áp rule #2 vs #3: chỉ tách Suspense khi Suspense vật lý tách được từ query.**
+- Ví dụ: `holdings/[id]/transactions/{new,edit}` tách (form không cần query). `settings/members/*` giữ async page (query quyết định render).
+- Docs: `docs/rules/component-architecture.md`.
 
-**Phase 2: BottomNav dùng chung màn gốc/tab — ghi đè phạm vi hẹp (issue #12).**
-- Quyết định cũ "không header chrome riêng" vẫn đúng cho **màn con/form** (giữ back/close). **Màn gốc** (`/`, `/holdings`, `/holdings/closed`, `/settings`) nay có BottomNav.
-- Wiring: `DashboardScreen`, `HoldingsOverviewScreen`, `HoldingsEmptyState`, `SettingsScreen`.
-- Còn treo: `NavOverrideForm` chưa có route thật (CTA tạm); "Tuỳ chỉnh" (CUSTOM) cutoff chưa có mockup (để task sau).
+**Phase 2: BottomNav dùng chung màn gốc (không form/route con) — quyết định cũ "không header chrome riêng" vẫn giữ cho form.**
+- **Còn treo:** `NavOverrideForm` chưa có route thật; "Tuỳ chỉnh" (CUSTOM) cutoff chưa mockup.
 
 ## 2026-07-12
 
-**`NavOverride`: `@@unique([holdingId, date])` + `@db.Date` — upsert tự động cùng ngày.**
-- Sửa giá cùng ngày phải ghi đè; `@db.Date` tránh nhầm lẫn giờ khác ngày.
+**`NavOverride`: `@@unique([holdingId, date])` + `@db.Date` — upsert tự động, sửa giá cùng ngày phải ghi đè.**
 
-**Wire mốc chốt cookie + Route Handler (`/api/cutoff`) — `CutoffHardNavGuard` ép hard nav để kích active state.**
-- Lý do: Server Component không thể `cookies().set()` lúc render (lan `/settings` → `/`); giải pháp: Route Handler + cookie + hard navigation.
-- Cảnh báo khi sửa `/api/cutoff`: Next.js soft-nav (`/settings` → `/settings`) bỏ qua re-render hoàn toàn (active state không cập nhật UI) → `CutoffHardNavGuard` client component ép hard nav (`window.location.href`) riêng cho link `/api/cutoff`, tôn trọng modifier keys (mở tab). Verify bằng Playwright (network trace + `context.cookies()`).
-- Chi tiết: `getCutoffSelection()` (cookie), `getCutoffOptions()` (preview XIRR/mốc), `getPortfolioValuation()` chuyển xuống `lib/`.
-- `Setting` không lưu (app read-only). "Tuỳ chỉnh" (CUSTOM) chưa mockup.
-
-**Không thêm cache Holdings/Cashflow ở Phase 2 — giữ query thẳng Prisma. Quay lại Phase 3 (Snapshot).**
-- Lý do: `getHoldingsRaw` đọc cột materialize (O(holding)), batch query giá + cashflow 1 lần → không N+1. App cá nhân nhỏ, không chậm thật; không tối ưu sớm.
-- Điều kiện Phase 3: khi thêm `Snapshot` (dày + dùng chart) → đo lại. Nếu cache, dùng `userId` làm **tham số hàm** (đặt trong cache key), + `revalidateTag` trong Server Action holdings.
-- **Không** copy pattern `getLatestPriceQuotes` (cache `symbol` dùng chung, khác bản chất cache `userId`).
+**Cutoff selection: cookie + Route Handler `/api/cutoff` + `CutoffHardNavGuard` hard nav để kích active state.**
+- Lý do: Server Component không `cookies().set()` lúc render.
+- **Cảnh báo:** Next.js soft-nav bỏ qua re-render → phải hard nav riêng cho link cutoff, tôn trọng modifier keys (open tab).
+- `Setting` không lưu (read-only); "Tuỳ chỉnh" (CUSTOM) chưa mockup.
 
 ## 2026-07-14
 

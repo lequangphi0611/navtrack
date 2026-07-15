@@ -22,23 +22,20 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 
 Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọng kèm lý do ghi ở [`DECISION.md`](./DECISION.md), không lặp lại chi tiết ở đây.
 
-- 2026-07-09: Phase 1 — nền tảng + Auth.js Google OAuth + allowlist + `resolveSetting`; nhập vị thế + CRUD mua/bán; unit test + e2e + cách ly dữ liệu 2 user.
-- 2026-07-10: Phase 1 — UI mockup 6 màn + loading/skeleton + schema `User` fix + tách route `/settings/*`.
-- 2026-07-11: Phase 1 — PWA (manifest, icon, sw, offline); gom danh sách theo `AssetType`.
-- 2026-07-11: Kiểm tra session regression — không phải bug (tránh tranh luận lại ở phase sau).
-- 2026-07-11: Phase 1 — issue #18 + #12: tách route `/holdings/closed`, materialize `quantity`/`avgCost`, Suspense transactions.
+- 2026-07-09: Phase 1 — nền tảng + Auth.js Google OAuth + allowlist + `resolveSetting`; nhập vị thế + CRUD mua/bán; PWA; unit test + e2e + cách ly dữ liệu 2 user.
+- 2026-07-10: Phase 1 — UI mockup 6 màn + loading/skeleton; tách route `/holdings/closed` + materialize `quantity`/`avgCost`.
+- 2026-07-11: Session regression — không phải bug, tránh tranh luận lại ở phase sau.
 - 2026-07-11: **Phase 1 hoàn thành** — toàn bộ tiêu chí ở [phase-1.md](./phase-1.md) đạt.
-- 2026-07-12: Phase 2 — `lib/valuation.ts` + batched pricing; `NavOverride` nhập tay; cutoff selection cookie; lệnh ưu tiên giá đơn vị.
-- 2026-07-13: Phase 2 — wire NAV/XIRR/PnL thật vào `/holdings/[id]` + danh sách + thay `TotalInvestedSection` → `HoldingsSummaryCard`.
-- 2026-07-13: **Phase 2 hoàn thành** — job Python price-fetcher deploy GitHub Actions; toàn bộ tiêu chí ở [phase-2.md](./phase-2.md) đạt.
-- 2026-07-14: Đổi rule ưu tiên giá: so `date` giữa NavOverride vs PriceQuote; e2e dùng DB riêng ephemeral.
-- 2026-07-14: Phase 3 — issue #34: thêm dedup constraint cho `Snapshot` đã đóng băng (2 partial unique index, migration `add_snapshot_unique_constraint`) — xem [DECISION.md](./DECISION.md).
-- 2026-07-14: Phase 3 — issue #36: job Python `jobs/snapshot-cron/` + workflow GitHub Actions riêng, chốt `Snapshot{PERIODIC}` hằng tháng + `{YEAR_END}` đầu năm cho từng Holding đang mở và tổng danh mục mỗi user — xem [DECISION.md](./DECISION.md).
-- 2026-07-15: Phase 3 — thêm rule + integration test (`test_integration.py`, `pnpm test:python-integration`) cho `jobs/snapshot-cron/`, verify idempotent 2 lần chạy `run_snapshot()` + giá trị NAV trên Postgres thật (ephemeral, tái dùng hạ tầng e2e) — xem [DECISION.md](./DECISION.md).
-- 2026-07-15: Phase 3 — mở rộng sang `jobs/price-fetcher/`: thêm `test_integration.py` mock `vnstock` (monkeypatch `main.fetch_price`, chỉ verify ghi/đọc Postgres thật), `scripts/python-integration-test.mjs` giờ tự quét `jobs/*/test_integration.py` (chạy chung 1 lần docker compose up/down cho mọi job) thay vì hardcode 1 job — xem [DECISION.md](./DECISION.md).
-- 2026-07-15: Phase 3 — issue #35: hoàn thành layer Presentational cho CTA "Chốt số liệu hôm nay" (SnapshotTodayCard trên Dashboard) + Props contract trong `process/UI_phase_3.md` cho issue #37.
-- 2026-07-15: Phase 3 — issue #35 (mở rộng, verify độc lập): thêm 6 màn Phase 3 Screens (3a/3c/3d/3e/3f + entry point Dashboard) thuần Presentational, đối chiếu khớp plan + `process/UI_phase_3.md`; vẫn để lại `phase-3.md` chưa tick (business logic thuộc issue #37).
-- 2026-07-15: Phase 3 — issue #37: hiện thực Snapshot thủ công (`MANUAL`) — `freezeManualSnapshot()`/`createManualSnapshot()` (`features/snapshots/actions.ts`, upsert idempotent check-before-insert trong transaction Serializable), trigger tự động sau mỗi giao dịch mua/bán/sửa/xoá (`features/holdings/actions.ts`), wiring `SnapshotTodayCard` (Dashboard) + `SnapshotFreezeSheet`/`freezeSheet` (`/snapshots`) + `TransactionSnapshotBanner` (`/holdings/[id]`, cờ `?cashflowId=`) vào dữ liệu thật; thêm `Snapshot.updatedAt` (migration `add_snapshot_updated_at`) + đồng bộ `jobs/snapshot-cron/main.py` — xem [DECISION.md](./DECISION.md). **Phase 3 hoàn thành** phần business logic — tick hết mục "Công việc cần làm" ở [phase-3.md](./phase-3.md) (mục "Tiêu chí hoàn thành" để verifier xác nhận).
-- 2026-07-15: Phase 3 — verify độc lập issue #37: sửa 7 assertion `waitForURL` lỗi thời trong `e2e/{dashboard,holdings,nav-override}.spec.ts` (redirect sau mua/bán giờ gắn `?cashflowId=`, hành vi cố ý #37) + thêm helper `e2e/support/urls.ts`; viết mới `e2e/manual-snapshot.spec.ts` (4 test: banner + Snapshot DB sau mua, đóng băng không đổi khi giá cập nhật, "Chốt ngay" Dashboard server truth, đóng băng nhiều lần trên `/snapshots` vẫn 1 dòng/mốc). **Phase 3 hoàn thành** — tick hết "Tiêu chí hoàn thành" ở [phase-3.md](./phase-3.md).
-- 2026-07-15: Phase 3 — issue #46: `getSnapshotHistory()`/`getSnapshotDetail(id)` (`features/snapshots/queries.ts`) đọc chuỗi `Snapshot{holdingId: null, frozen: true}` thật, dựng chart NAV 8 điểm + danh sách "Các mốc đã chốt" + chi tiết/breakdown per-holding + so sánh giá đã đổi từ lúc chốt (`recomputedComparison`); logic thuần tách riêng `src/lib/snapshot-history.ts` + `src/lib/snapshot-recompute.ts` (unit test đối chiếu); wire `page.tsx` của `/snapshots` và `/snapshots/[id]` thay sample data — xem [DECISION.md](./DECISION.md).
-- 2026-07-15: Phase 3 — verify độc lập issue #46: viết mới `e2e/snapshot-history.spec.ts` (4 test: `/snapshots` hiển thị đúng lịch sử thật + điều hướng đúng `/snapshots/[id]` với NAV/breakdown đúng, cách ly quyền user khác → 404, guard dòng per-holding/id không tồn tại → 404, `recomputedComparison` (3f) hiện đúng khi giá lịch sử khác giá hiện tại đủ ngưỡng); toàn bộ verify (`lint`/`typecheck`/`test` 158/158/`e2e` 16 test) sạch.
+- 2026-07-12: Phase 2 — `lib/valuation.ts` + batched pricing; `NavOverride` nhập tay; cutoff selection cookie.
+- 2026-07-13: Phase 2 — wire NAV/XIRR/PnL thật vào holdings + danh sách; job Python price-fetcher deploy GitHub Actions.
+- 2026-07-13: **Phase 2 hoàn thành** — toàn bộ tiêu chí ở [phase-2.md](./phase-2.md) đạt.
+- 2026-07-14: Đổi rule ưu tiên giá: so `date` giữa NavOverride vs PriceQuote; e2e dùng DB riêng ephemeral (xem [DECISION.md](./DECISION.md)).
+- 2026-07-14: Phase 3 — issue #34: thêm dedup constraint cho `Snapshot` (2 partial unique index, migration `add_snapshot_unique_constraint`).
+- 2026-07-14: Phase 3 — issue #36: job Python `jobs/snapshot-cron/` + GitHub Actions workflow chốt `Snapshot{PERIODIC/YEAR_END}`.
+- 2026-07-15: Phase 3 — thêm integration test cho `jobs/snapshot-cron/` và `jobs/price-fetcher/` (tái dùng DB ephemeral, tự quét `jobs/*/test_integration.py`).
+- 2026-07-15: Phase 3 — issue #35: layer Presentational cho "Chốt số liệu hôm nay" (SnapshotTodayCard) + 6 màn Phase 3 Screens (3a/3c-3f).
+- 2026-07-15: Phase 3 — issue #37: Snapshot thủ công (`MANUAL`) + Server Action `freezeManualSnapshot()` + trigger tự động sau giao dịch + thêm `Snapshot.updatedAt`.
+- 2026-07-15: Phase 3 — issue #37 e2e verify: sửa 7 `waitForURL` lỗi thời; viết `e2e/manual-snapshot.spec.ts` (4 test snapshot banner + chốt lại nhiều lần).
+- 2026-07-15: Phase 3 — issue #46: `getSnapshotHistory()`/`getSnapshotDetail(id)` đọc lịch sử thật + chart NAV + breakdown + so sánh giá (`recomputedComparison`).
+- 2026-07-15: Phase 3 — issue #46 e2e verify: viết `e2e/snapshot-history.spec.ts` (4 test lịch sử + quyền user + giá so sánh); toàn bộ verify sạch.
+- 2026-07-15: **Phase 3 hoàn thành** — toàn bộ tiêu chí ở [phase-3.md](./phase-3.md) đạt.
