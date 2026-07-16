@@ -27,6 +27,16 @@ export const ROUTES = {
   snapshots: "/snapshots",
   snapshotDetail: (snapshotId: string) => `/snapshots/${snapshotId}`,
   snapshotSchedule: "/settings/snapshot-schedule",
+  // Phase 4 (issue #51) — ghi nhận cổ tức. KHÔNG có route lịch sử toàn danh mục
+  // (khác snapshots): mockup "Phase 4 Screens" 4e scope theo TỪNG Holding, không
+  // portfolio-wide — xem process/UI_phase_4.md mục "Điểm lệch so với plan".
+  // `newDividend` dùng cho CẢ hai lối vào (nút "Ghi cổ tức" ở HoldingDetailScreen
+  // VÀ mục "Đổi mã" trong HoldingSwitcher) vì DividendForm luôn hiện switcher.
+  newDividend: (holdingId: string) => `/holdings/${holdingId}/dividends/new`,
+  // Entry độc lập từ Dashboard (chưa có ngữ cảnh Holding) — page.tsx tự chọn
+  // Holding mặc định (Holding đang mở đầu tiên) rồi render DividendForm như trên.
+  newDividendStandalone: "/dividends/new",
+  dividendHistory: (holdingId: string) => `/holdings/${holdingId}/dividends`,
 } as const;
 
 // Khai NGOÀI object ROUTES (tham chiếu ROUTES.holdingDetail — object literal không tự

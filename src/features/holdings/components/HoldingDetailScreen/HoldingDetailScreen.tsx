@@ -1,4 +1,4 @@
-import { Pencil, Plus } from "lucide-react";
+import { Coins, History, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { type AssetType, AssetTypeBadge } from "@/components/AssetTypeBadge";
@@ -170,17 +170,44 @@ function HoldingDetailScreen({
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="min-w-0 truncate text-sm font-semibold text-foreground">
           Lịch sử giao dịch
         </h2>
-        <Link
-          href={ROUTES.newTransaction(holding.id)}
-          className={cn(buttonVariants({ size: "sm" }), "gap-1 font-semibold")}
-        >
-          <Plus className="size-3.5" />
-          Thêm giao dịch
-        </Link>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Lịch sử cổ tức (mockup Phase 4 Screens, entry map "Từ Chi tiết
+              Holding → 'Lịch sử cổ tức'") — icon-only để không chen ngang 2
+              nút text đã có, xem process/UI_phase_4.md mục "Điểm lệch". */}
+          <Link
+            href={ROUTES.dividendHistory(holding.id)}
+            aria-label="Lịch sử cổ tức"
+            className={cn(
+              buttonVariants({ size: "icon-sm", variant: "outline" }),
+            )}
+          >
+            <History className="size-3.75" />
+          </Link>
+          <Link
+            href={ROUTES.newDividend(holding.id)}
+            className={cn(
+              buttonVariants({ size: "sm" }),
+              "gap-1 font-semibold",
+            )}
+          >
+            <Coins className="size-3.5" />
+            Ghi cổ tức
+          </Link>
+          <Link
+            href={ROUTES.newTransaction(holding.id)}
+            className={cn(
+              buttonVariants({ size: "sm" }),
+              "gap-1 font-semibold",
+            )}
+          >
+            <Plus className="size-3.5" />
+            Thêm giao dịch
+          </Link>
+        </div>
       </div>
 
       <TransactionHistoryList

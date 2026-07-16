@@ -9,7 +9,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 1 | Nền tảng + đăng nhập + nhập vị thế | ✅ | [phase-1.md](./phase-1.md) |
 | 2 | Lõi XIRR + giá tự động | ✅ | [phase-2.md](./phase-2.md) |
 | 3 | Snapshot tự động | ✅ | [phase-3.md](./phase-3.md) |
-| 4 | Cổ tức | ⬜ | [phase-4.md](./phase-4.md) |
+| 4 | Cổ tức | 🟨 | [phase-4.md](./phase-4.md) |
 | 5 | Thuế bán (áp dụng) | ⬜ | [phase-5.md](./phase-5.md) |
 | 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
 
@@ -39,3 +39,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-15: Phase 3 — issue #46: `getSnapshotHistory()`/`getSnapshotDetail(id)` đọc lịch sử thật + chart NAV + breakdown + so sánh giá (`recomputedComparison`).
 - 2026-07-15: Phase 3 — issue #46 e2e verify: viết `e2e/snapshot-history.spec.ts` (4 test lịch sử + quyền user + giá so sánh); toàn bộ verify sạch.
 - 2026-07-15: **Phase 3 hoàn thành** — toàn bộ tiêu chí ở [phase-3.md](./phase-3.md) đạt.
+- 2026-07-16: Phase 4 — issue #51 verify: layer Presentational cổ tức (`DividendForm`/`HoldingSwitcher`/`DividendHistoryScreen` + entry point) đúng 4 ràng buộc nghiệp vụ, lệch mockup có chủ đích đã ghi ở [UI_phase_4.md](./UI_phase_4.md); phát hiện 1 e2e regression tiền lệ (không do #51) — báo riêng, không tự sửa.

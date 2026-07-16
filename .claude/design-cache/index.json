@@ -1,1 +1,7 @@
-{}
+{
+  "src/features/dividends": {
+    "designFile": "Phase 4 Screens.dc.html",
+    "section": "4a-4f (Ghi cổ tức tiền mặt/cổ phiếu, chọn mã, đã ghi, lịch sử, menu nhanh Dashboard)",
+    "cachedAt": "2026-07-16"
+  }
+}

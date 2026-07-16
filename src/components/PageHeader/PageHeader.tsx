@@ -8,6 +8,10 @@ type PageHeaderProps = {
   backHref: string;
   // "back" cho luồng điều hướng thường, "close" cho luồng dạng modal (vd form giao dịch)
   variant?: "back" | "close";
+  // Dòng phụ dưới tiêu đề (vd "Nhập % → tự tính tiền nhận về" — DividendForm,
+  // mockup Phase 4 Screens 4a/4c). Vắng mặt = giữ nguyên layout cũ (backward-
+  // compatible, không đổi call site hiện có).
+  subtitle?: React.ReactNode;
   // Composition slot bên phải tiêu đề (vd Badge "Chỉ xem" — mockup 3e). Vắng mặt
   // = giữ nguyên layout cũ (backward-compatible, không đổi call site hiện có).
   trailing?: React.ReactNode;
@@ -18,6 +22,7 @@ function PageHeader({
   title,
   backHref,
   variant = "back",
+  subtitle,
   trailing,
   className,
 }: PageHeaderProps) {
@@ -37,9 +42,16 @@ function PageHeader({
       >
         <Icon className="size-4.5 text-foreground-soft" />
       </Link>
-      <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">
-        {title}
-      </h1>
+      <div className="min-w-0 flex-1">
+        <h1 className="truncate text-base font-semibold text-foreground">
+          {title}
+        </h1>
+        {subtitle ? (
+          <div className="mt-0.25 truncate text-[11.5px] text-muted-faint">
+            {subtitle}
+          </div>
+        ) : null}
+      </div>
       {trailing}
     </div>
   );

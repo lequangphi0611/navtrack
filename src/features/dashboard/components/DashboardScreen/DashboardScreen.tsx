@@ -3,6 +3,7 @@ import {
   ArrowUp,
   CalendarClock,
   ChevronRight,
+  Coins,
   History,
   Sigma,
   SlidersHorizontal,
@@ -126,14 +127,28 @@ function DashboardScreen({
           <div className="text-[12.5px] font-semibold text-muted-foreground">
             Giá trị thị trường (NAV)
           </div>
-          <Link
-            href={ROUTES.snapshots}
-            className="flex shrink-0 items-center gap-1 rounded-full bg-primary/14 px-2.5 py-1 text-[11px] font-semibold text-primary"
-          >
-            <History className="size-3.25" />
-            Lịch sử
-            <ChevronRight className="size-3.25" />
-          </Link>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Link
+              href={ROUTES.snapshots}
+              className="flex items-center gap-1 rounded-full bg-primary/14 px-2.5 py-1 text-[11px] font-semibold text-primary"
+            >
+              <History className="size-3.25" />
+              Lịch sử
+              <ChevronRight className="size-3.25" />
+            </Link>
+            {/* Entry point "Cổ tức" (Phase 4, issue #51) — mirror cùng pattern
+                pill "Lịch sử" (Phase 3): mở thẳng /dividends/new (mockup
+                "Phase 4 Screens" 4f mở FAB quick-menu; đơn giản hoá thành 1
+                pill thay vì FAB đầy đủ — xem process/UI_phase_4.md mục
+                "Điểm lệch so với plan"). */}
+            <Link
+              href={ROUTES.newDividendStandalone}
+              className="flex items-center gap-1 rounded-full bg-accent/14 px-2.5 py-1 text-[11px] font-semibold text-accent"
+            >
+              <Coins className="size-3.25" />
+              Cổ tức
+            </Link>
+          </div>
         </div>
         <div className="font-mono text-[28px] leading-none font-semibold tracking-tight text-foreground tabular-nums">
           {formatMoney(navValue, { hidden })}
