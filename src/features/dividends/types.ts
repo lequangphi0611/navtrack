@@ -32,6 +32,12 @@ export type DividendRecordedResult = {
   // Tổng cổ tức (net, CASH) đã nhận từ trước tới nay của riêng Holding này —
   // optional cùng lý do trên (cần truy vấn tổng hợp lịch sử).
   totalDividendReceived?: string;
+  // STOCK-only: true khi hệ thống TỰ làm tròn xuống stockQuantity (không phải
+  // user tự sửa qua stockQuantityOverride) — xem dividend-math.ts::computeStockDividend.
+  wasRounded?: boolean;
+  // STOCK-only, chỉ có mặt khi wasRounded=true: số CP thưởng trước làm tròn
+  // (rawStockQuantity), để hiển thị so sánh với addedQuantity đã floor.
+  rawAddedQuantity?: string;
   historyHref: string;
   holdingHref: string;
 };

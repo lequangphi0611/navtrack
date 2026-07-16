@@ -11,6 +11,8 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 
+import { TransactionHoldingPicker } from "@/features/holdings/components/TransactionHoldingPicker";
+import type { HoldingSummary } from "@/features/holdings/types";
 import { ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -35,14 +37,24 @@ type DashboardQuickMenuProps = {
   // mục này khỏi menu (an toàn hơn hiện nút bấm không làm gì — xem
   // process/UI_phase_4.md).
   showSnapshotAction: boolean;
+  // Holding đang mở (quantity > 0), truyền xuống TransactionHoldingPicker —
+  // issue #54 (xem process/UI_phase_4.md mục 5, đảo ngược quyết định trỏ
+  // thẳng ROUTES.holdings).
+  tradeHoldings: HoldingSummary[];
+  hidden?: boolean;
 };
 
 // FAB menu nhanh nổi góc dưới-phải Dashboard (mockup "Phase 4 Screens" 4f).
 // State đóng/mở là UI thuần tuý (không điều hướng dữ liệu khác nhau giữa 2
 // trạng thái) nên dùng useState tại chỗ, khác HoldingSwitcher/CutoffPicker
 // (nơi đổi lựa chọn = đổi route/dữ liệu, bắt buộc qua Link).
-function DashboardQuickMenu({ showSnapshotAction }: DashboardQuickMenuProps) {
+function DashboardQuickMenu({
+  showSnapshotAction,
+  tradeHoldings,
+  hidden = false,
+}: DashboardQuickMenuProps) {
   const [open, setOpen] = useState(false);
+  const [tradePickerOpen, setTradePickerOpen] = useState(false);
 
   const close = () => setOpen(false);
 
@@ -51,11 +63,13 @@ function DashboardQuickMenu({ showSnapshotAction }: DashboardQuickMenuProps) {
       key: "trade",
       label: "Mua / Bán",
       icon: ArrowLeftRight,
-      // Không có route "thêm giao dịch" độc lập (luôn cần holdingId, xem
-      // lib/routes.ts) — trỏ tới danh sách vị thế để tự chọn mã rồi bấm "Thêm
-      // giao dịch" từ HoldingDetailScreen. Lựa chọn ít giả định nhất, không
-      // cần dựng thêm switcher mới chỉ cho FAB này.
-      href: ROUTES.holdings,
+      // Mở TransactionHoldingPicker để chọn mã rồi điều hướng thẳng
+      // ROUTES.newTransaction(holdingId) — issue #54, đảo ngược quyết định cũ
+      // trỏ thẳng ROUTES.holdings (xem process/UI_phase_4.md mục 5).
+      onClick: () => {
+        close();
+        setTradePickerOpen(true);
+      },
     },
     {
       key: "new-holding",
@@ -164,6 +178,14 @@ function DashboardQuickMenu({ showSnapshotAction }: DashboardQuickMenuProps) {
           {open ? <X className="size-7" /> : <Plus className="size-7" />}
         </button>
       </div>
+
+      <TransactionHoldingPicker
+        open={tradePickerOpen}
+        onOpenChange={setTradePickerOpen}
+        holdings={tradeHoldings}
+        newHoldingHref={ROUTES.newHolding}
+        hidden={hidden}
+      />
     </>
   );
 }

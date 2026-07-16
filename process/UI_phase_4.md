@@ -31,7 +31,8 @@ entry point thay đổi theo mockup thật.
 | `HoldingSwitcher` | Nhúng trong `DividendForm` | Sample options cứng trong `page.tsx`, luôn hiện |
 | `DividendHistoryScreen` / `DividendHistoryList` | `/holdings/[id]/dividends` (mới) | `page.tsx` hardcode sample rows theo `id` — chờ `getDividendHistory(holdingId)` thật |
 | Nút "Ghi cổ tức" + "Lịch sử cổ tức" | Mở rộng `HoldingDetailScreen` (`/holdings/[id]`, route đã wiring thật) | `Link` tĩnh, luôn hiện — không phụ thuộc dữ liệu Container |
-| `DashboardQuickMenu` (FAB, mockup 4f) | `DashboardScreen` (`/`, route đã wiring thật) | `Link` tĩnh tới `ROUTES.holdings`/`newHolding`/`newDividendStandalone`; hành động "Chốt số liệu hôm nay" phụ thuộc `snapshotToday` (ẩn khi Container chưa cấp) |
+| `DashboardQuickMenu` (FAB, mockup 4f) | `DashboardScreen` (`/`, route đã wiring thật) | "Mua / Bán" mở `TransactionHoldingPicker` (issue #54, xem mục 5 bên dưới — thay cho `Link` tĩnh cũ tới `ROUTES.holdings`); "Thêm vị thế"/"Cổ tức" vẫn `Link` tĩnh tới `newHolding`/`newDividendStandalone`; "Chốt số liệu hôm nay" phụ thuộc `snapshotToday` (ẩn khi Container chưa cấp) |
+| `TransactionHoldingPicker` (mới, issue #54) | Sheet mở từ `DashboardQuickMenu` (`/`) | `page.tsx` truyền `getOpenHoldings()` thật (`tradeHoldings`) — wiring đầy đủ ngay từ đầu, không sample data |
 
 ---
 
@@ -91,12 +92,18 @@ xem mockup, các điểm sau lệch có chủ đích, không phải bỏ sót:
    Mockup không tự nói rõ đích đến của 2/4 hành động — đây LÀ quyết định
    thiết kế thật cần ghi lại (không còn là "điểm lệch" vì FAB đã bám đúng
    mockup):
-   - **"Mua / Bán"** → `ROUTES.holdings` (danh sách vị thế). Không có route
-     "thêm giao dịch không cần chọn Holding trước" trong app (`newTransaction
-     (holdingId)` luôn cần `holdingId`, xem `lib/routes.ts`) — trỏ tới danh
-     sách để user tự chọn mã rồi bấm "Thêm giao dịch" từ `HoldingDetailScreen`
-     là lựa chọn ít giả định nhất, không cần dựng thêm 1 `HoldingSwitcher`
-     biến thể mới chỉ cho FAB này.
+   - **"Mua / Bán"** → **[ĐÃ ĐẢO NGƯỢC bởi issue #54]** ban đầu trỏ
+     `ROUTES.holdings` (danh sách vị thế) với lý do "không có route thêm giao
+     dịch không cần chọn Holding trước, trỏ tới danh sách để user tự chọn mã
+     rồi bấm 'Thêm giao dịch' từ `HoldingDetailScreen` là lựa chọn ít giả định
+     nhất". Quyết định này bị đảo ngược: đi qua `/holdings` rồi phải bấm tiếp
+     vào 1 Holding rồi mới thấy nút "Thêm giao dịch" là quá nhiều bước cho một
+     hành động tần suất cao (mua/bán) — user phải rời hẳn Dashboard, không
+     quay lại được nhanh. Issue #54 dựng `TransactionHoldingPicker` (Sheet
+     chọn mã ngay tại chỗ, mirror pattern `HoldingSwitcher` — xem mục 2b mới
+     bên dưới): bấm "Mua / Bán" → đóng FAB, mở Sheet liệt kê `tradeHoldings`
+     (Container đã cấp qua `getOpenHoldings()`) → chọn mã → `Link` thẳng
+     `ROUTES.newTransaction(holdingId)`, không qua `/holdings` nữa.
    - **"Chốt số liệu hôm nay"** → không điều hướng route; đóng menu rồi cuộn
      mượt (`scrollIntoView({behavior:"smooth", block:"center"})`) tới
      `SnapshotTodayCard` đã render sẵn trên Dashboard. Thêm prop `id?: string`
@@ -108,13 +115,17 @@ xem mockup, các điểm sau lệch có chủ đích, không phải bỏ sót:
    - "Thêm vị thế" → `ROUTES.newHolding`, "Cổ tức" → `ROUTES.newDividendStandalone`
      — cả hai route đã có sẵn, rõ ràng, không cần suy đoán thêm.
 
-   Props contract:
+   Props contract (cập nhật bởi issue #54 — thêm `tradeHoldings`/`hidden` để
+   forward xuống `TransactionHoldingPicker`, xem mục 2b):
    ```ts
    // DashboardQuickMenu.tsx
    type DashboardQuickMenuProps = {
      // false khi Container chưa cấp snapshotToday — ẩn hành động "Chốt số
      // liệu hôm nay" khỏi menu (không có SnapshotTodayCard để cuộn tới).
      showSnapshotAction: boolean;
+     // Holding đang mở (quantity > 0), forward xuống TransactionHoldingPicker.
+     tradeHoldings: HoldingSummary[];
+     hidden?: boolean;
    };
    ```
 
@@ -220,6 +231,39 @@ type HoldingSwitcherOption = DividendHolding & {
 type HoldingSwitcherProps = {
   current: DividendHolding;
   options: HoldingSwitcherOption[]; // CHỈ Holding đang mở (quantity > 0), luôn gồm current
+  hidden?: boolean;
+};
+```
+
+## 2b. TransactionHoldingPicker (mới, issue #54)
+
+- File: `src/features/holdings/components/TransactionHoldingPicker/{TransactionHoldingPicker.tsx,index.ts}`.
+- Client component (`"use client"`, cần `Sheet` + state tìm kiếm). KHÔNG có
+  `SheetTrigger` bên trong — trigger là nút "Mua / Bán" của
+  `DashboardQuickMenu` (FAB), đóng/mở điều khiển hoàn toàn bằng state ngoài
+  (`open`/`onOpenChange` truyền qua props, controlled `Dialog.Root`). Khác
+  `HoldingSwitcher`: ở đó trigger là pill switcher persistent bên trong form,
+  luôn có một `current` holding "đang chọn"; ở đây chưa có holding nào đang
+  chọn trước, và chọn xong thì `Link` điều hướng đi luôn (không ở lại Sheet).
+- Ô "Tìm mã…" lọc client-side, copy nguyên pattern `HoldingSwitcher` (lọc
+  theo `symbol`/`name` trên mảng `holdings` đã có sẵn từ props).
+- Chọn mã = `<Link>` thật sang `ROUTES.newTransaction(holding.id)`.
+- Avatar dùng `SymbolAvatar` mặc định (hash-theo-mã), KHÔNG tô accent cố định
+  như `HoldingSwitcher` — ngữ cảnh khác (không phải "đang chọn mã để ghi cổ
+  tức" mà là danh sách vị thế trung tính, giống `HoldingsList`).
+- Empty state khi `holdings.length === 0` ("Chưa có vị thế nào đang mở" + CTA
+  `Link` tới `newHoldingHref`), khác `filtered.length === 0` (đã gõ tìm nhưng
+  không khớp — "Không tìm thấy mã phù hợp.").
+
+```ts
+// TransactionHoldingPicker.tsx
+type TransactionHoldingPickerProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  // Holding đang mở (quantity > 0) — Container đã lọc sẵn (getOpenHoldings()),
+  // không lọc lại trong component.
+  holdings: HoldingSummary[];
+  newHoldingHref: string; // ROUTES.newHolding — CTA khi holdings rỗng
   hidden?: boolean;
 };
 ```
@@ -461,8 +505,20 @@ switcher (điểm lệch 2) nên không cần route/param riêng cho 2 lối và
 - `src/app/(dashboard)/holdings/[id]/dividends/page.tsx`
 - `process/UI_phase_4.md` (file này)
 - `.claude/design-cache/raw/Phase-4-Screens.dc.html` (cache, gitignore)
+- `src/features/holdings/components/TransactionHoldingPicker/{TransactionHoldingPicker.tsx,index.ts}`
+  (issue #54, sau khi phần trên đã merge — xem mục 2b và điểm lệch 5)
 
-**Sửa:**
+**Sửa (issue #54):**
+- `src/features/dashboard/components/DashboardQuickMenu/DashboardQuickMenu.tsx`
+  — action "trade" đổi từ `href: ROUTES.holdings` sang `onClick` mở
+  `TransactionHoldingPicker`; thêm props `tradeHoldings`/`hidden`.
+- `src/features/dashboard/components/DashboardScreen/DashboardScreen.tsx` —
+  thêm prop `tradeHoldings: HoldingSummary[]`, forward xuống
+  `DashboardQuickMenu` cùng `hidden`.
+- `src/app/(dashboard)/page.tsx` — do `business-implementer` wiring
+  `getOpenHoldings()` (không thuộc phạm vi `design-implementer`).
+
+**Sửa (Phase 4 gốc):**
 - `src/lib/routes.ts` — thêm `newDividend`, `newDividendStandalone`,
   `dividendHistory`.
 - `src/components/PageHeader/PageHeader.tsx` — thêm prop optional `subtitle`.

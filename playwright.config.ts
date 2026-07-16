@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
+  workers: 1,
   // retries=1 cả local (không chỉ CI): pnpm e2e giờ luôn chạy sau mỗi thay đổi
   // (HARNESS.md) — lần đầu dev server (Turbopack) mới khởi động, nhiều worker
   // cùng request các route chưa từng biên dịch có thể race và 404 thoáng qua,

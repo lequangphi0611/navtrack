@@ -16,7 +16,7 @@ import type { TransactionSnapshotBannerProps } from "@/features/holdings/compone
 // module xử lý an toàn (live binding), không phải "true" circular init dependency.
 import { getManualSnapshotToday } from "@/features/snapshots/queries";
 import { getSession } from "@/lib/auth";
-import { derivePosition } from "@/lib/cost-basis";
+import { derivePositionIncludingStockDividends } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
@@ -169,10 +169,17 @@ export async function getHoldingDetail(
     where: { id: holdingId },
     include: {
       // Khớp thứ tự tie-break dùng ở actions.ts/migration backfill (date, createdAt, id) —
-      // derivePosition() chỉ sort theo date, cần thứ tự DB nhất quán khi trùng ngày để
-      // không lệch với Holding.quantity/avgCost đã materialize (docs/domain/02).
+      // derivePositionIncludingStockDividends() sort theo (date, createdAt, id), cần thứ tự
+      // DB nhất quán khi trùng ngày để không lệch với Holding.quantity/avgCost đã materialize
+      // (docs/domain/02).
       cashflows: {
         orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      },
+      // Issue #59: vị thế-tại-cutoff (bên dưới) trước đây chỉ derive từ Cashflow,
+      // bỏ sót cổ tức cổ phiếu đã nhận — hiện SL/avgCost sai (và NAV/XIRR theo đó).
+      dividends: {
+        where: { type: "STOCK" },
+        select: { id: true, date: true, createdAt: true, stockQuantity: true },
       },
     },
   });
@@ -206,18 +213,32 @@ export async function getHoldingDetail(
   const cashflowsUpToCutoff = holding.cashflows.filter(
     (cf) => cf.date.getTime() <= resolvedCutoffDate.getTime(),
   );
+  // Cổ tức cổ phiếu TÍNH TỚI cutoffDate — cùng phạm vi lọc với cashflowsUpToCutoff
+  // (issue #59: trước đây bỏ sót hoàn toàn, SL/avgCost tại cutoff sai).
+  const stockDividendsUpToCutoff = holding.dividends.filter(
+    (dividend) => dividend.date.getTime() <= resolvedCutoffDate.getTime(),
+  );
 
   // Vị thế TẠI THỜI ĐIỂM cutoff — KHÁC Holding.quantity/avgCost cache (luôn
   // là snapshot HIỆN TẠI, không đổi theo cutoff, dùng cho các nơi khác như
   // getOpenHoldings/getOpenHoldingsWithValuation). Dùng để valuate/xác định
   // isOpenPosition đúng thời điểm đang xem, nhất quán với cashflowsForXirr/
   // dividends bên dưới.
-  const position = derivePosition(
+  const position = derivePositionIncludingStockDividends(
     cashflowsUpToCutoff.map((cf) => ({
+      id: cf.id,
       type: cf.type,
       date: cf.date,
+      createdAt: cf.createdAt,
       quantity: new Decimal(cf.quantity.toString()),
       pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
+    })),
+    stockDividendsUpToCutoff.map((dividend) => ({
+      id: dividend.id,
+      date: dividend.date,
+      createdAt: dividend.createdAt,
+      // Đã lọc type === "STOCK" ở include -> stockQuantity luôn có giá trị.
+      quantity: new Decimal(dividend.stockQuantity!.toString()),
     })),
   );
 

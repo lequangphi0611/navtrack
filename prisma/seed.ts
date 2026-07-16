@@ -34,6 +34,44 @@ async function main() {
       effectiveFrom: BASELINE_DATE,
     },
   });
+
+  await db.setting.upsert({
+    where: {
+      key_effectiveFrom: {
+        key: SETTING_KEYS.DIVIDEND_TAX_RATE,
+        effectiveFrom: BASELINE_DATE,
+      },
+    },
+    update: {},
+    create: {
+      key: SETTING_KEYS.DIVIDEND_TAX_RATE,
+      value: "5",
+      valueType: "DECIMAL",
+      label: "Thuế cổ tức tiền mặt (%)",
+      group: "TAX",
+      unit: "%",
+      effectiveFrom: BASELINE_DATE,
+    },
+  });
+
+  await db.setting.upsert({
+    where: {
+      key_effectiveFrom: {
+        key: SETTING_KEYS.DIVIDEND_PAR_VALUE,
+        effectiveFrom: BASELINE_DATE,
+      },
+    },
+    update: {},
+    create: {
+      key: SETTING_KEYS.DIVIDEND_PAR_VALUE,
+      value: "10000",
+      valueType: "DECIMAL",
+      label: "Mệnh giá cổ tức (đ/CP)",
+      group: "TAX",
+      unit: "đ/CP",
+      effectiveFrom: BASELINE_DATE,
+    },
+  });
 }
 
 main()

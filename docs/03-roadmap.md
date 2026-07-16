@@ -48,6 +48,12 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
 - Biểu đồ phân bổ tài sản (% theo `AssetType` tại thời điểm hiện tại)
 - **Chế độ ẩn số tiền:** nút mắt bật/tắt nhanh trên dashboard + mặc định trong Settings (`User.hideAmountsByDefault`, lưu theo user). Chỉ che giá trị tiền tuyệt đối, giữ nguyên XIRR và các phần trăm.
 
+## Phase 7 — Trái tức (lãi trái phiếu)
+- Ghi nhận lãi định kỳ (trái tức) cho `Holding{type: BOND}` — khác công thức % cổ tức cổ phiếu hiện có (Phase 4 chỉ scope cho cổ tức cổ phiếu/tiền mặt).
+- Mở rộng `DividendType`/`Dividend` (hoặc model tương đương) cho loại lãi trái phiếu; **mệnh giá trái phiếu nhập tay mỗi lần ghi** (khác cổ tức cổ phiếu dùng chung `DIVIDEND_PAR_VALUE`) vì mỗi trái phiếu mệnh giá khác nhau theo tổ chức phát hành — chốt chính thức lúc implement.
+- Thuế lãi trái phiếu: xác nhận dùng chung `DIVIDEND_TAX_RATE` hay cần `Setting` key riêng — điểm còn mở, xem `docs/domain/07-tax.md`.
+- UI ghi nhận trái tức: mở rộng `DividendForm` hiện có (Phase 4), không dựng màn mới.
+
 ## Backlog (chưa ưu tiên, cân nhắc sau khi dùng thử ổn định)
 - Import CSV/Excel từ Google Sheets (hoãn từ Phase 1) — làm khi có nhu cầu nạp dữ liệu chi tiết từng mã
 - So sánh benchmark (VN-Index, lãi suất tiết kiệm)

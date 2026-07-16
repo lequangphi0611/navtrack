@@ -1,7 +1,11 @@
 import Decimal from "decimal.js";
 import { describe, expect, test } from "vitest";
 
-import { computeCashflowAmount, derivePosition } from "./cost-basis";
+import {
+  computeCashflowAmount,
+  derivePosition,
+  derivePositionIncludingStockDividends,
+} from "./cost-basis";
 
 describe("computeCashflowAmount", () => {
   test("BUY: amount âm, gồm cả phí", () => {
@@ -210,5 +214,162 @@ describe("derivePosition", () => {
 
     expect(position.quantity.toString()).toBe("150");
     expect(position.avgCost.toString()).toBe("110000");
+  });
+});
+
+// Issue #59: derivePosition() một mình bỏ sót Dividend{STOCK} -> SL sai VÀ
+// wentNegative có thể báo "bán vượt" SAI cho lệnh bán thực ra hợp lệ (SL bán
+// nằm trong phần cổ tức cổ phiếu, không phải mua). Xem cost-basis.ts.
+describe("derivePositionIncludingStockDividends", () => {
+  test("cổ tức cổ phiếu cộng vào SL, KHÔNG đổi avgCost (docs/domain/03-dividends.md)", () => {
+    const position = derivePositionIncludingStockDividends(
+      [
+        {
+          id: "buy-1",
+          type: "BUY",
+          date: new Date("2026-01-01"),
+          createdAt: new Date("2026-01-01"),
+          quantity: new Decimal(100),
+          pricePerUnit: new Decimal(100_000),
+        },
+      ],
+      [
+        {
+          id: "div-1",
+          date: new Date("2026-02-01"),
+          createdAt: new Date("2026-02-01"),
+          quantity: new Decimal(10),
+        },
+      ],
+    );
+
+    expect(position.quantity.toString()).toBe("110");
+    expect(position.avgCost.toString()).toBe("100000");
+    expect(position.wentNegative).toBe(false);
+  });
+
+  test("bán vượt số Cashflow-only nhưng HỢP LỆ nhờ cổ tức cổ phiếu đã nhận trước đó -> wentNegative = false", () => {
+    // 100 mua + 10 cổ tức (nhận TRƯỚC khi bán) = 110 đang giữ -> bán 105 hợp lệ.
+    // derivePosition() cashflow-only (không biết 10 CP thưởng) sẽ SAI báo âm.
+    const position = derivePositionIncludingStockDividends(
+      [
+        {
+          id: "buy-1",
+          type: "BUY",
+          date: new Date("2026-01-01"),
+          createdAt: new Date("2026-01-01"),
+          quantity: new Decimal(100),
+          pricePerUnit: new Decimal(100_000),
+        },
+        {
+          id: "sell-1",
+          type: "SELL",
+          date: new Date("2026-03-01"),
+          createdAt: new Date("2026-03-01"),
+          quantity: new Decimal(105),
+          pricePerUnit: new Decimal(120_000),
+        },
+      ],
+      [
+        {
+          id: "div-1",
+          date: new Date("2026-02-01"),
+          createdAt: new Date("2026-02-01"),
+          quantity: new Decimal(10),
+        },
+      ],
+    );
+
+    expect(position.quantity.toString()).toBe("5");
+    expect(position.wentNegative).toBe(false);
+  });
+
+  test("bán vượt THẬT SỰ (vẫn âm dù đã cộng cổ tức) -> wentNegative = true", () => {
+    const position = derivePositionIncludingStockDividends(
+      [
+        {
+          id: "buy-1",
+          type: "BUY",
+          date: new Date("2026-01-01"),
+          createdAt: new Date("2026-01-01"),
+          quantity: new Decimal(100),
+          pricePerUnit: new Decimal(100_000),
+        },
+        {
+          id: "sell-1",
+          type: "SELL",
+          date: new Date("2026-03-01"),
+          createdAt: new Date("2026-03-01"),
+          quantity: new Decimal(200),
+          pricePerUnit: new Decimal(120_000),
+        },
+      ],
+      [
+        {
+          id: "div-1",
+          date: new Date("2026-02-01"),
+          createdAt: new Date("2026-02-01"),
+          quantity: new Decimal(10),
+        },
+      ],
+    );
+
+    expect(position.wentNegative).toBe(true);
+  });
+
+  test("cổ tức nhận SAU khi bán không hồi tố cho lệnh bán trước đó -> vẫn báo bán vượt đúng thời điểm", () => {
+    // Bán 105 tại 2026-02-01 khi mới có 100 CP (cổ tức 10 CP đến SAU, 2026-03-01)
+    // -> tại THỜI ĐIỂM bán vẫn là bán vượt, dù tổng cuối cùng (nếu cộng dồn không
+    // quan tâm thứ tự) sẽ dương. Xác nhận phép replay tôn trọng thứ tự thời gian.
+    const position = derivePositionIncludingStockDividends(
+      [
+        {
+          id: "buy-1",
+          type: "BUY",
+          date: new Date("2026-01-01"),
+          createdAt: new Date("2026-01-01"),
+          quantity: new Decimal(100),
+          pricePerUnit: new Decimal(100_000),
+        },
+        {
+          id: "sell-1",
+          type: "SELL",
+          date: new Date("2026-02-01"),
+          createdAt: new Date("2026-02-01"),
+          quantity: new Decimal(105),
+          pricePerUnit: new Decimal(120_000),
+        },
+      ],
+      [
+        {
+          id: "div-1",
+          date: new Date("2026-03-01"),
+          createdAt: new Date("2026-03-01"),
+          quantity: new Decimal(10),
+        },
+      ],
+    );
+
+    expect(position.wentNegative).toBe(true);
+  });
+
+  test("không có cổ tức nào -> kết quả khớp derivePosition() thuần", () => {
+    const cashflows = [
+      {
+        id: "buy-1",
+        type: "BUY" as const,
+        date: new Date("2026-01-01"),
+        createdAt: new Date("2026-01-01"),
+        quantity: new Decimal(100),
+        pricePerUnit: new Decimal(100_000),
+      },
+    ];
+
+    const withDividends = derivePositionIncludingStockDividends(cashflows, []);
+    const plain = derivePosition(cashflows);
+
+    expect(withDividends.quantity.toString()).toBe(plain.quantity.toString());
+    expect(withDividends.avgCost.toString()).toBe(plain.avgCost.toString());
+    expect(withDividends.wentNegative).toBe(plain.wentNegative);
   });
 });
