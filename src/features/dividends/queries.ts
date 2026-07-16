@@ -100,6 +100,28 @@ function roundPercentLabel(numerator: Decimal, denominator: Decimal): string {
     .toString();
 }
 
+// Tổng cổ tức tiền mặt (net) ĐÃ nhận từ trước tới nay của MỘT Holding — dùng
+// cho DividendRecordedResult.totalDividendReceived (mockup Phase 4, 4d).
+// KHÔNG lọc theo cutoffDate (đây là tổng lịch sử, không phải input XIRR) và
+// đọc TRỰC TIẾP từ DB nên luôn phản ánh dividend VỪA ghi khi gọi SAU
+// transaction của recordDividend (features/dividends/actions.ts). holdingId
+// đã được caller verify thuộc đúng user trước đó (cùng cách getCashDividends
+// ở holdings/queries.ts không tự re-check userId).
+export async function getTotalCashDividendReceived(
+  holdingId: string,
+): Promise<Decimal> {
+  const rows = await db.dividend.findMany({
+    where: { holdingId, type: "CASH", netAmount: { not: null } },
+    select: { netAmount: true },
+  });
+
+  return rows.reduce(
+    // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
+    (sum, row) => sum.plus(new Decimal(row.netAmount!.toString())),
+    new Decimal(0),
+  );
+}
+
 // Lịch sử cổ tức của MỘT Holding (mockup Phase 4 Screens, 4e) — verify
 // holding.userId === session (cùng pattern getHoldingDetail, notFound() khi
 // không khớp, không lộ thông tin tồn tại).
@@ -200,10 +222,15 @@ export async function getDividendHistory(holdingId: string): Promise<{
     return b.createdAt.getTime() - a.createdAt.getTime();
   });
 
-  const rows: DividendHistoryRow[] = sortedDividends.map((dividend) => {
+  const rows: DividendHistoryRow[] = sortedDividends.map((dividend, index) => {
     // Mọi dividend đều là 1 event trong `events` phía trên -> luôn có entry.
     const { before, after } = timeline.get(dividend.id)!;
     const dateLabel = formatDate(dividend.date);
+    // sortedDividends đã sort mới nhất trước (theo date rồi createdAt) -> dòng
+    // đầu tiên (index 0) LUÔN là bản ghi mới nhất trong toàn bộ lịch sử của
+    // holding này (badge "MỚI", mockup 4e) — không cần biết đây có phải vừa từ
+    // action nào ghi hay không.
+    const isNew = index === 0;
 
     if (dividend.type === "CASH") {
       // grossAmount/taxAmount/netAmount luôn có giá trị khi type === CASH.
@@ -223,6 +250,7 @@ export async function getDividendHistory(holdingId: string): Promise<{
           before.mul(parValueAtDate),
         ),
         date: dateLabel,
+        isNew,
         grossAmount: grossAmount.toString(),
         taxAmount: taxAmount.toString(),
         netAmount: netAmount.toString(),
@@ -239,6 +267,7 @@ export async function getDividendHistory(holdingId: string): Promise<{
       type: "STOCK",
       percentLabel: roundPercentLabel(stockQuantity, before),
       date: dateLabel,
+      isNew,
       unit: holding.unit,
       quantityBefore: before.toString(),
       quantityAfter: after.toString(),

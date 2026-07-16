@@ -465,8 +465,8 @@ function DividendForm({
                 <span className="text-foreground-soft">
                   không phát sinh dòng tiền
                 </span>{" "}
-                → không vào XIRR. Giá vốn/{holding.unit} giảm tương ứng vì tổng
-                vốn chia cho nhiều {holding.unit} hơn.
+                → không vào XIRR. Giá vốn/{holding.unit} giữ nguyên, số lượng{" "}
+                {holding.unit} tăng thêm tương ứng.
               </div>
             </div>
           )}

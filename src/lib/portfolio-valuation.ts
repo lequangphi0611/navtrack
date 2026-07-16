@@ -16,7 +16,11 @@ import {
   resolveCutoffDate,
 } from "@/lib/cutoff";
 import { db } from "@/lib/db";
-import { formatDate, formatDayMonth } from "@/lib/format";
+import {
+  formatDate,
+  formatDayMonth,
+  formatXirrBarePercent,
+} from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
 import type { HoldingValuation } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
@@ -371,4 +375,71 @@ export async function getXirrForCutoff(
 ): Promise<XirrResultUi> {
   const { xirr } = await computeXirrAndPnlCore(selection);
   return toUiXirr(xirr);
+}
+
+// Đọc Holding TRỰC TIẾP từ DB (id/symbol/quantity) — KHÔNG qua
+// getOpenHoldings/getClosedHoldings (features/holdings/queries.ts), vốn cache()
+// theo request/render. getCurrentPortfolioXirrPercent() bên dưới cần gọi được
+// HAI LẦN trong CÙNG một invocation Server Action (trước và sau khi ghi
+// Dividend/cập nhật Holding.quantity, xem recordDividend) — nếu tái dùng
+// getOpenHoldings/getClosedHoldings, lần gọi thứ hai sẽ trả kết quả CŨ do
+// React cache() de-dup trong cùng request, không phản ánh thay đổi vừa ghi.
+async function getAllHoldingIdsAndQuantities(
+  userId: string,
+): Promise<{ id: string; symbol: string; quantity: Decimal }[]> {
+  const holdings = await db.holding.findMany({
+    where: { userId },
+    select: { id: true, symbol: true, quantity: true },
+  });
+
+  return holdings.map((holding) => ({
+    id: holding.id,
+    symbol: holding.symbol,
+    quantity: new Decimal(holding.quantity.toString()),
+  }));
+}
+
+// XIRR toàn danh mục "tại thời điểm gọi" (cutoff = hôm nay), đọc dữ liệu tươi
+// mỗi lần gọi — dùng cho DividendRecordedResult.xirrBeforePercent/
+// xirrAfterPercent (recordDividend, features/dividends/actions.ts): gọi hàm
+// này 1 lần TRƯỚC và 1 lần SAU transaction ghi Dividend để so sánh ảnh hưởng.
+// Nhận userId trực tiếp (KHÔNG tự gọi getSession()) — caller đã resolve session
+// một lần ở đầu action, tránh phụ thuộc lại vào giá trị cache() theo request.
+// Trả null (KHÔNG throw) khi XIRR không hội tụ/thiếu dòng tiền dương — caller
+// tự quyết định ẩn field tương ứng (docs/rules/error-handling.md).
+export async function getCurrentPortfolioXirrPercent(
+  userId: string,
+): Promise<string | null> {
+  const cutoffDate = resolveCutoffDate({ key: "TODAY" });
+
+  const allHoldings = await getAllHoldingIdsAndQuantities(userId);
+  const holdingIds = allHoldings.map((h) => h.id);
+
+  const [valuations, cashflows, dividends] = await Promise.all([
+    valuateHoldings(allHoldings, cutoffDate),
+    getAllCashflowsForXirr(holdingIds, cutoffDate),
+    getAllCashDividendsForXirr(holdingIds, cutoffDate),
+  ]);
+
+  const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
+  const currentNav =
+    validNavs.length > 0
+      ? validNavs.reduce((sum, nav) => sum.plus(nav), new Decimal(0))
+      : null;
+
+  const isOpenPosition = allHoldings.some((h) => !h.quantity.isZero());
+
+  const xirr = computeXirr(
+    buildXirrCashflows({
+      cashflows,
+      dividends,
+      isOpenPosition,
+      cutoffDate,
+      currentNav,
+    }),
+  );
+
+  if (!xirr.ok) return null;
+
+  return formatXirrBarePercent(xirr.annualizedRate.mul(100).toNumber());
 }

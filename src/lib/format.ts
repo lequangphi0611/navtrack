@@ -113,6 +113,15 @@ export function formatPercent(value: number): string {
   return `${PERCENT_FORMATTER.format(value)}%`;
 }
 
+// Phần trăm THUẦN 1 chữ số thập phân, KHÔNG kèm dấu "%" và KHÔNG ép dấu +
+// tường minh (số âm vẫn hiện dấu trừ mặc định của Intl) — dùng cho
+// DividendRecordedResult.xirrBeforePercent/xirrAfterPercent (mockup Phase 4,
+// 4d: "17,4% → 17,9%"), nơi component tự nối literal "%" ở giữa hai giá trị
+// nên không dùng được formatSignedPercent (đã tự kèm "%" + dấu +/−).
+export function formatXirrBarePercent(value: number): string {
+  return PERCENT_FORMATTER.format(value);
+}
+
 // Màu theo dấu giá trị (dùng cho XIRR, lãi/lỗ, chênh lệch NAV...) — 0 trung
 // tính, dương = "text-gain", âm = "text-destructive". Nguồn sự thật DUY NHẤT,
 // dùng chung ở ReturnMetrics và DashboardScreen (navDelta).

@@ -1,6 +1,9 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 import { Prisma, PrismaClient } from "@prisma/client";
 
+import { daysAgo, isoDate } from "./support/dates";
 import {
   cleanupTestUser,
   createTestSession,
@@ -308,5 +311,85 @@ test("Cổ tức cổ phiếu: SL hiện đúng ngay sau khi ghi, không bị gi
   } finally {
     await context.close();
     await cleanupTestUser(session.userId);
+  }
+});
+
+// Fix (business-implementer, verify 2026-07-16): DividendRecordedResult.
+// xirrBeforePercent/xirrAfterPercent/totalDividendReceived trước đây LUÔN
+// undefined (getCurrentPortfolioXirrPercent() chưa tồn tại) nên khối "Ảnh
+// hưởng lên hiệu suất" (mockup Phase 4 Screens, 4d) không bao giờ render. Cần
+// PriceQuote + Cashflow đủ xa "hôm nay" để dòng tiền giả định NAV (ghép tại
+// cutoffDate) hội tụ được XIRR (cùng lý do dashboard.spec.ts) — một Holding
+// chỉ có 1 BUY không giá tự động sẽ luôn NO_POSITIVE_FLOW/NO_CONVERGE ở CẢ
+// before lẫn after, khối này sẽ luôn ẩn và không verify được gì.
+test("Ghi cổ tức tiền mặt: hiện khối XIRR danh mục trước/sau + tổng cổ tức đã nhận", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dividend-xirr-impact");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const quoteDate = daysAgo(7);
+
+  try {
+    // Seed PriceQuote TRƯỚC Holding — thứ tự quan trọng, cùng lý do
+    // dashboard.spec.ts (tránh unstable_cache ghim "thiếu giá").
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol, date: quoteDate } },
+      create: { symbol, date: quoteDate, price: "100000", source: "vnstock" },
+      update: { price: "100000", source: "vnstock" },
+    });
+
+    // Mua 10 <symbol> @ 90.000 cách đây ~2 năm — đủ xa "hôm nay" để dòng tiền
+    // giả định NAV (ghép tại cutoffDate = hôm nay) hội tụ được, tránh ca biên
+    // "kỳ rất ngắn" (docs/domain/05, cùng lý do dashboard.spec.ts).
+    const buyDate = isoDate(daysAgo(730));
+    await page.goto("/holdings/new");
+    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
+    await page.locator('input[name="quantity"]').fill("10");
+    await page.locator('input[name="pricePerUnit"]').fill("90000");
+    await page.locator('input[name="date"]').fill(buyDate);
+    await page.getByRole("button", { name: "Xong", exact: true }).click();
+    await page.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
+    const holdingUrl = stripQuery(page.url());
+
+    // 10% × 10.000đ mệnh giá × 10 CP = gộp 10.000, thuế 5% = 500, net = 9.500
+    // (docs/domain/03-dividends.md) — lần đầu ghi cổ tức của holding này nên
+    // totalDividendReceived (tổng lịch sử) phải bằng đúng net vừa tính.
+    await page.goto(`${holdingUrl}/dividends/new`);
+    await page.locator('input[name="percent"]').fill("10");
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+
+    await expect(
+      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
+    ).toBeVisible();
+
+    // Khối "Ảnh hưởng lên hiệu suất" (mockup 4d) — trước fix luôn ẩn.
+    await expect(page.getByText("Ảnh hưởng lên hiệu suất")).toBeVisible();
+    await expect(page.getByText("XIRR danh mục")).toBeVisible();
+
+    // "xx,x% → yy,y%" nằm nguyên trong 1 span (DividendForm.tsx) — không
+    // assert giá trị tuyệt đối (phụ thuộc ngày chạy test), chỉ verify đúng
+    // định dạng (formatXirrBarePercent, lib/format.ts) và before != after
+    // (dividend vừa ghi phải làm XIRR đổi, không phải hiện lặp lại 1 số).
+    const xirrValue = page.getByText(/^\d+,\d% → \d+,\d%$/);
+    await expect(xirrValue).toBeVisible();
+    const xirrText = await xirrValue.innerText();
+    const match = xirrText.match(/^(\d+,\d)% → (\d+,\d)%$/);
+    expect(match).not.toBeNull();
+    expect(match?.[1]).not.toBe(match?.[2]);
+
+    // Tổng cổ tức đã nhận — lần đầu nên bằng đúng net (9.500 -> compact
+    // "9,5k", formatMoney compact, lib/format.ts).
+    await expect(page.getByText(`Tổng cổ tức ${symbol} đã nhận`)).toBeVisible();
+    await expect(page.getByText("9,5k", { exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
 });

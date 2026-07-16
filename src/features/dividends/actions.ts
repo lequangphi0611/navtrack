@@ -9,6 +9,7 @@ import {
   computeStockDividend,
   isStockQuantityOverrideValid,
 } from "@/features/dividends/dividend-math";
+import { getTotalCashDividendReceived } from "@/features/dividends/queries";
 import { recordDividendSchema } from "@/features/dividends/schemas";
 import type { DividendFormState } from "@/features/dividends/types";
 import { toFieldErrors } from "@/lib/action-result";
@@ -16,6 +17,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { logger } from "@/lib/logger";
+import { getCurrentPortfolioXirrPercent } from "@/lib/portfolio-valuation";
 import { buildQuantityTimeline } from "@/lib/position-trail";
 import type { PositionTrailEvent } from "@/lib/position-trail";
 import { ROUTES } from "@/lib/routes";
@@ -76,6 +78,13 @@ export async function recordDividend(
       resolveDecimalSetting(SETTING_KEYS.DIVIDEND_TAX_RATE, date),
     ]);
   }
+
+  // XIRR danh mục TRƯỚC khi ghi — đọc NGOÀI transaction (cùng lý do parValue/
+  // taxRatePercent ở trên: chỉ cần chính xác tại thời điểm ngay trước/sau ghi,
+  // không cần atomic tuyệt đối với race hiếm gặp). getCurrentPortfolioXirrPercent
+  // đọc Holding trực tiếp từ DB (không cache() theo request) nên gọi lại lần
+  // nữa SAU transaction (dưới) vẫn phản ánh đúng thay đổi vừa ghi.
+  const xirrBeforePercent = await getCurrentPortfolioXirrPercent(userId);
 
   try {
     const result = await db.$transaction(
@@ -250,6 +259,21 @@ export async function recordDividend(
 
     const dateLabel = formatDate(date);
 
+    // XIRR danh mục SAU khi ghi + tổng cổ tức tiền mặt đã nhận của riêng
+    // holding này — cả hai đọc TƯƠI từ DB (không qua cache() theo request) nên
+    // phản ánh đúng Dividend/Holding.quantity vừa commit ở transaction trên.
+    const [xirrAfterPercent, totalDividendReceived] = await Promise.all([
+      getCurrentPortfolioXirrPercent(userId),
+      getTotalCashDividendReceived(holdingId),
+    ]);
+    // Chỉ set CẢ HAI khi CẢ before lẫn after đều tính được — vắng 1 trong 2 =
+    // ẩn hẳn dòng "XIRR danh mục" (DividendRecordedResult.xirrBeforePercent/
+    // xirrAfterPercent, xem comment types.ts), không hiển thị số sai/NaN.
+    const xirrFields =
+      xirrBeforePercent !== null && xirrAfterPercent !== null
+        ? { xirrBeforePercent, xirrAfterPercent }
+        : {};
+
     if (result.type === "CASH") {
       return {
         ok: true,
@@ -261,6 +285,8 @@ export async function recordDividend(
           grossAmount: result.grossAmount.toString(),
           taxAmount: result.taxAmount.toString(),
           netAmount: result.netAmount.toString(),
+          ...xirrFields,
+          totalDividendReceived: totalDividendReceived.toString(),
           historyHref: ROUTES.dividendHistory(holdingId),
           holdingHref: ROUTES.holdingDetail(holdingId),
         },
@@ -284,6 +310,8 @@ export async function recordDividend(
               rawAddedQuantity: result.rawStockQuantity.toString(),
             }
           : {}),
+        ...xirrFields,
+        totalDividendReceived: totalDividendReceived.toString(),
         historyHref: ROUTES.dividendHistory(holdingId),
         holdingHref: ROUTES.holdingDetail(holdingId),
       },
