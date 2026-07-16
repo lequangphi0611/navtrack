@@ -179,7 +179,7 @@ test("số liệu Snapshot đã đóng băng không đổi khi PriceQuote cập 
 
     await page.goto("/");
     await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator(".."),
+      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
     ).toContainText("9.999.999.990");
   } finally {
     await context.close();
