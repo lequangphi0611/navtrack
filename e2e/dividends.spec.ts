@@ -171,17 +171,15 @@ test("Ghi cổ tức cổ phiếu: số lẻ tự làm tròn xuống, báo rõ +
     ).toBeVisible();
 
     // Xác nhận cache Holding.quantity đã cộng đúng số ĐÃ LÀM TRÒN (12, không
-    // phải 12,6) qua lịch sử cổ tức (getDividendHistory dùng
-    // buildQuantityTimeline, có replay cả Dividend{STOCK}) — KHÔNG qua trang
-    // chi tiết vị thế: getHoldingDetail() (features/holdings/queries.ts) tính
-    // quantity bằng derivePosition(cashflows), chỉ replay Cashflow (mua/bán),
-    // BỎ QUA Dividend{STOCK} -> trang chi tiết hiện sai SL sau khi nhận cổ tức
-    // cổ phiếu (đã xác nhận bằng thực nghiệm: page.goto lại /holdings/{id}
-    // vẫn hiện "105 cổ phần" dù cache/lịch sử/dashboard đều đúng 117). Bug có
-    // thật, báo riêng cho người dùng — KHÔNG che giấu bằng cách assert theo
-    // hành vi sai ở đây.
-    await page.getByRole("link", { name: "Xem lịch sử cổ tức" }).click();
-    await page.waitForURL(`${holdingUrl}/dividends`);
+    // phải 12,6) qua CẢ 2 kênh: trang chi tiết vị thế (hard nav, loại trừ
+    // cache client-side) và lịch sử cổ tức — trước fix #59, getHoldingDetail()
+    // dùng derivePosition(cashflows) (chỉ biết Cashflow) nên hiện SAI SL sau
+    // khi nhận cổ tức cổ phiếu; giờ dùng derivePositionIncludingStockDividends()
+    // nên phải khớp đúng cache.
+    await page.goto(holdingUrl);
+    await expect(page.getByText("117 cổ phần", { exact: true })).toBeVisible();
+
+    await page.goto(`${holdingUrl}/dividends`);
     await expect(page.getByText("Cổ phiếu 11%")).toBeVisible();
     await expect(page.getByText(/105 cổ phần → 117 cổ phần/)).toBeVisible();
   } finally {
