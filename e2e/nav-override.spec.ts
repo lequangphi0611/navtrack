@@ -83,7 +83,7 @@ test("nhập giá tay (NavOverride) cho vị thế Vàng cập nhật NAV toàn 
 
     // NAV giờ gồm cả vị thế này = 10 * 8.000.000 = 80.000.000.
     await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator(".."),
+      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
     ).toContainText("80.000.000");
 
     // Không còn nằm trong danh sách thiếu giá.
@@ -152,7 +152,7 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
     // Baseline: chỉ có AUTO -> NAV = 10 * 100.000 = 1.000.000.
     await page.goto("/");
     await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator(".."),
+      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
     ).toContainText("1.000.000");
     await expect(page.getByText(/dùng giá nhập tay/)).toHaveCount(0);
 
@@ -166,7 +166,7 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
 
     await page.goto("/");
     await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator(".."),
+      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
     ).toContainText("2.000.000");
     await expect(page.getByText(/dùng giá nhập tay/)).toBeVisible();
 
@@ -197,7 +197,7 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
     // NAV quay lại dùng AUTO mới nhất = 10 * 300.000 = 3.000.000 — PriceQuote
     // mới hơn đã "un-shadow" NavOverride cũ, không còn kẹt vĩnh viễn ở MANUAL.
     await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator(".."),
+      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
     ).toContainText("3.000.000");
     await expect(page.getByText(/dùng giá nhập tay/)).toHaveCount(0);
   } finally {

@@ -71,9 +71,11 @@ test("Dashboard hiển thị đúng NAV/XIRR/lãi-lỗ khi vị thế có giá t
 
     await page.goto("/");
 
-    // NAV = 100 * 150.000 = 15.000.000.
+    // NAV = 100 * 150.000 = 15.000.000. Lên 2 cấp (không phải 1) vì commit
+    // 13146d6 bọc label vào 1 row riêng chung với pill "Lịch sử" — số NAV giờ
+    // là sibling của row đó, không còn là con trực tiếp.
     await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator(".."),
+      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
     ).toContainText("15.000.000");
 
     // XIRR tính được — không rơi vào "Chưa tính được" (docs/domain/05: có ít
