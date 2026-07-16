@@ -3,7 +3,6 @@ import {
   ArrowUp,
   CalendarClock,
   ChevronRight,
-  Coins,
   History,
   Sigma,
   SlidersHorizontal,
@@ -18,6 +17,7 @@ import {
   AllocationBar,
   type AllocationSlice,
 } from "@/features/dashboard/components/AllocationBar";
+import { DashboardQuickMenu } from "@/features/dashboard/components/DashboardQuickMenu";
 import {
   MissingPriceList,
   type MissingPriceHolding,
@@ -136,18 +136,6 @@ function DashboardScreen({
               Lịch sử
               <ChevronRight className="size-3.25" />
             </Link>
-            {/* Entry point "Cổ tức" (Phase 4, issue #51) — mirror cùng pattern
-                pill "Lịch sử" (Phase 3): mở thẳng /dividends/new (mockup
-                "Phase 4 Screens" 4f mở FAB quick-menu; đơn giản hoá thành 1
-                pill thay vì FAB đầy đủ — xem process/UI_phase_4.md mục
-                "Điểm lệch so với plan"). */}
-            <Link
-              href={ROUTES.newDividendStandalone}
-              className="flex items-center gap-1 rounded-full bg-accent/14 px-2.5 py-1 text-[11px] font-semibold text-accent"
-            >
-              <Coins className="size-3.25" />
-              Cổ tức
-            </Link>
           </div>
         </div>
         <div className="font-mono text-[28px] leading-none font-semibold tracking-tight text-foreground tabular-nums">
@@ -181,7 +169,9 @@ function DashboardScreen({
         )}
       </div>
 
-      {snapshotToday ? <SnapshotTodayCard {...snapshotToday} /> : null}
+      {snapshotToday ? (
+        <SnapshotTodayCard id="snapshot-today-card" {...snapshotToday} />
+      ) : null}
 
       <ReturnMetrics
         xirr={xirr}
@@ -232,6 +222,11 @@ function DashboardScreen({
           </div>
         </div>
       ) : null}
+
+      {/* FAB menu nhanh (mockup "Phase 4 Screens" 4f, issue #51) — thay thế
+          pill "Cổ tức" đơn giản hoá trước đó, dựng đủ 4 hành động theo mockup
+          thật (xem process/UI_phase_4.md mục "Điểm lệch so với plan" #5). */}
+      <DashboardQuickMenu showSnapshotAction={Boolean(snapshotToday)} />
 
       <BottomNav active="dashboard" />
     </div>

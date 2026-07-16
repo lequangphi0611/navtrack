@@ -73,6 +73,8 @@ Quy tắc giao diện cho Navtrack: theme màu, typography, icon, và kho atoms/
 | `check` | `Check` |
 | `check_circle` | `CheckCircle2` |
 | `function` | `Sigma` |
+| `swap_vert` | `ArrowLeftRight` (Phase 4 — FAB "Mua/Bán") |
+| `add_chart` | `ChartNoAxesCombined` (Phase 4 — FAB "Thêm vị thế") |
 
 ## Primitives
 

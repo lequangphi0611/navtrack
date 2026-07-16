@@ -22,6 +22,9 @@ type SnapshotTodayCardProps = {
     formData: FormData,
   ) => Promise<SnapshotTodayState>;
   className?: string;
+  // DOM id — cho phép target `scrollIntoView` từ nơi khác (Phase 4,
+  // `DashboardQuickMenu` cuộn tới card này khi bấm "Chốt số liệu hôm nay").
+  id?: string;
 };
 
 // Card CTA "Chốt số liệu hôm nay" (mockup 3b, rút gọn) — Dashboard, không phải
@@ -33,6 +36,7 @@ function SnapshotTodayCard({
   snapshotTakenAt,
   action,
   className,
+  id,
 }: SnapshotTodayCardProps) {
   const [state, formAction, isPending] = useActionState(action, null);
 
@@ -41,6 +45,7 @@ function SnapshotTodayCard({
 
   return (
     <div
+      id={id}
       className={cn("rounded-2xl border border-border bg-card p-4", className)}
     >
       <div className="flex items-start justify-between gap-3">

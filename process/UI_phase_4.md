@@ -31,7 +31,7 @@ entry point thay đổi theo mockup thật.
 | `HoldingSwitcher` | Nhúng trong `DividendForm` | Sample options cứng trong `page.tsx`, luôn hiện |
 | `DividendHistoryScreen` / `DividendHistoryList` | `/holdings/[id]/dividends` (mới) | `page.tsx` hardcode sample rows theo `id` — chờ `getDividendHistory(holdingId)` thật |
 | Nút "Ghi cổ tức" + "Lịch sử cổ tức" | Mở rộng `HoldingDetailScreen` (`/holdings/[id]`, route đã wiring thật) | `Link` tĩnh, luôn hiện — không phụ thuộc dữ liệu Container |
-| Entry point pill "Cổ tức" | `DashboardScreen` (`/`, route đã wiring thật) | `Link` tĩnh tới `/dividends/new`, luôn hiện |
+| `DashboardQuickMenu` (FAB, mockup 4f) | `DashboardScreen` (`/`, route đã wiring thật) | `Link` tĩnh tới `ROUTES.holdings`/`newHolding`/`newDividendStandalone`; hành động "Chốt số liệu hôm nay" phụ thuộc `snapshotToday` (ẩn khi Container chưa cấp) |
 
 ---
 
@@ -65,23 +65,69 @@ xem mockup, các điểm sau lệch có chủ đích, không phải bỏ sót:
    **empty state** (lời mời hành động khi rỗng, theo
    `component-architecture.md`), không có CTA thường trực khi đã có dữ liệu.
 
-4. **Dashboard: 1 pill "Cổ tức" mở THẲNG form ghi cổ tức, không qua màn lịch
-   sử.** Hệ quả của điểm 1+3: vì không có lịch sử toàn danh mục và CTA không
-   nằm trong màn lịch sử, entry point trên Dashboard phải trỏ thẳng
-   `/dividends/new` (khớp entry map mockup: "Dashboard → menu nhanh
-   '+ Cổ tức' mở thẳng 4a"), không phải trỏ tới lịch sử trước như quyết định
-   (b) cũ.
+4. **Dashboard: hành động "Cổ tức" trong FAB menu nhanh mở THẲNG form ghi cổ
+   tức, không qua màn lịch sử.** Hệ quả của điểm 1+3: vì không có lịch sử
+   toàn danh mục và CTA không nằm trong màn lịch sử, entry point trên
+   Dashboard phải trỏ thẳng `/dividends/new` (khớp entry map mockup:
+   "Dashboard → menu nhanh '+ Cổ tức' mở thẳng 4a"), không phải trỏ tới lịch
+   sử trước như quyết định (b) cũ. (Cơ chế trigger là FAB đầy đủ theo mockup
+   4f — xem điểm 5.)
 
-5. **KHÔNG dựng FAB quick-action đầy đủ (mockup 4f).** Mockup 4f vẽ một FAB
-   nổi có 4 hành động (Mua/Bán, Thêm vị thế, Cổ tức, Chốt số liệu hôm nay).
-   3/4 hành động đã có entry point riêng ở nơi khác trong app (Thêm giao dịch
-   ở `HoldingDetailScreen`, Thêm vị thế ở `/holdings`, Chốt số liệu hôm nay đã
-   có `SnapshotTodayCard` ngay trên Dashboard) — dựng thêm một FAB trùng lặp
-   toàn bộ các entry point này vượt phạm vi issue #51 (chỉ về cổ tức). Thay
-   vào đó: thêm 1 pill "Cổ tức" cạnh pill "Lịch sử" đã có trong card NAV
-   (cùng vị trí, cùng ngôn ngữ thị giác — mirror đúng cách Phase 3 làm), đích
-   đến giống hệt mockup (mở thẳng form ghi cổ tức). Đây là đơn giản hoá CƠ
-   CHẾ TRIGGER (pill và FAB), không đổi ĐÍCH ĐẾN hay hành vi.
+5. **FAB menu nhanh Dashboard dựng ĐẦY ĐỦ theo đúng mockup 4f — đảo ngược
+   quyết định đơn giản hoá trước đó.** Bản đầu (trước review PR #53) đơn
+   giản hoá thành 1 pill "Cổ tức" cạnh pill "Lịch sử" (lý do: 3/4 hành động
+   đã có entry point riêng nơi khác, dựng FAB trùng lặp vượt phạm vi issue
+   #51). Sau khi chủ dự án review PR và yêu cầu bám đúng mockup ("mockup ưu
+   tiên hơn scope issue"), quyết định bị đảo ngược: dựng đủ FAB 4 hành động
+   như mockup 4f, không giữ pill song song. Component mới
+   `DashboardQuickMenu` (`src/features/dashboard/components/DashboardQuickMenu/`):
+   đóng = nút tròn 58px nền `accent`, icon `Plus`; mở = cột 4 hành động (chip
+   label bên trái + icon tròn 46px bên phải, animate `slide-in-from-bottom-1`)
+   chồng lên scrim (`bg-black/55 backdrop-blur-[1px]`, bấm ra ngoài đóng lại),
+   nút tròn đổi icon thành `X`. State đóng/mở là `useState` tại chỗ (UI thuần
+   tuý, không phải điều hướng dữ liệu khác nhau — khác rule bắt buộc `Link`
+   của `HoldingSwitcher`/tab điều hướng).
+
+   Mockup không tự nói rõ đích đến của 2/4 hành động — đây LÀ quyết định
+   thiết kế thật cần ghi lại (không còn là "điểm lệch" vì FAB đã bám đúng
+   mockup):
+   - **"Mua / Bán"** → `ROUTES.holdings` (danh sách vị thế). Không có route
+     "thêm giao dịch không cần chọn Holding trước" trong app (`newTransaction
+     (holdingId)` luôn cần `holdingId`, xem `lib/routes.ts`) — trỏ tới danh
+     sách để user tự chọn mã rồi bấm "Thêm giao dịch" từ `HoldingDetailScreen`
+     là lựa chọn ít giả định nhất, không cần dựng thêm 1 `HoldingSwitcher`
+     biến thể mới chỉ cho FAB này.
+   - **"Chốt số liệu hôm nay"** → không điều hướng route; đóng menu rồi cuộn
+     mượt (`scrollIntoView({behavior:"smooth", block:"center"})`) tới
+     `SnapshotTodayCard` đã render sẵn trên Dashboard. Thêm prop `id?: string`
+     (mới, backward-compatible) cho `SnapshotTodayCard` để làm target
+     (`id="snapshot-today-card"`, gán ở `DashboardScreen.tsx`). Khi Container
+     chưa cấp `snapshotToday` (card không tồn tại trong DOM), `DashboardScreen`
+     truyền `showSnapshotAction={false}` xuống — ẩn hẳn mục này khỏi FAB thay
+     vì hiện một nút bấm không làm gì (an toàn hơn, đơn giản hơn).
+   - "Thêm vị thế" → `ROUTES.newHolding`, "Cổ tức" → `ROUTES.newDividendStandalone`
+     — cả hai route đã có sẵn, rõ ràng, không cần suy đoán thêm.
+
+   Props contract:
+   ```ts
+   // DashboardQuickMenu.tsx
+   type DashboardQuickMenuProps = {
+     // false khi Container chưa cấp snapshotToday — ẩn hành động "Chốt số
+     // liệu hôm nay" khỏi menu (không có SnapshotTodayCard để cuộn tới).
+     showSnapshotAction: boolean;
+   };
+   ```
+
+   Lệch nhỏ so với mockup (có chủ đích): scrim (`z-40`) đặt CAO HƠN
+   `BottomNav` (`z-20`) để che luôn thanh điều hướng đáy khi menu mở, thay vì
+   theo đúng thứ tự z-index trong markup mockup (scrim `z-index:8` thấp hơn
+   bottom nav `z-index:10`, khiến bottom nav không bị dim — nhiều khả năng là
+   tác dụng phụ của thứ tự DOM trong công cụ thiết kế hơn là chủ đích UX).
+   Che luôn `BottomNav` khi menu mở an toàn hơn (tránh bấm nhầm tab khác khi
+   đang mở FAB).
+
+   Đã xoá hẳn pill "Cổ tức" đơn giản hoá cũ khỏi `DashboardScreen.tsx` — chỉ
+   còn FAB, không giữ song song 2 cơ chế trigger.
 
 6. **Bỏ nút "Xem lịch sử cổ tức" mockup 4b filter/badge "sắp chia" (upcoming
    dividend).** Dòng HPG trong sheet chọn mã (4b) có badge "sắp chia" — không
@@ -353,12 +399,15 @@ switcher (điểm lệch 2) nên không cần route/param riêng cho 2 lối và
   tức" (`Coins`, đúng plan) cạnh "Thêm giao dịch" đã có, bọc 3 nút trong 1
   nhóm `gap-1.5`. Luôn hiện tĩnh, không cần prop mới.
 - **`src/features/dashboard/components/DashboardScreen/DashboardScreen.tsx`**
-  — thêm pill "Cổ tức" (`Coins`, tô `accent`) cạnh pill "Lịch sử" đã có trong
-  header card NAV, trỏ `ROUTES.newDividendStandalone` (điểm lệch 4+5). Không
-  sửa `DashboardScreenSkeleton.tsx` — pill nằm TRONG khối card NAV đã có
-  (cùng chiều cao `h-32` trong skeleton), không phát sinh block mới nên hình
-  dạng skeleton không đổi (khác `SnapshotTodayCard` ở Phase 3, vốn thêm hẳn 1
-  block mới sau NAV card).
+  — xoá pill "Cổ tức" đơn giản hoá trước đó, thay bằng
+  `<DashboardQuickMenu showSnapshotAction={Boolean(snapshotToday)} />` (FAB
+  đầy đủ theo mockup 4f, điểm lệch 5 đã đảo ngược), gán `id="snapshot-today-card"`
+  cho `SnapshotTodayCard`. Không sửa `DashboardScreenSkeleton.tsx` — FAB là
+  `fixed`, không thuộc flow layout trong skeleton, cùng tiền lệ `BottomNav`
+  (cũng không xuất hiện trong skeleton).
+- **`src/features/dashboard/components/SnapshotTodayCard/SnapshotTodayCard.tsx`**
+  — thêm prop optional `id?: string` (backward-compatible), gán vào root
+  `div` — làm target `scrollIntoView` cho `DashboardQuickMenu`.
 - **`docs/rules/ui-ux-design.md`** — thêm 9 dòng icon mapping mới (`payments`
   → `Coins`, `library_add` → `Layers`, `calculate` → `Calculator`,
   `unfold_more` → `ChevronsUpDown`, `event` → `Calendar`, `search` → `Search`,
@@ -404,6 +453,9 @@ switcher (điểm lệch 2) nên không cần route/param riêng cho 2 lối và
 - `src/features/dividends/components/DividendForm/{DividendForm.tsx,index.ts}`
 - `src/features/dividends/components/DividendHistoryList/{DividendHistoryList.tsx,DividendRowsFilter.tsx,index.ts}`
 - `src/features/dividends/components/DividendHistoryScreen/{DividendHistoryScreen.tsx,index.ts}`
+- `src/features/dashboard/components/DashboardQuickMenu/{DashboardQuickMenu.tsx,index.ts}`
+  (mới, sau review PR #53 — thay pill "Cổ tức" đơn giản hoá bằng FAB đầy đủ
+  theo mockup 4f, xem điểm lệch 5)
 - `src/app/(dashboard)/holdings/[id]/dividends/new/page.tsx`
 - `src/app/(dashboard)/dividends/new/page.tsx`
 - `src/app/(dashboard)/holdings/[id]/dividends/page.tsx`
@@ -417,9 +469,13 @@ switcher (điểm lệch 2) nên không cần route/param riêng cho 2 lối và
 - `src/features/holdings/components/HoldingDetailScreen/HoldingDetailScreen.tsx`
   — thêm Link "Lịch sử cổ tức" (icon-only) + "Ghi cổ tức".
 - `src/features/dashboard/components/DashboardScreen/DashboardScreen.tsx` —
-  thêm pill "Cổ tức" cạnh pill "Lịch sử".
-- `docs/rules/ui-ux-design.md` — icon mapping mới + mô tả prop `subtitle` của
-  `PageHeader`.
+  xoá pill "Cổ tức" đơn giản hoá, thay bằng `DashboardQuickMenu` (FAB đầy đủ,
+  sau review PR #53 — xem điểm lệch 5).
+- `src/features/dashboard/components/SnapshotTodayCard/SnapshotTodayCard.tsx`
+  — thêm prop optional `id` (target cuộn từ `DashboardQuickMenu`).
+- `docs/rules/ui-ux-design.md` — icon mapping mới (gồm `swap_vert`→
+  `ArrowLeftRight`, `add_chart`→`ChartNoAxesCombined` bổ sung sau review PR
+  #53) + mô tả prop `subtitle` của `PageHeader`.
 - `.claude/design-cache/index.json` — thêm entry `src/features/dividends`.
 
 **Không sửa (đúng chỉ thị):**
