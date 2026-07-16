@@ -13,7 +13,7 @@
   - BUY: `amount = -(quantity × pricePerUnit) - feeAmount` (tiền bỏ ra gồm cả phí).
   - SELL: `amount = (quantity × pricePerUnit) - feeAmount - taxAmount` (tiền nhận sau phí, thuế).
 - **Không sửa giao dịch đã xảy ra thành dạng "ẩn"** — mọi thay đổi là sửa/xóa bản ghi rõ ràng, giữ lịch sử trung thực.
-- **Bán không vượt quá số lượng đang giữ** tại thời điểm bán (validate ở biên server).
+- **Bán không vượt quá số lượng đang giữ** tại thời điểm bán (validate ở biên server) — số lượng đang giữ **gồm cả cổ tức cổ phiếu đã nhận trước đó** (issue #59, xem `01-assets-and-holdings.md` mục "Cách tính"), không chỉ tổng mua/bán.
 
 ## Gắn giao dịch vào Holding (find-or-create)
 - Khi ghi giao dịch cho một mã, hệ thống tìm `Holding` theo `(userId, symbol, type)`: **có thì gắn vào, chưa có thì tạo mới** (`@@unique([userId, symbol, type])`). Mua trùng mã đang giữ **không** tạo Holding thứ hai — xem `01-assets-and-holdings.md`.
@@ -25,7 +25,7 @@
   ```
 - **Khi BÁN một phần**, giá vốn bình quân **giữ nguyên**; chỉ giảm số lượng (phương pháp bình quân di động).
 - **Lãi/lỗ đã thực hiện** khi bán = `(giá bán − giá vốn bình quân) × SL bán − phí − thuế`.
-- Giá vốn bình quân **dẫn xuất từ chuỗi `Cashflow`** (replay `derivePosition`) — **nguồn sự thật là `Cashflow`**, không phải cột lưu. Để tránh replay toàn bộ lịch sử mỗi lần đọc màn Danh mục, giá trị này được **materialize** vào cột `Holding.avgCost` (kèm `Holding.quantity`) dưới dạng **cache dẫn xuất**, với bất biến: chỉ ghi lại bằng `derivePosition(toàn bộ cashflow của holding)` trong **cùng transaction** với mọi thay đổi cashflow (không cộng/trừ tay) → cache luôn khớp nguồn, không tự lệch. Xem `docs/rules/data-prisma.md` (mục "Materialized cache…") và `process/DECISION.md` (2026-07-11) cho lý do đảo hướng "không lưu cứng" ban đầu. Giá vốn **tách khỏi XIRR** — XIRR dùng chuỗi dòng tiền thật theo ngày, không dùng giá vốn.
+- Giá vốn bình quân **dẫn xuất từ chuỗi `Cashflow`** (replay `derivePosition`, `lib/cost-basis.ts`) — **nguồn sự thật là `Cashflow`**, không phải cột lưu; cổ tức cổ phiếu không đổi `avgCost` (xem `03-dividends.md`) nên `derivePosition()` (chỉ biết `Cashflow`) vẫn đúng/đủ cho riêng phần `avgCost`. Để tránh replay toàn bộ lịch sử mỗi lần đọc màn Danh mục, giá trị này được **materialize** vào cột `Holding.avgCost` (kèm `Holding.quantity`) dưới dạng **cache dẫn xuất**, với bất biến: chỉ ghi lại trong **cùng transaction** với mọi thay đổi cashflow (không cộng/trừ tay) → cache luôn khớp nguồn, không tự lệch. **`Holding.quantity`** (khác `avgCost`) ghi bằng `derivePositionIncludingStockDividends()` — replay CẢ `Cashflow` lẫn `Dividend{STOCK}` (issue #59, xem `01-assets-and-holdings.md` mục "Cách tính"), không phải `derivePosition()` một mình. Xem `docs/rules/data-prisma.md` (mục "Materialized cache…") và `process/DECISION.md` (2026-07-11) cho lý do đảo hướng "không lưu cứng" ban đầu. Giá vốn **tách khỏi XIRR** — XIRR dùng chuỗi dòng tiền thật theo ngày, không dùng giá vốn.
 
 ## Vị thế mở ban đầu
 - Khi khai báo vị thế đang giữ (không import lịch sử), tạo `Holding` + **một `Cashflow` BUY tại ngày mốc**: `quantity` = SL đang giữ, `pricePerUnit` = giá vốn bình quân đã biết, `amount` = số âm tương ứng.

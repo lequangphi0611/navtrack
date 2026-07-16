@@ -7,7 +7,7 @@ import {
   disconnectTestDb,
   signInAs,
 } from "./support/test-session";
-import { stripQuery } from "./support/urls";
+import { afterTransactionUrl, stripQuery } from "./support/urls";
 
 // `DIVIDEND_TAX_RATE`/`DIVIDEND_PAR_VALUE` (Setting, docs/domain/03-dividends.md)
 // KHÔNG được seed tự động cho DB e2e — scripts/e2e.mjs chỉ `prisma migrate
@@ -247,6 +247,66 @@ test("Ghi cổ tức cổ phiếu: cho phép chỉnh tay số lượng, chặn k
     await page.waitForURL(`${holdingUrl}/dividends`);
     await expect(page.getByText("Cổ phiếu 13%")).toBeVisible();
     await expect(page.getByText(/105 cổ phần → 119 cổ phần/)).toBeVisible();
+  } finally {
+    await context.close();
+    await cleanupTestUser(session.userId);
+  }
+});
+
+// Issue #59 (khoá lại bằng e2e sau khi sửa src/lib/cost-basis.ts +
+// src/features/holdings/actions.ts/queries.ts): trước fix, derivePosition()
+// chỉ biết Cashflow, nên (1) trang chi tiết vị thế hiện SAI SL ngay sau khi
+// nhận cổ tức cổ phiếu, và (2) mọi giao dịch mua/bán SAU ĐÓ ghi đè cache bằng
+// kết quả derivePosition() cashflow-only, XOÁ MẤT phần cổ tức cổ phiếu đã
+// cộng — có thể khiến một lệnh bán hợp lệ (SL bán nằm trong phần cổ tức) bị
+// chặn nhầm "bán vượt quá số lượng đang giữ".
+test("Cổ tức cổ phiếu: SL hiện đúng ngay sau khi ghi, không bị giao dịch sau đó ghi đè mất, bán vượt cashflow-only nhưng hợp lệ nhờ cổ tức vẫn được chấp nhận", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dividend-position-consistency");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  try {
+    // 100 CP × 10% = 10 CP thưởng (số tròn, không lẫn chủ đề làm tròn của 2 test trên).
+    const holdingUrl = await createStockHolding(page, "HPG", "100");
+
+    await page.goto(`${holdingUrl}/dividends/new`);
+    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
+    await page.locator('input[name="percent"]').fill("10");
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    await expect(page.getByText(/Đã ghi cổ tức HPG/)).toBeVisible();
+
+    // (1) Trang chi tiết vị thế phải hiện ĐÚNG 110 CP ngay sau khi ghi — hard
+    // navigation (page.goto, không phải click Link) để loại trừ mọi nghi ngờ
+    // về cache client-side, chỉ còn lại đúng phép tính server-side.
+    await page.goto(holdingUrl);
+    await expect(page.getByText("110 cổ phần", { exact: true })).toBeVisible();
+
+    // (2) Bán 105 CP — CHỈ hợp lệ nếu tính cả 10 CP cổ tức (100 mua-only
+    // không đủ). Trước fix: derivePosition() cashflow-only sẽ SAI báo "bán
+    // vượt quá số lượng đang giữ" cho lệnh bán hợp lệ này.
+    await page.goto(`${holdingUrl}/transactions/new`);
+    await page.getByRole("button", { name: "Bán" }).click();
+    await page.locator('input[name="quantity"]').fill("105");
+    await page.locator('input[name="pricePerUnit"]').fill("60000");
+    await page.getByRole("button", { name: "Ghi nhận giao dịch bán" }).click();
+    await page.waitForURL(afterTransactionUrl(holdingUrl));
+
+    // Bán thành công (không bị chặn nhầm) VÀ cache không bị ghi đè mất 10 CP
+    // cổ tức: 100 + 10 − 105 = 5 CP — KHÔNG PHẢI 0 (nếu cache bị ghi đè mất
+    // phần cổ tức trước khi trừ) hay bị chặn hoàn toàn (nếu wentNegative sai).
+    await expect(page.getByText("5 cổ phần", { exact: true })).toBeVisible();
+
+    // avgCost không đổi qua cả cổ tức (miễn phí, không có giá) lẫn SELL
+    // (phương pháp bình quân di động, chỉ BUY mới recompute) — vẫn đúng 50k
+    // (giá mua duy nhất, từ createStockHolding).
+    const avgCostAfterSell = await page
+      .locator("text=/Giá vốn bình quân/")
+      .locator("..")
+      .innerText();
+    expect(avgCostAfterSell).toContain("50k");
   } finally {
     await context.close();
     await cleanupTestUser(session.userId);

@@ -43,3 +43,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-16: Phase 4 — issue #52 verify: công thức/cache/wiring khớp + test sạch. **Phase 4 hoàn thành** ✅.
 - 2026-07-16: fix(dividends) issue #52: floor stockQuantity + override tolerance 2.
 - 2026-07-16: Thêm **Phase 7 — Trái tức** vào roadmap + chia 3 issue.
+- 2026-07-16: fix issue #59: `derivePositionIncludingStockDividends()` (lib/cost-basis.ts) thay `derivePosition()` ở 4 action mua/bán + `getHoldingDetail()` — cổ tức cổ phiếu không còn bị ghi đè mất khi có giao dịch sau đó, bán vượt cashflow-only nhưng hợp lệ nhờ cổ tức không còn bị chặn nhầm. `buildQuantityTimeline()` chuyển từ `features/dividends/` ra `lib/position-trail.ts` (dùng chung).

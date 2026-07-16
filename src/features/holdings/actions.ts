@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { Prisma } from "@prisma/client";
-import type { Cashflow } from "@prisma/client";
+import type { Cashflow, Dividend } from "@prisma/client";
 // Trigger tự động chốt Snapshot{period: MANUAL} sau mỗi giao dịch (docs/domain/06-snapshots.md
 // "Khi nào lưu snapshot") — snapshots feature không phụ thuộc ngược vào holdings/actions.ts
 // (chỉ holdings/queries.ts, xem features/snapshots/actions.ts) nên import chiều này không tạo vòng.
@@ -13,8 +13,12 @@ import { freezeManualSnapshot } from "@/features/snapshots/actions";
 import type { ActionResult } from "@/lib/action-result";
 import { toFieldErrors } from "@/lib/action-result";
 import { getSession } from "@/lib/auth";
-import { computeCashflowAmount, derivePosition } from "@/lib/cost-basis";
-import type { CashflowInput } from "@/lib/cost-basis";
+import { derivePositionIncludingStockDividends } from "@/lib/cost-basis";
+import { computeCashflowAmount } from "@/lib/cost-basis";
+import type {
+  CashflowInputWithEvent,
+  StockDividendInput,
+} from "@/lib/cost-basis";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { ROUTES } from "@/lib/routes";
@@ -29,15 +33,39 @@ import {
 import type { NavOverrideFormState } from "./types";
 
 function toCashflowInput(
-  cf: Pick<Cashflow, "type" | "date" | "quantity" | "pricePerUnit">,
-): CashflowInput {
+  cf: Pick<
+    Cashflow,
+    "id" | "type" | "date" | "createdAt" | "quantity" | "pricePerUnit"
+  >,
+): CashflowInputWithEvent {
   return {
+    id: cf.id,
     type: cf.type,
     date: cf.date,
+    createdAt: cf.createdAt,
     quantity: new Decimal(cf.quantity.toString()),
     pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
   };
 }
+
+function toStockDividendInput(
+  dividend: Pick<Dividend, "id" | "date" | "createdAt" | "stockQuantity">,
+): StockDividendInput {
+  return {
+    id: dividend.id,
+    date: dividend.date,
+    createdAt: dividend.createdAt,
+    // Chỉ gọi hàm này với dividend đã lọc type === "STOCK" -> stockQuantity luôn có giá trị.
+    quantity: new Decimal(dividend.stockQuantity!.toString()),
+  };
+}
+
+// createdAt xa nhất có thể cho giao dịch ĐANG XỬ LÝ (chưa tồn tại trong DB) —
+// cùng pattern PROBE_CREATED_AT (features/dividends/actions.ts): đảm bảo giao
+// dịch mới LUÔN được coi là sự kiện GẦN NHẤT trong ngày khi trùng ngày với
+// cashflow/dividend đã ghi trước đó, khớp trực giác "vừa nhập thì tính sau
+// cùng" — không phụ thuộc độ trễ giữa lúc query chạy và lúc validate.
+const CANDIDATE_CREATED_AT = new Date(8640000000000000);
 
 // Ghi lại materialized cache vị thế lên Holding từ kết quả derivePosition đã tính sẵn.
 // Gọi trong CÙNG transaction với mọi thay đổi cashflow — giữ cache luôn khớp nguồn sự thật
@@ -111,30 +139,48 @@ export async function createHolding(
             id: true,
             cashflows: {
               select: {
+                id: true,
                 type: true,
                 date: true,
+                createdAt: true,
                 quantity: true,
                 pricePerUnit: true,
               },
               // Khớp thứ tự tie-break của migration backfill (date, createdAt, id) —
-              // derivePosition() chỉ sort theo date, dựa vào thứ tự DB trả về để
-              // phá vỡ trùng ngày một cách nhất quán giữa các lần ghi cache.
+              // derivePositionIncludingStockDividends() sort theo (date, createdAt, id)
+              // qua buildQuantityTimeline(), orderBy này chỉ để nhất quán hiển thị debug,
+              // không còn là nguồn tie-break duy nhất như derivePosition() cũ.
               orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+            },
+            // Issue #59: SL đang giữ phải gồm cả cổ tức cổ phiếu, không chỉ Cashflow —
+            // nếu không, wentNegative có thể báo "bán vượt" SAI cho lệnh bán hợp lệ
+            // (SL bán nằm trong phần cổ tức cổ phiếu đã nhận), và cache ghi đè mất
+            // phần cổ tức cổ phiếu đã cộng trước đó.
+            dividends: {
+              where: { type: "STOCK" },
+              select: {
+                id: true,
+                date: true,
+                createdAt: true,
+                stockQuantity: true,
+              },
             },
           },
         });
 
-        const candidate: CashflowInput = {
+        const candidate: CashflowInputWithEvent = {
+          id: "__candidate__",
           type: cashflowType,
           date,
+          createdAt: CANDIDATE_CREATED_AT,
           quantity: new Decimal(quantity),
           pricePerUnit: new Decimal(pricePerUnit),
         };
 
-        const position = derivePosition([
-          ...(existing?.cashflows.map(toCashflowInput) ?? []),
-          candidate,
-        ]);
+        const position = derivePositionIncludingStockDividends(
+          [...(existing?.cashflows.map(toCashflowInput) ?? []), candidate],
+          existing?.dividends.map(toStockDividendInput) ?? [],
+        );
         if (position.wentNegative) {
           return {
             ok: false as const,
@@ -262,13 +308,25 @@ export async function addTransaction(
             userId: true,
             cashflows: {
               select: {
+                id: true,
                 type: true,
                 date: true,
+                createdAt: true,
                 quantity: true,
                 pricePerUnit: true,
               },
               // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
               orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+            },
+            // Issue #59: xem ghi chú tương tự ở createHolding.
+            dividends: {
+              where: { type: "STOCK" },
+              select: {
+                id: true,
+                date: true,
+                createdAt: true,
+                stockQuantity: true,
+              },
             },
           },
         });
@@ -276,17 +334,19 @@ export async function addTransaction(
           return { ok: false as const, error: "Không tìm thấy danh mục" };
         }
 
-        const candidate: CashflowInput = {
+        const candidate: CashflowInputWithEvent = {
+          id: "__candidate__",
           type: cashflowType,
           date,
+          createdAt: CANDIDATE_CREATED_AT,
           quantity: new Decimal(quantity),
           pricePerUnit: new Decimal(pricePerUnit),
         };
 
-        const position = derivePosition([
-          ...holding.cashflows.map(toCashflowInput),
-          candidate,
-        ]);
+        const position = derivePositionIncludingStockDividends(
+          [...holding.cashflows.map(toCashflowInput), candidate],
+          holding.dividends.map(toStockDividendInput),
+        );
         if (position.wentNegative) {
           return {
             ok: false as const,
@@ -391,6 +451,7 @@ export async function updateTransaction(
                     id: true,
                     type: true,
                     date: true,
+                    createdAt: true,
                     quantity: true,
                     pricePerUnit: true,
                   },
@@ -401,6 +462,16 @@ export async function updateTransaction(
                     { id: "asc" },
                   ],
                 },
+                // Issue #59: xem ghi chú tương tự ở createHolding.
+                dividends: {
+                  where: { type: "STOCK" },
+                  select: {
+                    id: true,
+                    date: true,
+                    createdAt: true,
+                    stockQuantity: true,
+                  },
+                },
               },
             },
           },
@@ -409,19 +480,24 @@ export async function updateTransaction(
           return { ok: false as const, error: "Không tìm thấy giao dịch" };
         }
 
-        const candidate: CashflowInput = {
+        const candidate: CashflowInputWithEvent = {
+          id: "__candidate__",
           type: cashflowType,
           date,
+          createdAt: CANDIDATE_CREATED_AT,
           quantity: new Decimal(quantity),
           pricePerUnit: new Decimal(pricePerUnit),
         };
 
-        const position = derivePosition([
-          ...cashflow.holding.cashflows
-            .filter((cf) => cf.id !== cashflowId)
-            .map(toCashflowInput),
-          candidate,
-        ]);
+        const position = derivePositionIncludingStockDividends(
+          [
+            ...cashflow.holding.cashflows
+              .filter((cf) => cf.id !== cashflowId)
+              .map(toCashflowInput),
+            candidate,
+          ],
+          cashflow.holding.dividends.map(toStockDividendInput),
+        );
         if (position.wentNegative) {
           return {
             ok: false as const,
@@ -519,6 +595,7 @@ export async function deleteTransaction(
                     id: true,
                     type: true,
                     date: true,
+                    createdAt: true,
                     quantity: true,
                     pricePerUnit: true,
                   },
@@ -528,6 +605,16 @@ export async function deleteTransaction(
                     { createdAt: "asc" },
                     { id: "asc" },
                   ],
+                },
+                // Issue #59: xem ghi chú tương tự ở createHolding.
+                dividends: {
+                  where: { type: "STOCK" },
+                  select: {
+                    id: true,
+                    date: true,
+                    createdAt: true,
+                    stockQuantity: true,
+                  },
                 },
               },
             },
@@ -541,7 +628,10 @@ export async function deleteTransaction(
           .filter((cf) => cf.id !== cashflowId)
           .map(toCashflowInput);
 
-        const position = derivePosition(remaining);
+        const position = derivePositionIncludingStockDividends(
+          remaining,
+          cashflow.holding.dividends.map(toStockDividendInput),
+        );
         if (position.wentNegative) {
           return {
             ok: false as const,

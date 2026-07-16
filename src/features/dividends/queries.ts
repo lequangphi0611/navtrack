@@ -6,8 +6,6 @@ import type {
   DividendHistoryRow,
   DividendHistorySummary,
 } from "@/features/dividends/components/DividendHistoryList";
-import { buildQuantityTimeline } from "@/features/dividends/position-trail";
-import type { PositionTrailEvent } from "@/features/dividends/position-trail";
 import type { DividendHolding } from "@/features/dividends/types";
 import { getOpenHoldings } from "@/features/holdings/queries";
 import { getSession } from "@/lib/auth";
@@ -15,6 +13,8 @@ import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
+import { buildQuantityTimeline } from "@/lib/position-trail";
+import type { PositionTrailEvent } from "@/lib/position-trail";
 import {
   AppError,
   parseSettingValue,

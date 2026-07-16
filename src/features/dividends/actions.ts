@@ -9,8 +9,6 @@ import {
   computeStockDividend,
   isStockQuantityOverrideValid,
 } from "@/features/dividends/dividend-math";
-import { buildQuantityTimeline } from "@/features/dividends/position-trail";
-import type { PositionTrailEvent } from "@/features/dividends/position-trail";
 import { recordDividendSchema } from "@/features/dividends/schemas";
 import type { DividendFormState } from "@/features/dividends/types";
 import { toFieldErrors } from "@/lib/action-result";
@@ -18,6 +16,8 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { logger } from "@/lib/logger";
+import { buildQuantityTimeline } from "@/lib/position-trail";
+import type { PositionTrailEvent } from "@/lib/position-trail";
 import { ROUTES } from "@/lib/routes";
 import { resolveDecimalSetting, SETTING_KEYS } from "@/lib/settings";
 

@@ -22,7 +22,7 @@
   - `grossAmount = parValue × percent/100 × SL đang giữ tại ngày chia`.
   - `taxAmount = grossAmount × taxRateCổTức`; `netAmount = grossAmount − taxAmount = grossAmount × (1 − taxRateCổTức)`.
 - Với `STOCK`: `stockQuantity = SL đang giữ tại ngày chia × percent/100`. `stockQuantity` làm tròn xuống (floor) — cổ phiếu không chia lẻ. Giá trị trước làm tròn giữ lại làm mốc so sánh khi user tự chỉnh.
-- **"SL đang giữ tại ngày chia"** không phải `Holding.quantity` cache hiện tại (luôn phản ánh HÔM NAY) — phải phát lại lịch sử `Cashflow` (BUY/SELL) **và** `Dividend{type: STOCK}` đã ghi trước đó tính đến đúng ngày chia (`features/dividends/position-trail.ts::buildQuantityTimeline`), vì ghi cổ tức có thể lùi ngày so với giao dịch gần nhất.
+- **"SL đang giữ tại ngày chia"** không phải `Holding.quantity` cache hiện tại (luôn phản ánh HÔM NAY) — phải phát lại lịch sử `Cashflow` (BUY/SELL) **và** `Dividend{type: STOCK}` đã ghi trước đó tính đến đúng ngày chia (`lib/position-trail.ts::buildQuantityTimeline`, chuyển từ `features/dividends/` ra dùng chung khi `features/holdings/` cũng cần — xem issue #59), vì ghi cổ tức có thể lùi ngày so với giao dịch gần nhất.
 - **`avgCost` giữ nguyên khi nhận cổ tức cổ phiếu** — chỉ `Holding.quantity` tăng thêm `stockQuantity` (cộng thẳng vào cache hiện có trong cùng transaction, không replay lại toàn bộ lịch sử); giá vốn/CP giảm tương ứng một cách tự nhiên vì cùng tổng vốn chia cho nhiều CP hơn (không cần công thức riêng).
 - Số lượng nắm giữ (xem `01-assets-and-holdings.md`) cộng thêm Σ(dividend STOCK.stockQuantity).
 
