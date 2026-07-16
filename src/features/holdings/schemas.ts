@@ -29,7 +29,10 @@ export function positiveDecimal(message: string) {
   }, message);
 }
 
-function nonNegativeDecimal(message: string) {
+// Exported để tái dùng ở features/dividends/schemas.ts
+// (recordDividendSchema.stockQuantityOverride) — tránh chép lại logic validate
+// Decimal không âm.
+export function nonNegativeDecimal(message: string) {
   return decimalString(message).refine((value) => {
     try {
       return new Decimal(value).gte(0);

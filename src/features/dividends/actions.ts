@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 import {
   computeCashDividend,
   computeStockDividend,
+  isStockQuantityOverrideValid,
 } from "@/features/dividends/dividend-math";
 import { buildQuantityTimeline } from "@/features/dividends/position-trail";
 import type { PositionTrailEvent } from "@/features/dividends/position-trail";
@@ -44,6 +45,10 @@ export async function recordDividend(
     type: formData.get("type"),
     date: formData.get("date"),
     percent: formData.get("percent"),
+    // formData.get() trả null khi field không có mặt trong form (CASH, hoặc
+    // STOCK không override) -> coerce về undefined để khớp .optional() của
+    // zod (optional chỉ chấp nhận undefined, không chấp nhận null).
+    stockQuantityOverride: formData.get("stockQuantityOverride") || undefined,
   });
   if (!parsed.success) {
     return {
@@ -170,17 +175,40 @@ export async function recordDividend(
           };
         }
 
-        const { stockQuantity } = computeStockDividend({
-          percent: percentDecimal,
-          quantity: quantityAtDate,
-        });
+        const { rawStockQuantity, stockQuantity, wasRounded } =
+          computeStockDividend({
+            percent: percentDecimal,
+            quantity: quantityAtDate,
+          });
+
+        // stockQuantityOverride chỉ có ý nghĩa khi type === "STOCK". Validate
+        // tolerance phải nằm TRONG transaction, SAU khi có rawStockQuantity —
+        // rawStockQuantity phụ thuộc quantityAtDate, chỉ tính được sau khi đọc
+        // Holding.cashflows/dividends từ `tx` (không tách ra ngoài như
+        // parValue/taxRatePercent của CASH, vốn không phụ thuộc Holding).
+        let finalStockQuantity = stockQuantity;
+        if (parsed.data.stockQuantityOverride !== undefined) {
+          const override = new Decimal(parsed.data.stockQuantityOverride);
+          if (!isStockQuantityOverrideValid(override, rawStockQuantity)) {
+            return {
+              ok: false as const,
+              error:
+                "Số lượng chỉnh tay lệch quá nhiều so với số tính từ tỷ lệ",
+              fieldErrors: {
+                stockQuantityOverride:
+                  "Số lượng chỉnh tay lệch quá nhiều so với số tính từ tỷ lệ",
+              },
+            };
+          }
+          finalStockQuantity = override;
+        }
 
         await tx.dividend.create({
           data: {
             holdingId,
             type: "STOCK",
             date,
-            stockQuantity: stockQuantity.toString(),
+            stockQuantity: finalStockQuantity.toString(),
           },
         });
 
@@ -188,7 +216,7 @@ export async function recordDividend(
         // derivePosition()/buildQuantityTimeline để tính lại từ đầu — avgCost
         // giữ nguyên, không sửa (docs/domain/01-assets-and-holdings.md).
         const currentQuantity = new Decimal(holding.quantity.toString());
-        const afterQuantity = currentQuantity.plus(stockQuantity);
+        const afterQuantity = currentQuantity.plus(finalStockQuantity);
         await tx.holding.update({
           where: { id: holdingId },
           data: { quantity: afterQuantity.toString() },
@@ -199,8 +227,14 @@ export async function recordDividend(
           type: "STOCK" as const,
           symbol: holding.symbol,
           unit: holding.unit,
-          addedQuantity: stockQuantity,
+          addedQuantity: finalStockQuantity,
           afterQuantity,
+          // true CHỈ khi hệ thống tự làm tròn xuống — không phải khi user tự
+          // sửa qua stockQuantityOverride (override => coi như user đã chốt
+          // đúng giá trị, không cần cảnh báo làm tròn).
+          wasRounded:
+            wasRounded && parsed.data.stockQuantityOverride === undefined,
+          rawStockQuantity,
         };
       },
       // Serializable — cùng lý do với addTransaction: đọc lịch sử cashflow/dividend
@@ -243,6 +277,13 @@ export async function recordDividend(
         addedQuantity: result.addedQuantity.toString(),
         afterQuantity: result.afterQuantity.toString(),
         unit: result.unit,
+        // rawAddedQuantity chỉ có mặt khi wasRounded=true (docs/dividends/types.ts).
+        ...(result.wasRounded
+          ? {
+              wasRounded: true as const,
+              rawAddedQuantity: result.rawStockQuantity.toString(),
+            }
+          : {}),
         historyHref: ROUTES.dividendHistory(holdingId),
         holdingHref: ROUTES.holdingDetail(holdingId),
       },

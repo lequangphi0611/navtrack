@@ -11,8 +11,10 @@ import {
   Info,
   Layers,
   Lock,
+  Pencil,
   Sigma,
   TrendingUp,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState } from "react";
@@ -26,6 +28,10 @@ import {
   HoldingSwitcher,
   type HoldingSwitcherProps,
 } from "@/features/dividends/components/HoldingSwitcher";
+import {
+  computeStockDividend,
+  isStockQuantityOverrideValid,
+} from "@/features/dividends/dividend-math";
 import type {
   DividendFormState,
   DividendHolding,
@@ -96,6 +102,8 @@ function DividendForm({
   const [type, setType] = useState<DividendKind>("CASH");
   const [percent, setPercent] = useState("");
   const [date, setDate] = useState(defaultDateInputValue);
+  const [stockOverride, setStockOverride] = useState("");
+  const [showOverrideInput, setShowOverrideInput] = useState(false);
   const [state, formAction, isPending] = useActionState(action, null);
   const isDone = state?.ok === true;
 
@@ -116,9 +124,27 @@ function DividendForm({
   const netAmount =
     grossAmount && taxAmount ? grossAmount.minus(taxAmount) : null;
 
-  // Preview STOCK.
-  const addedQuantity =
-    !isCash && percentDecimal ? quantity.mul(percentDecimal).div(100) : null;
+  // Preview STOCK — dùng chung dividend-math.ts với Server Action (tránh drift
+  // giữa 2 nơi tính công thức), stockQuantity đã floor (cổ phiếu không chia
+  // lẻ). rawStockQuantity là mốc so sánh tolerance cho override.
+  const stockDividend =
+    !isCash && percentDecimal
+      ? computeStockDividend({ percent: percentDecimal, quantity })
+      : null;
+  const overrideDecimal = parseDecimalOrNull(stockOverride);
+  // User đã bật ô chỉnh sửa VÀ gõ được một số hợp lệ -> ưu tiên hiển thị số đó
+  // (kể cả khi lệch quá tolerance — disable submit lo phần chặn, không chặn preview).
+  const overrideActive = showOverrideInput && overrideDecimal !== null;
+  const overrideInvalid =
+    overrideDecimal !== null &&
+    stockDividend !== null &&
+    !isStockQuantityOverrideValid(
+      overrideDecimal,
+      stockDividend.rawStockQuantity,
+    );
+  const addedQuantity = overrideActive
+    ? overrideDecimal
+    : (stockDividend?.stockQuantity ?? null);
   const afterQuantity = addedQuantity ? quantity.plus(addedQuantity) : null;
 
   const subtitle = isCash
@@ -210,6 +236,84 @@ function DividendForm({
                 </span>
               )}
             </div>
+
+            {!isCash ? (
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                {stockDividend?.wasRounded && !overrideActive ? (
+                  <div className="flex items-start gap-1.5 font-mono text-[11px] text-muted-faint">
+                    <Info className="mt-0.5 size-3.25 shrink-0" />
+                    <span>
+                      Đã làm tròn xuống từ{" "}
+                      {formatQuantity(
+                        stockDividend.rawStockQuantity.toString(),
+                        holding.unit,
+                      )}{" "}
+                      →{" "}
+                      {formatQuantity(
+                        stockDividend.stockQuantity.toString(),
+                        holding.unit,
+                      )}{" "}
+                      · cổ phiếu không chia lẻ
+                    </span>
+                  </div>
+                ) : null}
+
+                {showOverrideInput ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowOverrideInput(false);
+                      setStockOverride("");
+                    }}
+                    className="flex w-fit items-center gap-1 text-[11.5px] font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3" />
+                    Bỏ chỉnh sửa, dùng số hệ thống tính
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowOverrideInput(true)}
+                    className="flex w-fit items-center gap-1 text-[11.5px] font-semibold text-accent hover:underline"
+                  >
+                    <Pencil className="size-3" />
+                    Sửa số lượng nếu công ty làm tròn khác
+                  </button>
+                )}
+
+                {showOverrideInput ? (
+                  <div className="mt-0.5">
+                    <FieldLabel>
+                      Số lượng thực nhận (theo thông báo công ty)
+                    </FieldLabel>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      name="stockQuantityOverride"
+                      value={stockOverride}
+                      onChange={(event) => setStockOverride(event.target.value)}
+                      placeholder={
+                        stockDividend
+                          ? stockDividend.stockQuantity.toString()
+                          : "0"
+                      }
+                      className="h-11 rounded-xl font-mono font-semibold"
+                      disabled={isPending}
+                    />
+                    {overrideInvalid && stockDividend ? (
+                      <p className="mt-1.5 text-[11.5px] text-destructive">
+                        Chỉ được lệch tối đa 2 đơn vị so với số tính từ % (
+                        {formatQuantity(
+                          stockDividend.rawStockQuantity.toString(),
+                          holding.unit,
+                        )}
+                        )
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {isCash ? (
@@ -377,7 +481,12 @@ function DividendForm({
 
           <Button
             type="submit"
-            disabled={isPending || !percentDecimal || percentDecimal.lte(0)}
+            disabled={
+              isPending ||
+              !percentDecimal ||
+              percentDecimal.lte(0) ||
+              overrideInvalid
+            }
             className={cn(
               "h-13 w-full gap-2 rounded-2xl text-[14.5px] font-bold",
               isCash
@@ -450,6 +559,12 @@ function DividendSuccessContent({
           {result.addedQuantity && result.unit ? (
             <div className="mt-1.25 font-mono text-[11px] text-muted-faint">
               +{formatQuantity(result.addedQuantity, result.unit)} thưởng
+            </div>
+          ) : null}
+          {result.wasRounded && result.rawAddedQuantity && result.unit ? (
+            <div className="mt-0.75 font-mono text-[11px] text-muted-faint">
+              Đã làm tròn xuống từ{" "}
+              {formatQuantity(result.rawAddedQuantity, result.unit)}
             </div>
           ) : null}
         </div>
