@@ -21,7 +21,7 @@
 - **Vị thế đóng (SL = 0):** khi bán hết, `Holding` **vẫn giữ lại** (không xóa) — lãi/lỗ đã hiện thực hóa, NAV = 0. Vị thế đóng **ẩn khỏi dashboard chính**, hiện ở tab **"Đã đóng"**; nhưng **vẫn tính vào tổng hiệu quả danh mục** (XIRR + tổng lãi/lỗ) vì là lợi nhuận thật đã thu. Trạng thái "đóng/mở" **suy ra từ SL** (`quantity == 0` ⇒ đóng) — đọc trực tiếp từ cache `quantity`, không phải cột trạng thái lưu riêng.
 
 ## Cách tính
-- **Số lượng hiện tại** = Σ(BUY.quantity) − Σ(SELL.quantity) + Σ(dividend STOCK.stockQuantity). Cache `Holding.quantity` hiện phản ánh phần **BUY/SELL** (`derivePosition`); cổ tức cổ phiếu chưa hiện thực (Phase 4). **Khi thêm cổ tức STOCK ở Phase 4, đường ghi đó phải cập nhật lại cache `quantity` trong cùng transaction** (cùng bất biến với 4 action mua/bán) — nếu không cache sẽ lệch công thức này.
+- **Số lượng hiện tại** = Σ(BUY.quantity) − Σ(SELL.quantity) + Σ(dividend STOCK.stockQuantity). Cache `Holding.quantity` phản ánh **cả BUY/SELL lẫn cổ tức cổ phiếu** — 4 action mua/bán (`features/holdings/actions.ts`) ghi cache bằng `derivePosition()` (chỉ BUY/SELL); đường ghi cổ tức cổ phiếu (`features/dividends/actions.ts::recordDividend`, Phase 4/#52) **cộng thẳng `stockQuantity` vào cache hiện có** trong cùng transaction, không gọi lại `derivePosition()` (khác BUY/SELL, không cần recompute lại toàn bộ vì cổ tức chỉ CỘNG THÊM, không có nhánh "bán vượt" cần validate lại từ đầu). `avgCost` giữ nguyên khi nhận cổ tức cổ phiếu (không đổi giá vốn bình quân) — xem `03-dividends.md`.
 - Danh sách 4 nhóm dùng cho biểu đồ phân bổ chính là `AssetType`.
 
 ## Ca biên

@@ -9,7 +9,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 1 | Nền tảng + đăng nhập + nhập vị thế | ✅ | [phase-1.md](./phase-1.md) |
 | 2 | Lõi XIRR + giá tự động | ✅ | [phase-2.md](./phase-2.md) |
 | 3 | Snapshot tự động | ✅ | [phase-3.md](./phase-3.md) |
-| 4 | Cổ tức | 🟨 | [phase-4.md](./phase-4.md) |
+| 4 | Cổ tức | ✅ | [phase-4.md](./phase-4.md) |
 | 5 | Thuế bán (áp dụng) | ⬜ | [phase-5.md](./phase-5.md) |
 | 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
 
@@ -40,3 +40,5 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-15: Phase 3 — issue #46 e2e verify: viết `e2e/snapshot-history.spec.ts` (4 test lịch sử + quyền user + giá so sánh); toàn bộ verify sạch.
 - 2026-07-15: **Phase 3 hoàn thành** — toàn bộ tiêu chí ở [phase-3.md](./phase-3.md) đạt.
 - 2026-07-16: Phase 4 — issue #51 verify: layer Presentational cổ tức (`DividendForm`/`HoldingSwitcher`/`DividendHistoryScreen` + entry point) đúng 4 ràng buộc nghiệp vụ, lệch mockup có chủ đích đã ghi ở [UI_phase_4.md](./UI_phase_4.md); phát hiện 1 e2e regression tiền lệ (không do #51) — báo riêng, không tự sửa.
+- 2026-07-16: Phase 4 — issue #52: Setting mới `DIVIDEND_TAX_RATE`/`DIVIDEND_PAR_VALUE`; Server Action `recordDividend` + query `getOpenHoldingsForDividendSwitcher`/`getDividendHistory` thật; wiring cả 3 `page.tsx` cổ tức (xoá sample data + `recordDividendSample`). Xem [DECISION.md](./DECISION.md).
+- 2026-07-16: Phase 4 — issue #52 verify: đối chiếu công thức/cache/wiring khớp domain + Props contract; `pnpm lint`/`typecheck`/`test` (168 test, 2 file mới) sạch; `pnpm e2e` 17 passed + 1 flaky pre-existing (không do #52). **Phase 4 hoàn thành** — toàn bộ tiêu chí ở [phase-4.md](./phase-4.md) đạt.

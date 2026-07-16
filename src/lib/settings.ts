@@ -7,6 +7,12 @@ import { db } from "@/lib/db";
 // rải rác ở seed/queries/actions (xem docs/rules/schema.md#key-value-config).
 export const SETTING_KEYS = {
   MAX_MEMBERS: "MAX_MEMBERS",
+  // docs/domain/03-dividends.md — thuế TNCN cổ tức tiền mặt (%), effective-dated
+  // theo ngày chia cổ tức.
+  DIVIDEND_TAX_RATE: "DIVIDEND_TAX_RATE",
+  // docs/domain/03-dividends.md — mệnh giá dùng để tính cổ tức tiền mặt theo %
+  // (đ/CP), effective-dated theo ngày chia cổ tức.
+  DIVIDEND_PAR_VALUE: "DIVIDEND_PAR_VALUE",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -89,4 +95,24 @@ export async function resolveSetting(key: SettingKey, atDate: Date) {
     throw new AppError("SETTING_NOT_FOUND", `Thiếu cấu hình cho key "${key}"`);
   }
   return parseSettingValue(row.value, row.valueType);
+}
+
+// Thu hẹp kiểu trả về union của resolveSetting() về Decimal cho các key luôn
+// seed DECIMAL (thuế/mệnh giá...) — parseSettingValue() đảm bảo DECIMAL luôn
+// parse ra instance Decimal, nhưng chữ ký resolveSetting() là union nên caller
+// cần thu hẹp tường minh thay vì `as Decimal`. Sai valueType ở DB (dữ liệu
+// hỏng, không phải input người dùng) -> AppError, để throw ra ngoài (lỗi bất
+// ngờ, xem docs/rules/error-handling.md), không nuốt/mặc định.
+export async function resolveDecimalSetting(
+  key: SettingKey,
+  atDate: Date,
+): Promise<Decimal> {
+  const value = await resolveSetting(key, atDate);
+  if (!(value instanceof Decimal)) {
+    throw new AppError(
+      "INVALID_SETTING_VALUE",
+      `Setting "${key}" không phải kiểu DECIMAL`,
+    );
+  }
+  return value;
 }
