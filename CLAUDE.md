@@ -25,9 +25,11 @@ Chỉ cần mở khi việc đang làm chạm đúng phần liên quan:
   - `issuer` — thao tác GitHub issue + tạo PR (`gh issue *`, `gh pr create`); không merge/close PR.
   - `curator` — làm gọn nhật ký `process/PROCESS.md` và rút gọn `process/DECISION.md`.
   - `planner` — lên kế hoạch triển khai (implementation plan) cho một task, dùng ở Phase 2 (Design) của Plan Mode thay cho Plan agent mặc định; viết dễ hiểu, plan luôn kết thúc bằng verify (`HARNESS.md`) → commit → push → tạo PR qua `issuer`.
-  - `verifier` — kiểm chứng độc lập một task/phase đã hoàn thành thật hay chưa: chạy verify theo `HARNESS.md`, đối chiếu tiêu chí `phase-x.md` với bằng chứng thật, được viết thêm e2e/unit test còn thiếu; không sửa code production, không tự fix lỗi tìm thấy.
+  - `quality-verifier` — chạy lệnh verify cơ học (lint/typecheck/unit test/build theo `HARNESS.md`), rẻ và nhanh, chạy trước tiên; không phán đoán nghiệp vụ, không viết test, không chạy e2e.
+  - `e2e-verifier` — kiểm thử luồng chính từ góc nhìn người dùng bằng Playwright, viết thêm e2e test còn thiếu; cần Docker nên chỉ chạy trên Claude Local, skip trên Claude Cloud theo `TOOLS.md`.
+  - `verifier` — tầng tổng hợp cuối: nhận báo cáo của `quality-verifier` + `e2e-verifier`, đối chiếu tiêu chí `phase-x.md` với bằng chứng thật, grep nhanh 2 quy ước lõi (`userId`, `Decimal`), được viết thêm unit test còn thiếu; không sửa code production, không viết e2e, không tự fix lỗi tìm thấy. Là nơi duy nhất tick `phase-x.md`/`PROCESS.md`.
 - **Custom skills:** [`.claude/skills/`](./.claude/skills/). Hiện có:
-  - `dev-cycle` — điều phối tự động `planner` → `business-implementer`/`design-implementer` → `verifier` cho một task/phase, lặp lại implementer khi verifier báo gap (tối đa 3 lần), rồi tự commit → push → tạo PR qua `issuer` khi verifier xác nhận đạt. Dùng khi muốn giao hẳn một task để tự chạy hết chu trình.
+  - `dev-cycle` — điều phối tự động `planner` → `business-implementer`/`design-implementer` → `quality-verifier` → `e2e-verifier` → `verifier` cho một task/phase, lặp lại implementer khi có gap (tối đa 3 lần), rồi tự commit → push → tạo PR qua `issuer` khi verifier xác nhận đạt. Có track rút gọn cho hotfix (chỉ khi user gõ rõ từ khoá, đủ điều kiện mới bỏ bớt bước) — xem `dev-cycle/SKILL.md`. Dùng khi muốn giao hẳn một task để tự chạy hết chu trình.
   - `issue-breakdown` — chia một phase hoặc cụm việc lớn thành các GitHub issue đúng convention (template `.github/ISSUE_TEMPLATE/*`, nhãn `phase-N`, tách issue Design & UI riêng khi UI chưa có sẵn, ghi rõ phụ thuộc bằng số issue thật). Dùng khi mới bắt đầu một phase, trước khi giao việc cho `dev-cycle`.
 
 ## Tiến trình triển khai
