@@ -3,7 +3,9 @@ import { describe, expect, test } from "vitest";
 
 import {
   computeCashDividend,
+  computeCashDividendPriceAdjustment,
   computeStockDividend,
+  computeStockDividendPriceAdjustment,
   isStockQuantityOverrideValid,
   STOCK_DIVIDEND_ROUNDING_TOLERANCE,
 } from "./dividend-math";
@@ -141,5 +143,53 @@ describe("isStockQuantityOverrideValid", () => {
     const override = raw.minus(STOCK_DIVIDEND_ROUNDING_TOLERANCE).minus(1); // 7
 
     expect(isStockQuantityOverrideValid(override, raw)).toBe(false);
+  });
+});
+
+describe("computeStockDividendPriceAdjustment", () => {
+  // Issue #61: giữ nguyên tổng giá trị — giá_mới = giá_cũ × SL_trước / SL_sau.
+  test("ca thường — oldPrice=100, SL 100 -> 110", () => {
+    const result = computeStockDividendPriceAdjustment({
+      oldPrice: new Decimal(100),
+      quantityBefore: new Decimal(100),
+      quantityAfter: new Decimal(110),
+    });
+
+    expect(result?.toString()).toBe(
+      new Decimal(100).mul(100).div(110).toString(),
+    );
+  });
+
+  test("quantityAfter = 0 -> null (không điều chỉnh được)", () => {
+    const result = computeStockDividendPriceAdjustment({
+      oldPrice: new Decimal(100),
+      quantityBefore: new Decimal(100),
+      quantityAfter: new Decimal(0),
+    });
+
+    expect(result).toBeNull();
+  });
+});
+
+describe("computeCashDividendPriceAdjustment", () => {
+  // Issue #61: trừ cổ tức GỘP (trước thuế) trên mỗi cổ phần khỏi giá cũ.
+  test("ca thường — oldPrice=100.000, grossAmount=200.000, SL=100 -> 98.000", () => {
+    const result = computeCashDividendPriceAdjustment({
+      oldPrice: new Decimal(100000),
+      grossAmount: new Decimal(200000),
+      quantityAtDate: new Decimal(100),
+    });
+
+    expect(result?.toString()).toBe("98000");
+  });
+
+  test("quantityAtDate = 0 -> null (không điều chỉnh được)", () => {
+    const result = computeCashDividendPriceAdjustment({
+      oldPrice: new Decimal(100000),
+      grossAmount: new Decimal(200000),
+      quantityAtDate: new Decimal(0),
+    });
+
+    expect(result).toBeNull();
   });
 });

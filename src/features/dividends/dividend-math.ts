@@ -57,3 +57,38 @@ export function isStockQuantityOverrideValid(
     .abs()
     .lte(STOCK_DIVIDEND_ROUNDING_TOLERANCE);
 }
+
+// Bù pha loãng khi ghi cổ tức cổ phiếu (issue #61, docs/domain/03-dividends.md
+// "Bù pha loãng NAV khi ghi cổ tức"): Holding.quantity tăng NGAY khi ghi (recordDividend)
+// nhưng giá (PriceQuote/NavOverride) chưa đổi kịp — tổng NAV bị thổi phồng tạm
+// thời cho tới khi có giá mới. Giữ nguyên TỔNG GIÁ TRỊ trước/sau: giá_mới =
+// giá_cũ × SL_trước / SL_sau. Trả null khi SL_sau = 0 (không thể — caller coi
+// null = "không điều chỉnh được", không tạo NavOverride).
+// Không clamp giá âm/0 — chưa chốt spec cho ca biên này (SL_trước có thể theo
+// lý thuyết là 0 nếu gọi sai, nhưng recordDividend luôn gọi với SL đã cộng
+// dividend nên SL_sau > SL_trước >= 0; giới hạn chưa xử lý, để ngỏ).
+export function computeStockDividendPriceAdjustment(input: {
+  oldPrice: Decimal;
+  quantityBefore: Decimal;
+  quantityAfter: Decimal;
+}): Decimal | null {
+  if (input.quantityAfter.isZero()) return null;
+  return input.oldPrice.mul(input.quantityBefore).div(input.quantityAfter);
+}
+
+// Bù pha loãng khi ghi cổ tức tiền mặt (issue #61, cùng lý do trên): tiền mặt
+// rời khỏi vốn công ty → giá cổ phiếu thường điều chỉnh giảm tương ứng ngay
+// ngày chia (ex-dividend), nhưng PriceQuote/NavOverride chưa kịp phản ánh.
+// Trừ cổ tức GỘP (`grossAmount`, TRƯỚC thuế) trên mỗi cổ phần — đây là tiền
+// rời khỏi vốn công ty, không liên quan thuế TNCN cá nhân của người nắm giữ
+// (KHÔNG dùng netAmount). Trả null khi SL tại ngày ghi = 0.
+// Không clamp giá âm/0 — chưa chốt spec cho ca biên này (cổ tức gộp/CP lớn
+// hơn giá hiện tại), để ngỏ.
+export function computeCashDividendPriceAdjustment(input: {
+  oldPrice: Decimal;
+  grossAmount: Decimal;
+  quantityAtDate: Decimal;
+}): Decimal | null {
+  if (input.quantityAtDate.isZero()) return null;
+  return input.oldPrice.minus(input.grossAmount.div(input.quantityAtDate));
+}

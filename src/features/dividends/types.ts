@@ -38,6 +38,19 @@ export type DividendRecordedResult = {
   // STOCK-only, chỉ có mặt khi wasRounded=true: số CP thưởng trước làm tròn
   // (rawStockQuantity), để hiển thị so sánh với addedQuantity đã floor.
   rawAddedQuantity?: string;
+  // Issue #61: ngày tiền/CP thực về tài khoản, đã format dd/MM/yyyy — chỉ có
+  // mặt khi user nhập `paymentDate` (field thuần thông tin, không dùng cho
+  // tính toán — xem prisma/schema.prisma::Dividend.paymentDate).
+  paymentDateLabel?: string;
+  // Issue #61: true khi hệ thống TỰ tạo/ghi đè NavOverride bù pha loãng
+  // (recordDividend, chỉ xảy ra khi priceAlreadyReflectsMarket=false VÀ có
+  // giá cũ để điều chỉnh). Vắng mặt/false-ish = không hiện khối này.
+  navOverrideAdjusted?: boolean;
+  // Issue #61: giá trước điều chỉnh — chỉ có mặt khi navOverrideAdjusted=true.
+  oldPrice?: string;
+  // Issue #61: giá sau điều chỉnh (đã ghi vào NavOverride tại `date`) — chỉ
+  // có mặt khi navOverrideAdjusted=true.
+  newPrice?: string;
   historyHref: string;
   holdingHref: string;
 };
