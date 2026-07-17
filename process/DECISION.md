@@ -183,6 +183,23 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - **Không phải chỉ số hiệu suất riêng, không đưa vào XIRR** — XIRR đã tự phản ánh chi phí này qua dòng tiền thực rồi; đây chỉ là phần diễn giải thêm cho lãi/lỗ.
 - **Không cần schema/model mới** — mọi field cần đều đã tồn tại (`Cashflow.taxAmount/feeAmount`, `Dividend.taxAmount`, `totalInvested` đã tính sẵn), chỉ cần một hàm tổng hợp (business-implementer) + một dòng UI (design-implementer, mở rộng component có sẵn không cần mockup mới lớn).
 - Docs đã sync: `docs/domain/07-tax.md` (mục "Chi phí ăn mòn" mới), `docs/domain/05-returns-xirr-and-pnl.md` (cross-reference), `docs/03-roadmap.md` (Phase 5), `docs/business-overview.md` (mục 5), `process/phase-5.md`.
+
+## 2026-07-17 (5)
+
+**Thêm 2 ý tưởng còn lại vào roadmap: "Cảnh báo tập trung" (Phase 6) và "Lịch dòng tiền sắp tới" (Phase 8 mới) — cùng đảo quyết định treo Phase 7 (1).**
+- Bối cảnh: tiếp tục danh sách 3 ý tưởng gợi ý ngoài roadmap ban đầu (idea 1 — chi phí ăn mòn — đã vào Phase 5 ở quyết định trên). User xác nhận đưa nốt idea 2 (cảnh báo tập trung) và idea 3 (lịch dòng tiền) vào domain docs + roadmap + phase-x.
+- **Cảnh báo tập trung (Phase 6):**
+  - **Phạm vi (đã hỏi user, chọn theo Holding):** cảnh báo theo từng `Holding` riêng lẻ, KHÔNG theo `AssetType` nhóm — sát rủi ro thực tế hơn dù `AllocationBar` theo nhóm đã có sẵn dễ tái dùng hơn.
+  - **Ngưỡng (đã hỏi user):** 30%, cấu hình qua `Setting{CONCENTRATION_WARNING_THRESHOLD}` (group mới `RISK`) — user chủ động chọn "cấu hình trên Settings" thay vì hard-code, nhất quán nguyên tắc "cấu hình được, không hard-code" của `07-tax.md`.
+  - Resolve `atDate = hôm nay` (không effective-dated theo giao dịch) — cùng pattern với `MAX_MEMBERS`.
+  - Vị thế `MISSING_PRICE` loại khỏi tính cảnh báo (không mặc định 0%) — nhất quán nguyên tắc "thiếu giá không mặc định 0".
+  - Docs: `docs/domain/04-pricing-and-valuation.md` (mục "Cảnh báo tập trung" mới), `docs/domain/09-settings.md`, `process/phase-6.md`, `docs/03-roadmap.md`.
+- **Lịch dòng tiền sắp tới (Phase 8 mới):**
+  - **Phạm vi (đã hỏi user, chọn chỉ trái phiếu):** chỉ đáo hạn + coupon trái phiếu — cố tình KHÔNG dự đoán cổ tức STOCK/FUND vì không có ngày/mức cố định theo hợp đồng, dự đoán sẽ không đáng tin.
+  - **Đảo quyết định treo Phase 7 điểm mở (1)** (đã hỏi user, chọn lưu cố định trên Holding): mệnh giá/coupon rate **lưu cố định trên `Holding`** (5 field mới: `parValue`/`couponRatePercent`/`couponFrequencyMonths`/`maturityDate`/`nextCouponDate`, chỉ có ý nghĩa khi `type = BOND`) thay vì "nhập tay mỗi lần ghi" như đề xuất mặc định ban đầu của Phase 7 — cần thiết để suy ra "kỳ tới" cho Phase 8. `recordDividend` (Phase 7) đọc từ `Holding`, không hỏi lại; tự cộng `couponFrequencyMonths` vào `nextCouponDate` sau mỗi lần ghi thành công, vẫn cho user sửa tay.
+  - **Phase 8 phụ thuộc chặt Phase 7** (đọc field Phase 7 thêm, không tự thêm schema) — không phải trình tự ưu tiên gốc, giống Phase 7.
+  - Ước tính đáo hạn KHÔNG trừ thuế (nhất quán quyết định "đáo hạn không chịu SALE_TAX_BOND" ở `07-tax.md`); ước tính coupon hiển thị số gộp trước thuế (công thức thuế lãi trái phiếu chính xác vẫn là điểm mở của Phase 7, không tự chọn thay ở đây).
+  - Docs: `docs/domain/10-cashflow-calendar.md` (file mới), `docs/domain/README.md` (index #10), `docs/domain/01-assets-and-holdings.md`, `docs/02-data-model.md` (5 field mới trên `Holding`), `process/phase-7.md` (đảo điểm mở (1)), `process/phase-8.md` (file mới), `docs/03-roadmap.md` (Phase 7 cập nhật + Phase 8 mới), `process/PROCESS.md` (bảng trạng thái + nhật ký).
 - Ca biên đã cân nhắc: khi `MISSING_PRICE` (không có giá cũ để bù), NAV có thể lệch thật do SL tăng "chay" không giá đi kèm — nhưng đúng lúc này Snapshot cũng tự bỏ qua Holding đó (không resolve được giá, theo rule ở `06-snapshots.md`), nên trigger snapshot cũng không cứu được ca này.
 - Docs đã sync: `docs/domain/03-dividends.md` (mục "Bù pha loãng NAV khi ghi cổ tức", bỏ khung "quyết định treo", ghi rõ đã chốt + lý do).
 

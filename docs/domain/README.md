@@ -15,6 +15,7 @@ Mỗi file theo cùng bố cục: **Mục đích · Entity/field · Quy tắc & 
 | 07 | [Tax](./07-tax.md) | Thuế bán ~0.1%, thuế cổ tức ~5%, lãi/lỗ sau thuế |
 | 08 | [Users, Access & Privacy](./08-users-access-and-privacy.md) | Chỉ người mời, tách dữ liệu, ẩn số tiền |
 | 09 | [Settings (master config)](./09-settings.md) | Bảng cấu hình key-value, effective dating, cập nhật trực tiếp trên DB |
+| 10 | [Cash flow calendar](./10-cashflow-calendar.md) | Lịch dự kiến đáo hạn + coupon trái phiếu (Phase 8), cảnh báo tập trung ở `04-pricing-and-valuation.md` |
 
 ## Nguyên tắc xuyên suốt
 

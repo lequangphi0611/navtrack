@@ -113,6 +113,11 @@ model Holding {
   unit         String        // đơn vị số lượng theo loại tài sản — "cổ phần", "chỉ", "lượng", "trái phiếu"...; app phải set tường minh khi tạo Holding, không có default chung cho mọi loại
   quantity     Decimal       @default(0) @db.Decimal(20, 4) // materialized cache: SL đang giữ hiện tại (nguồn sự thật = Cashflow; recompute-in-transaction)
   avgCost      Decimal       @default(0) @db.Decimal(20, 4) // materialized cache: giá vốn bình quân di động hiện tại
+  parValue              Decimal?  @db.Decimal(20, 4) // Phase 8, chỉ BOND: mệnh giá trái phiếu
+  couponRatePercent     Decimal?  @db.Decimal(20, 4) // Phase 8, chỉ BOND: lãi suất coupon danh nghĩa (%/năm)
+  couponFrequencyMonths Int?                          // Phase 8, chỉ BOND: kỳ trả lãi (tháng), vd 6/12
+  maturityDate          DateTime?                     // Phase 8, chỉ BOND: ngày đáo hạn
+  nextCouponDate        DateTime?                     // Phase 8, chỉ BOND: ngày dự kiến trả lãi kỳ tới, tự cập nhật sau mỗi lần ghi trái tức
   cashflows    Cashflow[]
   dividends    Dividend[]
   snapshots    Snapshot[]

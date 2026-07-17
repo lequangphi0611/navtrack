@@ -13,6 +13,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 5 | Thuế bán (áp dụng) | ⬜ | [phase-5.md](./phase-5.md) |
 | 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
 | 7 | Trái tức (lãi trái phiếu) | ⬜ | [phase-7.md](./phase-7.md) |
+| 8 | Lịch dòng tiền sắp tới | ⬜ | [phase-8.md](./phase-8.md) |
 
 ## Cách dùng
 - Bắt đầu một phase → đổi trạng thái sang 🟨, đọc `phase-x.md` **và [`DECISION.md`](./DECISION.md)** (quyết định quan trọng đã chốt ở phase trước).
@@ -50,3 +51,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-17: đóng quyết định treo từ #52 — ghi cổ tức KHÔNG tự trigger `Snapshot{period: MANUAL}` (lý do: cơ chế bù pha loãng NAV giữ NAV gần như liên tục qua sự kiện chia cổ tức, khác mua/bán).
 - 2026-07-17: thảo luận nghiệp vụ Phase 5 (thuế bán) — chốt SELL prefill+sửa tay, BUY bỏ field thuế, `SALE_TAX_GOLD = 0`; để ngỏ đáo hạn trái phiếu (dời Phase 7) + hành vi sửa SELL đã ghi.
 - 2026-07-17: thêm tính năng "Chi phí ăn mòn" vào Phase 5 — tổng thuế + phí luỹ kế (thuế bán + thuế cổ tức + phí), % trên `totalInvested`, dòng phụ dưới card lãi/lỗ.
+- 2026-07-17: thêm "Cảnh báo tập trung" vào Phase 6 (`Setting{CONCENTRATION_WARNING_THRESHOLD}` = 30%, theo từng Holding) và **Phase 8 mới — Lịch dòng tiền sắp tới** (đáo hạn + coupon trái phiếu, phụ thuộc Phase 7); đảo quyết định treo Phase 7 (1): mệnh giá/coupon rate lưu cố định trên `Holding` thay vì nhập tay mỗi lần.

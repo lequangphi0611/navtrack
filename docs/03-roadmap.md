@@ -48,12 +48,18 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
 - Biểu đồ NAV theo thời gian (dựa trên snapshot đã lưu)
 - Biểu đồ phân bổ tài sản (% theo `AssetType` tại thời điểm hiện tại)
 - **Chế độ ẩn số tiền:** nút mắt bật/tắt nhanh trên dashboard + mặc định trong Settings (`User.hideAmountsByDefault`, lưu theo user). Chỉ che giá trị tiền tuyệt đối, giữ nguyên XIRR và các phần trăm.
+- **Cảnh báo tập trung (mới, 2026-07-17):** badge cảnh báo khi một `Holding` vượt `Setting{CONCENTRATION_WARNING_THRESHOLD}` (seed mặc định 30%) — xem `docs/domain/04-pricing-and-valuation.md` mục "Cảnh báo tập trung".
 
 ## Phase 7 — Trái tức (lãi trái phiếu)
 - Ghi nhận lãi định kỳ (trái tức) cho `Holding{type: BOND}` — khác công thức % cổ tức cổ phiếu hiện có (Phase 4 chỉ scope cho cổ tức cổ phiếu/tiền mặt).
-- Mở rộng `DividendType`/`Dividend` (hoặc model tương đương) cho loại lãi trái phiếu; **mệnh giá trái phiếu nhập tay mỗi lần ghi** (khác cổ tức cổ phiếu dùng chung `DIVIDEND_PAR_VALUE`) vì mỗi trái phiếu mệnh giá khác nhau theo tổ chức phát hành — chốt chính thức lúc implement.
+- Mở rộng `DividendType`/`Dividend` (hoặc model tương đương) cho loại lãi trái phiếu; **mệnh giá/coupon rate lưu cố định trên `Holding`** (đã chốt 2026-07-17, đảo hướng đề xuất ban đầu "nhập tay mỗi lần" — cần cho Phase 8 dự đoán kỳ tới), thêm 5 field mới trên `Holding` (xem `docs/domain/10-cashflow-calendar.md`).
 - Thuế lãi trái phiếu: xác nhận dùng chung `DIVIDEND_TAX_RATE` hay cần `Setting` key riêng — điểm còn mở, xem `docs/domain/07-tax.md`.
 - UI ghi nhận trái tức: mở rộng `DividendForm` hiện có (Phase 4), không dựng màn mới.
+
+## Phase 8 — Lịch dòng tiền sắp tới (mới, 2026-07-17)
+- Danh sách trái phiếu sắp **đáo hạn** + **coupon kỳ tới** trong 90 ngày, ước tính từ `parValue`/`couponRatePercent`/`couponFrequencyMonths`/`maturityDate`/`nextCouponDate` (5 field Phase 7 thêm trên `Holding`).
+- Chỉ áp dụng `BOND` — không dự đoán cổ tức STOCK/FUND (ngày/mức không cố định theo hợp đồng, không đủ tin cậy).
+- Phụ thuộc chặt Phase 7 (đọc field đã thêm, không tự thêm schema). Xem `docs/domain/10-cashflow-calendar.md`, `process/phase-8.md`.
 
 ## Backlog (chưa ưu tiên, cân nhắc sau khi dùng thử ổn định)
 - Import CSV/Excel từ Google Sheets (hoãn từ Phase 1) — làm khi có nhu cầu nạp dữ liệu chi tiết từng mã
