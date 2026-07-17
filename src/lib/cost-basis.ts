@@ -1,6 +1,8 @@
 import Decimal from "decimal.js";
 
 import type { CashflowType } from "@prisma/client";
+import { buildQuantityTimeline } from "@/lib/position-trail";
+import type { PositionTrailEvent } from "@/lib/position-trail";
 
 export type CashflowInput = {
   type: CashflowType;
@@ -58,6 +60,63 @@ export function derivePosition(cashflows: CashflowInput[]): {
       if (quantity.isNegative()) wentNegative = true;
       if (quantity.isZero()) avgCost = new Decimal(0);
     }
+  }
+
+  return { quantity, avgCost, wentNegative };
+}
+
+export type CashflowInputWithEvent = CashflowInput & {
+  id: string;
+  createdAt: Date;
+};
+
+export type StockDividendInput = {
+  id: string;
+  date: Date;
+  createdAt: Date;
+  quantity: Decimal;
+};
+
+// Issue #59: derivePosition() một mình KHÔNG đủ để tính vị thế đúng — nó chỉ
+// biết Cashflow, nên (1) SL trả về thiếu cổ tức cổ phiếu đã nhận, và (2)
+// wentNegative có thể báo "bán vượt" SAI cho một lệnh bán thực ra hợp lệ (SL
+// bán nằm trong phần SL đến từ cổ tức cổ phiếu, không phải mua). Hàm này kết
+// hợp derivePosition() (avgCost — CHỈ dẫn xuất từ Cashflow, cổ tức cổ phiếu
+// không đổi avgCost, xem docs/domain/03-dividends.md) với
+// buildQuantityTimeline() (lib/position-trail.ts, đã phát lại đúng thứ tự
+// thời gian CẢ Cashflow lẫn Dividend{STOCK}) để lấy SL + validate bán vượt
+// đúng. Dùng ở 4 action ghi giao dịch (features/holdings/actions.ts) và
+// getHoldingDetail (features/holdings/queries.ts) — derivePosition() giữ
+// nguyên không đổi (vẫn đúng/đủ cho avgCost, có unit test riêng bao phủ).
+export function derivePositionIncludingStockDividends(
+  cashflows: CashflowInputWithEvent[],
+  stockDividends: StockDividendInput[],
+): { quantity: Decimal; avgCost: Decimal; wentNegative: boolean } {
+  const { avgCost } = derivePosition(cashflows);
+
+  const events: PositionTrailEvent[] = [
+    ...cashflows.map((cf) => ({
+      id: cf.id,
+      date: cf.date,
+      createdAt: cf.createdAt,
+      delta: cf.type === "BUY" ? cf.quantity : cf.quantity.neg(),
+    })),
+    ...stockDividends.map((dividend) => ({
+      id: dividend.id,
+      date: dividend.date,
+      createdAt: dividend.createdAt,
+      delta: dividend.quantity,
+    })),
+  ];
+
+  // Map giữ thứ tự insertion = thứ tự chronological buildQuantityTimeline()
+  // đã sort -> entry cuối cùng lặp qua chính là SL sau cùng.
+  const timeline = buildQuantityTimeline(events);
+  let quantity = new Decimal(0);
+  let wentNegative = false;
+  for (const entry of timeline.values()) {
+    quantity = entry.after;
+    if (entry.after.isNegative()) wentNegative = true;
   }
 
   return { quantity, avgCost, wentNegative };

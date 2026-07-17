@@ -17,7 +17,9 @@ function decimalString(message: string) {
     }, message);
 }
 
-function positiveDecimal(message: string) {
+// Exported để tái dùng ở features/dividends/schemas.ts (recordDividendSchema.percent) —
+// tránh chép lại logic validate Decimal dương.
+export function positiveDecimal(message: string) {
   return decimalString(message).refine((value) => {
     try {
       return new Decimal(value).gt(0);
@@ -27,7 +29,10 @@ function positiveDecimal(message: string) {
   }, message);
 }
 
-function nonNegativeDecimal(message: string) {
+// Exported để tái dùng ở features/dividends/schemas.ts
+// (recordDividendSchema.stockQuantityOverride) — tránh chép lại logic validate
+// Decimal không âm.
+export function nonNegativeDecimal(message: string) {
   return decimalString(message).refine((value) => {
     try {
       return new Decimal(value).gte(0);

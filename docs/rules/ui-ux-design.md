@@ -64,6 +64,17 @@ Quy tắc giao diện cho Navtrack: theme màu, typography, icon, và kho atoms/
 | `calendar_view_month` | `CalendarRange` |
 | `event_available` | `CalendarCheck2` |
 | `verified` | `ShieldCheck` |
+| `payments` | `Coins` (Phase 4 — cổ tức tiền mặt) |
+| `library_add` | `Layers` (Phase 4 — cổ tức cổ phiếu) |
+| `calculate` | `Calculator` |
+| `unfold_more` | `ChevronsUpDown` |
+| `event` | `Calendar` |
+| `search` | `Search` |
+| `check` | `Check` |
+| `check_circle` | `CheckCircle2` |
+| `function` | `Sigma` |
+| `swap_vert` | `ArrowLeftRight` (Phase 4 — FAB "Mua/Bán") |
+| `add_chart` | `ChartNoAxesCombined` (Phase 4 — FAB "Thêm vị thế") |
 
 ## Primitives
 
@@ -96,7 +107,7 @@ Tái dùng trước khi tạo mới trùng lặp. Cấu trúc/pattern (thư mụ
 | `AssetTypeBadge` | Pill tint theo màu asset (nền `asset-*` mờ + chữ màu asset, mockup 2d) + chấm màu; nguồn tạm cho union `AssetType` (thay bằng enum Prisma khi Phase 1 có schema thật) |
 | `SymbolAvatar` | Avatar chữ viết tắt mã, màu suy ra từ hash(mã) — khớp quyết định ở [`04-tech-stack.md`](../04-tech-stack.md) (không dùng logo ảnh) |
 | `UserAvatar` | Avatar initials người dùng/thành viên (bo `30%`, nền gradient secondary→card) — suy initials từ tên hoặc email |
-| `PageHeader` | Thanh đầu trang: nút back (`variant: "back"`) hoặc close (`"close"`) + tiêu đề render bằng `h1` + `trailing?: ReactNode` (composition slot bên phải, vd Badge "Chỉ xem" — mockup 3e) |
+| `PageHeader` | Thanh đầu trang: nút back (`variant: "back"`) hoặc close (`"close"`) + tiêu đề render bằng `h1` + `subtitle?: ReactNode` (dòng phụ dưới tiêu đề, vd "Nhập % → tự tính tiền nhận về" — `DividendForm`, Phase 4) + `trailing?: ReactNode` (composition slot bên phải, vd Badge "Chỉ xem" — mockup 3e) |
 | `SegmentedControl` | Control pill trượt nền, controlled (`value`/`onChange`) — không tự giữ state; hỗ trợ `stretch` (full width), `thumbClassName` (đổi màu thumb, vd Mua/Bán → `gain`/`destructive`), `activeClassName` per-option |
 | `StatCard` | Label + `MoneyValue` + `PercentChange` + `note?` (ghi chú mờ dưới giá trị) |
 | `HoldingListItem` | Dòng danh mục: `SymbolAvatar` + `AssetTypeBadge` + `MoneyValue` + `PercentChange` |
