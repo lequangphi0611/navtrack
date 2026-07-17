@@ -22,6 +22,21 @@
 - **Lãi/lỗ sau thuế (một lần bán)** = `(giá bán − giá vốn bình quân) × SL bán − phí − thuế bán`.
 - Vì thuế đã nằm trong `Cashflow.amount` và `Dividend.netAmount`, **XIRR tự phản ánh sau thuế** mà không cần xử lý thêm.
 
+## Chi phí ăn mòn (cost drag) — tổng thuế + phí luỹ kế
+- **Mục đích:** trả lời câu hỏi Sheet cũ không trả lời được — "tổng cộng tôi đã mất bao nhiêu tiền cho thuế/phí giao dịch, và con số đó chiếm bao nhiêu % số vốn tôi bỏ ra" (xem `docs/business-overview.md` mục "Bài toán"). Hiển thị như một dòng phụ nhỏ dưới card lãi/lỗ trên dashboard (`ReturnMetrics`), không phải một card riêng.
+- **Phạm vi cộng dồn — gồm cả ba nguồn đã có sẵn dữ liệu**, tính tới cùng mốc chốt (`cutoffDate`) đang chọn trên dashboard, giống cách `totalInvested` hiện tính (`lib/portfolio-valuation.ts`):
+  - `Σ Cashflow.taxAmount` — thuế bán (Phase 5; luôn `0` cho BUY).
+  - `Σ Cashflow.feeAmount` — phí giao dịch (BUY + SELL, đã có từ Phase 1).
+  - `Σ Dividend.taxAmount` — thuế cổ tức tiền mặt (Phase 4; `null`/không áp dụng cho cổ tức cổ phiếu, coi như `0`).
+- **Công thức:**
+  ```
+  costDragAmount  = Σ Cashflow.taxAmount + Σ Cashflow.feeAmount + Σ Dividend.taxAmount
+  costDragPercent = costDragAmount / totalInvested × 100
+  ```
+  - `totalInvested` = **vốn ròng đã bỏ vào** — giá trị đã tính sẵn cho `navDeltaPercent` (`= -(Σ Cashflow.amount + Σ Dividend.netAmount)` tính tới `cutoffDate`, xem `05-returns-xirr-and-pnl.md`). Dùng lại đúng khái niệm "vốn đã bỏ vào" đã hiển thị trên dashboard, không định nghĩa một mẫu số khác.
+  - `totalInvested = 0` (chưa có giao dịch nào) → `costDragPercent = 0`, không chia cho 0 (cùng cách xử lý với `navDeltaPercent`).
+- **Không phải một chỉ số hiệu suất riêng** — chỉ là phần diễn giải thêm cho lãi/lỗ, không đưa vào XIRR (XIRR đã tự phản ánh chi phí này qua dòng tiền thực, xem trên).
+
 ## Ca biên
 - **Mức thuế cổ phiếu/quỹ:** 0.1% (bán) và 5% (cổ tức) là mức phổ biến VN — dùng làm mặc định seed cho `SALE_TAX_STOCK`/`SALE_TAX_FUND`/`DIVIDEND_TAX_RATE`.
 - **`SALE_TAX_GOLD` = 0 (đã chốt, 2026-07-17):** cá nhân bán vàng miếng/trang sức tại VN không chịu thuế TNCN chuyển nhượng (khác chứng khoán) — seed `Setting` với giá trị `0`, KHÔNG được để trống/thiếu dòng (vẫn phải seed tường minh, vì "thiếu cấu hình" báo lỗi cứng — xem `09-settings.md`).
@@ -36,3 +51,4 @@
 - Bán 50 FPT giá 130k → giá trị bán 6.500.000 → thuế 0.1% = 6.500 → tiền nhận ≈ 6.493.500 (trước phí).
 - Cổ tức tiền mặt gộp 200.000 → thuế 5% = 10.000 → thực nhận 190.000.
 - Bán 1 lượng vàng SJC → `SALE_TAX_GOLD` = 0% → `taxAmount = 0`, tiền nhận chỉ trừ phí (nếu có).
+- **Chi phí ăn mòn:** danh mục có `totalInvested` = 500.000.000; lịch sử cộng dồn `Cashflow.taxAmount` = 1.200.000, `Cashflow.feeAmount` = 800.000, `Dividend.taxAmount` = 300.000 → `costDragAmount` = 2.300.000 → `costDragPercent` ≈ 0.46%. Dòng phụ dưới lãi/lỗ hiển thị: "Bao gồm 1.500.000 thuế + 800.000 phí (0.46% vốn đã bỏ vào)".

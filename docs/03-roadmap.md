@@ -41,7 +41,8 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
 - Bảng `Setting` + `resolveSetting` **đã tạo ở Phase 1** — phase này chỉ dùng.
 - Tự động trừ thuế khi ghi giao dịch bán theo `SALE_TAX_<LOẠI>` (tra tại ngày giao dịch), hiển thị lãi/lỗ sau thuế
 - Thuế suất chỉnh **trực tiếp trên DB** (không có UI admin)
-- Xác nhận mức thuế suất cụ thể trước khi seed (điểm còn mở)
+- Xác nhận mức thuế suất cụ thể trước khi seed; `SALE_TAX_GOLD = 0` **đã chốt** (2026-07-17, cá nhân bán vàng tại VN không chịu thuế TNCN)
+- **Chi phí ăn mòn (mới):** dòng phụ dưới lãi/lỗ trên dashboard — tổng thuế + phí luỹ kế (thuế bán + thuế cổ tức + phí giao dịch) và % trên vốn ròng đã bỏ vào, xem `docs/domain/07-tax.md`
 
 ## Phase 6 — Biểu đồ + hoàn thiện dashboard
 - Biểu đồ NAV theo thời gian (dựa trên snapshot đã lưu)

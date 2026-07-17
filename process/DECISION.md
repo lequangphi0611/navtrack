@@ -172,6 +172,17 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
   - Đáo hạn trái phiếu (nhận lại gốc, không phải chuyển nhượng) vs bán trước hạn (chịu `SALE_TAX_BOND` 0.1%) — user hiện chỉ giữ trái phiếu tới đáo hạn, không bán thứ cấp, nên **chưa xử lý ở Phase 5**; dời bàn kỹ sang Phase 7 (đã thêm vào `process/phase-7.md` mục "Phụ thuộc / ghi chú" điểm (4)).
   - Sửa một SELL đã ghi (đổi ngày/giá) có tính lại `taxAmount` theo ngày mới hay giữ nguyên giá trị cũ (có thể đã bị sửa tay theo (1)) — chưa chốt, cần quyết định lúc implement.
 - Docs đã sync: `docs/domain/07-tax.md`, `docs/domain/09-settings.md`, `docs/domain/02-transactions-and-cost-basis.md`, `process/phase-5.md`, `process/phase-7.md`.
+
+## 2026-07-17 (4)
+
+**Thêm tính năng mới "Chi phí ăn mòn" (cost drag) vào Phase 5 — tổng thuế + phí luỹ kế, % trên vốn đã bỏ vào.**
+- Bối cảnh: tiếp tục thảo luận nghiệp vụ Phase 5, user chọn hiện thực hoá ngay ý tưởng "tổng chi phí thuế + phí đã trả từ đầu" (một trong 3 ý tưởng gợi ý ngoài roadmap) — trả lời câu hỏi gốc của `business-overview.md`: Sheet cũ không cho biết chi phí giao dịch đã ăn vào lợi nhuận bao nhiêu.
+- **Phạm vi (đã hỏi user, chọn phương án gộp cả 3 nguồn):** `Σ Cashflow.taxAmount` (thuế bán, Phase 5) + `Σ Cashflow.feeAmount` (phí, có từ Phase 1) + `Σ Dividend.taxAmount` (thuế cổ tức tiền mặt, có từ Phase 4) — không giới hạn riêng trong dữ liệu mới của Phase 5 để con số phản ánh đúng tổng chi phí thật.
+- **Mẫu số % (đã hỏi user, chọn "vốn đã bỏ vào"):** tái dùng `totalInvested` đã có sẵn trong `lib/portfolio-valuation.ts` (dùng cho `navDeltaPercent`) — KHÔNG định nghĩa một khái niệm "vốn" thứ hai. `totalInvested = 0` → 0%, không chia 0 (giống cách `navDeltaPercent` đã xử lý).
+- **Vị trí UI (đã hỏi user, chọn dòng phụ):** một dòng ghi chú nhỏ dưới card lãi/lỗ hiện có (`ReturnMetrics` trong `DashboardScreen.tsx`) — KHÔNG dựng card/tile riêng, giữ phạm vi UI của Phase 5 gọn (chỉ sửa component có sẵn, không thêm component mới).
+- **Không phải chỉ số hiệu suất riêng, không đưa vào XIRR** — XIRR đã tự phản ánh chi phí này qua dòng tiền thực rồi; đây chỉ là phần diễn giải thêm cho lãi/lỗ.
+- **Không cần schema/model mới** — mọi field cần đều đã tồn tại (`Cashflow.taxAmount/feeAmount`, `Dividend.taxAmount`, `totalInvested` đã tính sẵn), chỉ cần một hàm tổng hợp (business-implementer) + một dòng UI (design-implementer, mở rộng component có sẵn không cần mockup mới lớn).
+- Docs đã sync: `docs/domain/07-tax.md` (mục "Chi phí ăn mòn" mới), `docs/domain/05-returns-xirr-and-pnl.md` (cross-reference), `docs/03-roadmap.md` (Phase 5), `docs/business-overview.md` (mục 5), `process/phase-5.md`.
 - Ca biên đã cân nhắc: khi `MISSING_PRICE` (không có giá cũ để bù), NAV có thể lệch thật do SL tăng "chay" không giá đi kèm — nhưng đúng lúc này Snapshot cũng tự bỏ qua Holding đó (không resolve được giá, theo rule ở `06-snapshots.md`), nên trigger snapshot cũng không cứu được ca này.
 - Docs đã sync: `docs/domain/03-dividends.md` (mục "Bù pha loãng NAV khi ghi cổ tức", bỏ khung "quyết định treo", ghi rõ đã chốt + lý do).
 

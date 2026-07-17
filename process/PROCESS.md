@@ -49,3 +49,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-17: review PR #62 (issue #61) — fix finding #2 (note trên NavOverride tự tạo), #3 (validate `paymentDate >= date`), #4 (e2e ghi cổ tức 2 lần cùng ngày), sửa mô tả PR khớp diff thật (finding #1).
 - 2026-07-17: đóng quyết định treo từ #52 — ghi cổ tức KHÔNG tự trigger `Snapshot{period: MANUAL}` (lý do: cơ chế bù pha loãng NAV giữ NAV gần như liên tục qua sự kiện chia cổ tức, khác mua/bán).
 - 2026-07-17: thảo luận nghiệp vụ Phase 5 (thuế bán) — chốt SELL prefill+sửa tay, BUY bỏ field thuế, `SALE_TAX_GOLD = 0`; để ngỏ đáo hạn trái phiếu (dời Phase 7) + hành vi sửa SELL đã ghi.
+- 2026-07-17: thêm tính năng "Chi phí ăn mòn" vào Phase 5 — tổng thuế + phí luỹ kế (thuế bán + thuế cổ tức + phí), % trên `totalInvested`, dòng phụ dưới card lãi/lỗ.
