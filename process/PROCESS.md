@@ -53,3 +53,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-17: thêm tính năng "Chi phí ăn mòn" vào Phase 5 — tổng thuế + phí luỹ kế (thuế bán + thuế cổ tức + phí), % trên `totalInvested`, dòng phụ dưới card lãi/lỗ.
 - 2026-07-17: thêm "Cảnh báo tập trung" vào Phase 6 (`Setting{CONCENTRATION_WARNING_THRESHOLD}` = 30%, theo từng Holding) và **Phase 8 mới — Lịch dòng tiền sắp tới** (đáo hạn + coupon trái phiếu, phụ thuộc Phase 7); đảo quyết định treo Phase 7 (1): mệnh giá/coupon rate lưu cố định trên `Holding` thay vì nhập tay mỗi lần.
 - 2026-07-17: sửa A1 — "Chi phí ăn mòn" đổi mẫu số từ `totalInvested` (vốn ròng, vỡ khi bán nhiều) sang `grossInvested` (vốn gộp `Σ|BUY.amount|`); xem `DECISION.md` (6).
+- 2026-07-17: rà nghiệp vụ tài chính — sửa docs A2 (treo cảnh báo tập trung khi NAV danh mục khuyết giá); log #65 (C1 timing cổ tức), #66 (C2 phí mua vào avgCost), #67 (B1 realized/unrealized) để sửa sau; B2 benchmark giữ ở Backlog. Xem `DECISION.md` (7).

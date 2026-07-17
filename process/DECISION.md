@@ -220,3 +220,14 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - `totalInvested` (vốn ròng) **vẫn đúng** cho `navDeltaPercent` (lợi suất trên vốn đang làm việc) — không đụng tới chỗ đó; chỉ tách khái niệm cho riêng chi phí ăn mòn.
 - Tính năng chưa implement (chỉ mới ở docs) nên đây là sửa spec, không đụng code.
 - Docs đã sync: `docs/domain/07-tax.md` (công thức + ví dụ ca bán nhiều), `docs/domain/05-returns-xirr-and-pnl.md` (cross-reference), `docs/03-roadmap.md` (Phase 5), `process/phase-5.md`, cùng ghi chú đính chính ở entry (4).
+
+## 2026-07-17 (7)
+
+**Rà soát nghiệp vụ dưới góc nhìn tài chính — chốt A2 (sửa docs), log C1/C2/B1 thành issue để sửa sau; B2 giữ ở Backlog.**
+- Bối cảnh: tiếp tục rà bất cập nghiệp vụ với user. Phân loại theo "đã phản ánh vào code hay chưa": vấn đề nằm trong code đã ship → tạo issue sửa sau; vấn đề chỉ ở spec Phase 5+ chưa code → sửa docs ngay.
+- **A2 (sửa docs — spec Phase 6 chưa code):** cảnh báo tập trung dùng `NAV(danh mục)` làm mẫu số; khi danh mục còn mã `MISSING_PRICE` thì mẫu số là **NAV một phần** (`navValueIsPartial`), làm `concentrationPercent` của các mã *có giá* bị thổi phồng → báo động giả (vd FPT 180tr + trái phiếu 300tr chưa nhập giá → FPT "100%"). **Quyết định: khi `navValueIsPartial` thì TREO cảnh báo tập trung** (không kết luận trên mẫu số khuyết), kèm ghi chú cần cập nhật giá — giống cách NAV gắn dấu `*`. Chỉ tính khi NAV danh mục đầy đủ. Docs: `docs/domain/04-pricing-and-valuation.md` (mục "Cảnh báo tập trung"), `process/phase-6.md` (tiêu chí).
+- **C1/C2/B1 (đã phản ánh trong code Phase 1/2/4 → log issue, sửa sau):**
+  - **#65 (C1):** dòng tiền cổ tức/coupon vào XIRR đặt tại `date` (ngày chia) thay vì `paymentDate` (ngày tiền thực về) — `xirr-cashflow.ts:21`; lợi suất bị thổi nhẹ, rõ hơn với coupon trái phiếu kỳ dài. Sẽ đảo một phần quyết định #61 ("paymentDate thuần thông tin") khi làm.
+  - **#66 (C2):** phí mua không gộp vào `avgCost` (`cost-basis.ts:54`) → "lãi đã thực hiện" per-lot hơi cao hơn thực. Hai hướng (A gộp phí vào cost basis / B giữ + sửa nhãn), chốt lúc implement.
+  - **#67 (B1):** lãi/lỗ tuyệt đối gộp chung đã-thực-hiện vs chưa-thực-hiện (`portfolio-valuation.ts`) — đề xuất tách, gộp làm ở Phase 6, phụ thuộc C2.
+- **B2 (benchmark lãi suất tiết kiệm):** đã nằm ở Backlog (`docs/03-roadmap.md`) — đây là câu hỏi gốc của `business-overview.md` ("có hơn gửi tiết kiệm không?"). Không tạo issue trùng; nếu muốn kéo lên phase gần thì sửa roadmap (chưa làm, chờ user quyết).
