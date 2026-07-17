@@ -32,9 +32,9 @@ issue hoặc PR") để biết đúng tool cho hạ tầng đang chạy trước
 ## Bắt buộc khi tạo PR
 
 - Đọc `.github/pull_request_template.md`, điền đủ mục (Tóm tắt, Loại thay đổi, Liên quan, Test plan, Ảnh chụp màn hình nếu đổi UI).
-- **Luôn base = `main`** — KHÔNG dùng default branch mà `git remote show origin` / `origin/HEAD` gợi ý, vì trên repo này default branch trỏ sai (tổ tiên cũ của `main`, đi sau `main` nhiều commit). Base nhầm sẽ gom cả trăm file không liên quan vào diff.
+- **Base branch:** nếu người gọi (user hoặc agent khác) chỉ định rõ base branch cho tác vụ này, dùng đúng branch đó. **Nếu không chỉ định gì, mặc định base = `main`** — KHÔNG tự suy ra từ default branch mà `git remote show origin` / `origin/HEAD` gợi ý, vì trên repo này default branch trỏ sai (tổ tiên cũ của `main`, đi sau `main` nhiều commit). Base nhầm sẽ gom cả trăm file không liên quan vào diff.
 - Trước khi tạo PR: `git status`/`git log`/`git diff` để xác nhận nhánh hiện tại, đã push chưa, và đúng những gì cần đưa vào PR.
-- Sau khi tạo, kiểm tra lại số file/dòng thay đổi của PR (mục "Xem nội dung issue hoặc PR" ở `TOOLS.md`) hợp lý — nếu bất thường (quá nhiều file) nghĩa là base sai, sửa lại base về `main`.
+- Sau khi tạo, kiểm tra lại số file/dòng thay đổi của PR (mục "Xem nội dung issue hoặc PR" ở `TOOLS.md`) hợp lý — nếu bất thường (quá nhiều file) nghĩa là base sai, sửa lại đúng base đã chốt ở trên (chỉ định hoặc `main`).
 
 ## Nội dung
 
@@ -45,5 +45,5 @@ issue hoặc PR") để biết đúng tool cho hạ tầng đang chạy trước
 1. Xác định tác vụ: issue (loại bug/feature/refactor) hay PR.
 2. Xác định hạ tầng đang chạy và tool tương ứng theo `TOOLS.md` trước khi thao tác.
 3. Issue: đọc đúng template, soạn nội dung đủ mục, tạo issue theo tool đã xác định.
-4. PR: đọc PR template, kiểm tra trạng thái git, soạn nội dung đủ mục, tạo PR với base `main` theo tool đã xác định.
+4. PR: đọc PR template, kiểm tra trạng thái git, soạn nội dung đủ mục, tạo PR với base đã chốt (chỉ định nếu có, mặc định `main` nếu không) theo tool đã xác định.
 5. Trả về link/số issue hoặc PR vừa tạo, hoặc kết quả truy vấn — không tự suy diễn thêm hành động ngoài phạm vi được giao (không tự merge, không tự đóng issue/PR trừ khi được yêu cầu rõ).
