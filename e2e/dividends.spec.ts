@@ -358,11 +358,15 @@ test("Ghi cổ tức tiền mặt: hiện khối XIRR danh mục trước/sau + 
     );
     const holdingUrl = stripQuery(page.url());
 
-    // 10% × 10.000đ mệnh giá × 10 CP = gộp 10.000, thuế 5% = 500, net = 9.500
-    // (docs/domain/03-dividends.md) — lần đầu ghi cổ tức của holding này nên
-    // totalDividendReceived (tổng lịch sử) phải bằng đúng net vừa tính.
+    // 100% × 10.000đ mệnh giá × 10 CP = gộp 100.000, thuế 5% = 5.000, net =
+    // 95.000 (docs/domain/03-dividends.md) — lần đầu ghi cổ tức của holding
+    // này nên totalDividendReceived (tổng lịch sử) phải bằng đúng net vừa
+    // tính. Tỷ lệ 100% (thay vì 10%) cố ý chọn LỚN — với vị thế mua cách đây
+    // 730 ngày, cổ tức phải đủ lớn so với vốn để phần "before != after" ở
+    // dưới không bị trùng số do làm tròn 1 chữ số thập phân (100% dư margin
+    // ~0.26pp so với ngưỡng làm tròn 0.05pp, ổn định bất kể ngày chạy test).
     await page.goto(`${holdingUrl}/dividends/new`);
-    await page.locator('input[name="percent"]').fill("10");
+    await page.locator('input[name="percent"]').fill("100");
     await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
 
     await expect(
@@ -384,10 +388,10 @@ test("Ghi cổ tức tiền mặt: hiện khối XIRR danh mục trước/sau + 
     expect(match).not.toBeNull();
     expect(match?.[1]).not.toBe(match?.[2]);
 
-    // Tổng cổ tức đã nhận — lần đầu nên bằng đúng net (9.500 -> compact
-    // "9,5k", formatMoney compact, lib/format.ts).
+    // Tổng cổ tức đã nhận — lần đầu nên bằng đúng net (95.000 -> compact
+    // "95k", formatMoney compact, lib/format.ts).
     await expect(page.getByText(`Tổng cổ tức ${symbol} đã nhận`)).toBeVisible();
-    await expect(page.getByText("9,5k", { exact: true })).toBeVisible();
+    await expect(page.getByText("95k", { exact: true })).toBeVisible();
   } finally {
     await context.close();
     await cleanupTestUser(session.userId);
@@ -487,10 +491,14 @@ test("Ghi cổ tức cổ phiếu: tick “giá đã phản ánh thị trường
     await page.locator('input[name="percent"]').fill("10");
 
     // Checkbox thật (DividendForm.tsx) — accessible name lấy từ text trong
-    // cùng <label> bao input.
+    // cùng <label> bao input. `force: true` vì input là "peer sr-only"
+    // (CSS ẩn, kích thước ~1px) — actionability check của Playwright coi
+    // chính <label> bao ngoài "che" input tại điểm hit-test, dù người dùng
+    // thật click vào label vẫn toggle checkbox bình thường qua cơ chế native
+    // label-for (pattern chuẩn cho custom checkbox ẩn input + span trang trí).
     await page
       .getByRole("checkbox", { name: "Giá hiện tại đã phản ánh đợt chia này" })
-      .check();
+      .check({ force: true });
 
     await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
 

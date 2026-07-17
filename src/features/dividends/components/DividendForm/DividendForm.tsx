@@ -333,7 +333,7 @@ function DividendForm({
 
           {isCash ? (
             <div className="flex gap-2.5">
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <FieldLabel>Ngày nhận</FieldLabel>
                 <div className="relative">
                   <Input
@@ -348,7 +348,7 @@ function DividendForm({
                   <Calendar className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-faint" />
                 </div>
               </div>
-              <div className="w-27">
+              <div className="w-27 shrink-0">
                 <FieldLabel>Thuế</FieldLabel>
                 <div className="flex h-11 items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3">
                   <Lock className="size-3.5 shrink-0 text-muted-faint" />
@@ -501,7 +501,7 @@ function DividendForm({
                 ngày chia
               </span>
             </div>
-            <label className="flex cursor-pointer items-start gap-2.75 px-3.75 py-3.25">
+            <label className="relative flex cursor-pointer items-start gap-2.75 px-3.75 py-3.25">
               <input
                 type="checkbox"
                 checked={priceAlreadyReflectsMarket}
