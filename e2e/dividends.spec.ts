@@ -588,6 +588,85 @@ test("Ghi cổ tức cổ phiếu khi đã có giá cũ, không tick checkbox: t
   }
 });
 
+// Review PR #62 finding #4: ghi 2 lần cổ tức CỔ PHIẾU cùng vị thế, CÙNG ngày
+// chia (mặc định form luôn là hôm nay, không đổi giữa 2 lần submit) -> lần
+// sau phải TÍNH TIẾP trên giá đã điều chỉnh của lần trước (resolveOldPriceInTx
+// đọc lại NavOverride vừa ghi làm "giá cũ", mới hơn PriceQuote gốc) và
+// `navOverride.upsert` theo (holdingId, date) phải cập nhật ĐÚNG 1 dòng, không
+// tạo trùng. Hành vi domino này đã tự tay verify thủ công (không phải giả
+// định) nhưng trước đây chưa có test khoá lại — thêm ở đây để refactor sau
+// không lỡ làm hỏng mà không ai biết.
+test("Ghi cổ tức cổ phiếu 2 lần cùng ngày chia trên cùng vị thế: lần sau tính tiếp trên giá đã điều chỉnh của lần trước, không tạo NavOverride trùng", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dividend-nav-adjust-compound");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const quoteDate = daysAgo(30);
+
+  try {
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol, date: quoteDate } },
+      create: { symbol, date: quoteDate, price: "60000", source: "vnstock" },
+      update: { price: "60000", source: "vnstock" },
+    });
+
+    const holdingUrl = await createStockHolding(page, symbol, "100");
+    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
+    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+
+    // Lần 1: 100 CP, 10% -> SL_trước=100, SL_sau=110, giá mới = 60.000×100/110
+    // (giống test STOCK không-tick ở trên).
+    await page.goto(`${holdingUrl}/dividends/new`);
+    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
+    await page.locator('input[name="percent"]').fill("10");
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    await expect(
+      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
+    ).toBeVisible();
+
+    const firstOverride = await db.navOverride.findFirst({
+      where: { holdingId },
+    });
+    expect(firstOverride).not.toBeNull();
+
+    // Lần 2: CÙNG ngày chia -> "giá cũ" đọc lại NavOverride vừa ghi ở lần 1
+    // (mới hơn PriceQuote gốc 30 ngày trước). SL_trước lần 2 = 110 (100 gốc +
+    // 10 thưởng lần 1, đã cộng vào Holding.quantity) -> thưởng lần 2 = 11 ->
+    // SL_sau = 121.
+    await page.goto(`${holdingUrl}/dividends/new`);
+    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
+    await page.locator('input[name="percent"]').fill("10");
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    await expect(
+      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
+    ).toBeVisible();
+
+    const overridesAfterSecond = await db.navOverride.findMany({
+      where: { holdingId },
+    });
+    // upsert theo (holdingId, date) — cùng ngày chia cả 2 lần -> vẫn đúng 1
+    // dòng duy nhất, không tạo trùng.
+    expect(overridesAfterSecond).toHaveLength(1);
+
+    const expectedSecondPrice = new Decimal(firstOverride!.price.toString())
+      .mul(110)
+      .div(121)
+      .toDecimalPlaces(4)
+      .toString();
+    expect(
+      new Decimal(overridesAfterSecond[0]!.price.toString()).toString(),
+    ).toBe(expectedSecondPrice);
+  } finally {
+    await context.close();
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
+  }
+});
+
 // Issue #61: Holding chưa có giá nào (MISSING_PRICE — không PriceQuote lẫn
 // NavOverride) -> ghi cổ tức vẫn thành công bình thường, resolveOldPriceInTx
 // trả null nên KHÔNG tạo NavOverride nào (không có gì để điều chỉnh).

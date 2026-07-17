@@ -235,10 +235,21 @@ export async function recordDividend(
                 quantityAtDate,
               });
               if (newPrice) {
+                // Review PR #62 finding #2: ghi kèm `note` khi tự tạo/GHI ĐÈ
+                // NavOverride — nếu holdingId+date đã có sẵn 1 dòng (vd user
+                // tự nhập tay đúng ngày này, hoặc 1 dividend khác cùng ngày
+                // đã điều chỉnh trước đó), note giải thích RÕ vì sao giá bị
+                // thay, không âm thầm mất dấu vết audit.
+                const noteLabel = `Tự động điều chỉnh do ghi cổ tức tiền mặt ngày ${formatDate(date)}`;
                 await tx.navOverride.upsert({
                   where: { holdingId_date: { holdingId, date } },
-                  create: { holdingId, date, price: newPrice.toString() },
-                  update: { price: newPrice.toString() },
+                  create: {
+                    holdingId,
+                    date,
+                    price: newPrice.toString(),
+                    note: noteLabel,
+                  },
+                  update: { price: newPrice.toString(), note: noteLabel },
                 });
                 priceAdjustment = { oldPrice, newPrice };
               }
@@ -320,10 +331,17 @@ export async function recordDividend(
               quantityAfter: quantityAtDate.plus(finalStockQuantity),
             });
             if (newPrice) {
+              // Cùng lý do note ở nhánh CASH phía trên (review PR #62 finding #2).
+              const noteLabel = `Tự động điều chỉnh do ghi cổ tức cổ phiếu ngày ${formatDate(date)}`;
               await tx.navOverride.upsert({
                 where: { holdingId_date: { holdingId, date } },
-                create: { holdingId, date, price: newPrice.toString() },
-                update: { price: newPrice.toString() },
+                create: {
+                  holdingId,
+                  date,
+                  price: newPrice.toString(),
+                  note: noteLabel,
+                },
+                update: { price: newPrice.toString(), note: noteLabel },
               });
               priceAdjustment = { oldPrice, newPrice };
             }
