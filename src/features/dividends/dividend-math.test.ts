@@ -192,4 +192,27 @@ describe("computeCashDividendPriceAdjustment", () => {
 
     expect(result).toBeNull();
   });
+
+  // Review PR #62 finding #5: CP dưới mệnh giá + %cổ tức cao (hoặc nhiều đợt
+  // cổ tức liên tiếp dồn giá xuống) -> gross/CP vượt giá cũ -> giá điều chỉnh
+  // ra âm, vô nghĩa. Xử lý giống MISSING_PRICE: trả null, không tạo NavOverride.
+  test("gross/CP vượt giá cũ -> giá điều chỉnh ra âm -> null", () => {
+    const result = computeCashDividendPriceAdjustment({
+      oldPrice: new Decimal(5000),
+      grossAmount: new Decimal(1000000), // gross/CP = 10.000 > giá cũ 5.000
+      quantityAtDate: new Decimal(100),
+    });
+
+    expect(result).toBeNull();
+  });
+
+  test("gross/CP đúng bằng giá cũ -> giá điều chỉnh = 0 -> null", () => {
+    const result = computeCashDividendPriceAdjustment({
+      oldPrice: new Decimal(5000),
+      grossAmount: new Decimal(500000), // gross/CP = 5.000 = giá cũ
+      quantityAtDate: new Decimal(100),
+    });
+
+    expect(result).toBeNull();
+  });
 });
