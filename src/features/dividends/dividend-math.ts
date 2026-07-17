@@ -64,9 +64,10 @@ export function isStockQuantityOverrideValid(
 // thời cho tới khi có giá mới. Giữ nguyên TỔNG GIÁ TRỊ trước/sau: giá_mới =
 // giá_cũ × SL_trước / SL_sau. Trả null khi SL_sau = 0 (không thể — caller coi
 // null = "không điều chỉnh được", không tạo NavOverride).
-// Không clamp giá âm/0 — chưa chốt spec cho ca biên này (SL_trước có thể theo
-// lý thuyết là 0 nếu gọi sai, nhưng recordDividend luôn gọi với SL đã cộng
-// dividend nên SL_sau > SL_trước >= 0; giới hạn chưa xử lý, để ngỏ).
+// Không cần clamp âm/0: đây là phép NHÂN với tỷ lệ SL_trước/SL_sau luôn dương
+// (SL_sau > SL_trước >= 0, cổ tức chỉ CỘNG thêm SL) -> giá_mới luôn dương, trừ
+// khi giá_cũ vốn đã <= 0 (dữ liệu hỏng có sẵn, không phải rủi ro do tính năng
+// này gây ra — ngoài phạm vi xử lý ở đây).
 export function computeStockDividendPriceAdjustment(input: {
   oldPrice: Decimal;
   quantityBefore: Decimal;
@@ -82,13 +83,19 @@ export function computeStockDividendPriceAdjustment(input: {
 // Trừ cổ tức GỘP (`grossAmount`, TRƯỚC thuế) trên mỗi cổ phần — đây là tiền
 // rời khỏi vốn công ty, không liên quan thuế TNCN cá nhân của người nắm giữ
 // (KHÔNG dùng netAmount). Trả null khi SL tại ngày ghi = 0.
-// Không clamp giá âm/0 — chưa chốt spec cho ca biên này (cổ tức gộp/CP lớn
-// hơn giá hiện tại), để ngỏ.
+// Trả null khi giá điều chỉnh <= 0 (review PR #62 finding #5,
+// process/DECISION.md 2026-07-17 (3)) — có ca thật: CP giao dịch dưới mệnh
+// giá kết hợp %cổ tức cao, hoặc nhiều đợt cổ tức liên tiếp cùng holding dồn
+// giá xuống. Xử lý giống MISSING_PRICE (null = "không điều chỉnh được") —
+// caller bỏ qua tạo NavOverride, dividend vẫn ghi thành công.
 export function computeCashDividendPriceAdjustment(input: {
   oldPrice: Decimal;
   grossAmount: Decimal;
   quantityAtDate: Decimal;
 }): Decimal | null {
   if (input.quantityAtDate.isZero()) return null;
-  return input.oldPrice.minus(input.grossAmount.div(input.quantityAtDate));
+  const newPrice = input.oldPrice.minus(
+    input.grossAmount.div(input.quantityAtDate),
+  );
+  return newPrice.gt(0) ? newPrice : null;
 }
