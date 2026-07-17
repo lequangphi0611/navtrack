@@ -10,8 +10,8 @@
 ## Quy tắc & bất biến
 - **Quy ước dấu:** BUY → `amount < 0` (tiền ra), SELL → `amount > 0` (tiền vào).
 - `amount` của một giao dịch = (số lượng × giá) ± phí/thuế theo hướng dòng tiền thực:
-  - BUY: `amount = -(quantity × pricePerUnit) - feeAmount` (tiền bỏ ra gồm cả phí).
-  - SELL: `amount = (quantity × pricePerUnit) - feeAmount - taxAmount` (tiền nhận sau phí, thuế).
+  - BUY: `amount = -(quantity × pricePerUnit) - feeAmount` (tiền bỏ ra gồm cả phí). **Không có `taxAmount` cho BUY** — VN không đánh thuế khi mua chứng khoán, form ghi BUY không có field thuế (`taxAmount` luôn `0`, xem `07-tax.md`).
+  - SELL: `amount = (quantity × pricePerUnit) - feeAmount - taxAmount` (tiền nhận sau phí, thuế). `taxAmount` **tự tính** từ `SALE_TAX_<loại>` tại ngày bán nhưng **prefill, cho sửa tay** (xem `07-tax.md` mục "Quy tắc & bất biến").
 - **Không sửa giao dịch đã xảy ra thành dạng "ẩn"** — mọi thay đổi là sửa/xóa bản ghi rõ ràng, giữ lịch sử trung thực.
 - **Bán không vượt quá số lượng đang giữ** tại thời điểm bán (validate ở biên server) — số lượng đang giữ **gồm cả cổ tức cổ phiếu đã nhận trước đó** (issue #59, xem `01-assets-and-holdings.md` mục "Cách tính"), không chỉ tổng mua/bán.
 

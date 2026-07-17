@@ -9,7 +9,8 @@ App **chỉ đọc / resolve** giá trị cấu hình (thuế bán, thuế cổ 
 ## Các key hiện có
 | key | group | valueType | ghi chú |
 |---|---|---|---|
-| `SALE_TAX_STOCK` / `_FUND` / `_BOND` / `_GOLD` | TAX | DECIMAL | thuế bán theo loại (%), effective-dated theo ngày giao dịch |
+| `SALE_TAX_STOCK` / `_FUND` / `_BOND` | TAX | DECIMAL | thuế bán theo loại (%), effective-dated theo ngày giao dịch |
+| `SALE_TAX_GOLD` | TAX | DECIMAL | seed `0` — cá nhân bán vàng tại VN không chịu thuế TNCN chuyển nhượng (khác chứng khoán); vẫn phải seed tường minh, không được thiếu dòng (xem "Resolution" bên dưới) |
 | `DIVIDEND_TAX_RATE` | TAX | DECIMAL | thuế cổ tức tiền mặt (%), effective-dated theo ngày chia cổ tức — seed mặc định `5` từ 2020-01-01 |
 | `DIVIDEND_PAR_VALUE` | TAX | DECIMAL | mệnh giá dùng tính cổ tức tiền mặt theo % (đ/CP), effective-dated theo ngày chia cổ tức — seed mặc định `10000` từ 2020-01-01 |
 | `MAX_MEMBERS` | ACCESS | INT | số thành viên tối đa (đếm `AllowedUser` chưa thu hồi); resolve với `atDate = hôm nay`, không cần effective dating — xem `08-users-access-and-privacy.md` |
