@@ -15,7 +15,7 @@
 - **Vị thế đã đóng (bán hết, SL = 0):** XIRR là **"chốt" — KHÔNG ghép NAV giả định** (NAV = 0), vì dòng tiền bán cuối là dòng tiền dương thật đã đủ cho công thức. Kết quả không còn phụ thuộc giá thị trường. Vị thế đóng **vẫn tính vào XIRR & lãi/lỗ toàn danh mục**.
 - **"Không tính được" là kết quả nghiệp vụ, KHÔNG phải lỗi** — trả status rõ ràng (`NO_POSITIVE_FLOW`, `NO_CONVERGE`), **không âm thầm trả -100%** hay `NaN` (xem `rules/error-handling.md`).
 - Hiển thị **song song hai chỉ số**, không lẫn lộn.
-- **Lãi/lỗ tuyệt đối đi kèm một dòng phụ "chi phí ăn mòn"** (tổng thuế + phí luỹ kế, % trên `totalInvested`) — xem công thức và ví dụ ở `07-tax.md` mục "Chi phí ăn mòn".
+- **Lãi/lỗ tuyệt đối đi kèm một dòng phụ "chi phí ăn mòn"** (tổng thuế + phí luỹ kế, % trên `grossInvested` = vốn gộp đã triển khai `Σ|BUY.amount|`, **không** phải `totalInvested` vốn ròng) — xem công thức và ví dụ ở `07-tax.md` mục "Chi phí ăn mòn".
 
 ## Cách tính
 - **Chuỗi dòng tiền cho XIRR** = các `Cashflow.amount` (đã mang dấu) + các `Dividend.netAmount` (dương) + dòng tiền giả định NAV tại mốc chốt (dương).

@@ -24,17 +24,17 @@
 
 ## Chi phí ăn mòn (cost drag) — tổng thuế + phí luỹ kế
 - **Mục đích:** trả lời câu hỏi Sheet cũ không trả lời được — "tổng cộng tôi đã mất bao nhiêu tiền cho thuế/phí giao dịch, và con số đó chiếm bao nhiêu % số vốn tôi bỏ ra" (xem `docs/business-overview.md` mục "Bài toán"). Hiển thị như một dòng phụ nhỏ dưới card lãi/lỗ trên dashboard (`ReturnMetrics`), không phải một card riêng.
-- **Phạm vi cộng dồn — gồm cả ba nguồn đã có sẵn dữ liệu**, tính tới cùng mốc chốt (`cutoffDate`) đang chọn trên dashboard, giống cách `totalInvested` hiện tính (`lib/portfolio-valuation.ts`):
+- **Phạm vi cộng dồn — gồm cả ba nguồn đã có sẵn dữ liệu**, tính tới cùng mốc chốt (`cutoffDate`) đang chọn trên dashboard:
   - `Σ Cashflow.taxAmount` — thuế bán (Phase 5; luôn `0` cho BUY).
   - `Σ Cashflow.feeAmount` — phí giao dịch (BUY + SELL, đã có từ Phase 1).
   - `Σ Dividend.taxAmount` — thuế cổ tức tiền mặt (Phase 4; `null`/không áp dụng cho cổ tức cổ phiếu, coi như `0`).
 - **Công thức:**
   ```
   costDragAmount  = Σ Cashflow.taxAmount + Σ Cashflow.feeAmount + Σ Dividend.taxAmount
-  costDragPercent = costDragAmount / totalInvested × 100
+  costDragPercent = costDragAmount / grossInvested × 100
   ```
-  - `totalInvested` = **vốn ròng đã bỏ vào** — giá trị đã tính sẵn cho `navDeltaPercent` (`= -(Σ Cashflow.amount + Σ Dividend.netAmount)` tính tới `cutoffDate`, xem `05-returns-xirr-and-pnl.md`). Dùng lại đúng khái niệm "vốn đã bỏ vào" đã hiển thị trên dashboard, không định nghĩa một mẫu số khác.
-  - `totalInvested = 0` (chưa có giao dịch nào) → `costDragPercent = 0`, không chia cho 0 (cùng cách xử lý với `navDeltaPercent`).
+  - `grossInvested` = **vốn gộp đã triển khai** = `Σ |Cashflow.amount|` trên các dòng `type = BUY` (tổng tiền mặt đã chi ra để mua, đã gồm phí mua), tính tới `cutoffDate`. **KHÔNG dùng `totalInvested` (vốn ròng)** — vốn ròng đã bị phần đã bán/cổ tức rút bớt, nên khi bán nhiều mẫu số co lại (thậm chí âm khi bán sạch) làm `costDragPercent` phình vô lý, dù chi phí thật không đổi. Chi phí ăn mòn là chi phí tích luỹ trên **hoạt động giao dịch**, nên mẫu số phải là vốn đã *rót vào để mua* (chỉ đi lên), không phải vốn *còn lại*. Quyết định 2026-07-17 (6), sửa từ mẫu số `totalInvested` sai ban đầu — xem `process/DECISION.md`.
+  - `grossInvested = 0` (chưa có lệnh mua nào) → `costDragPercent = 0`, không chia cho 0.
 - **Không phải một chỉ số hiệu suất riêng** — chỉ là phần diễn giải thêm cho lãi/lỗ, không đưa vào XIRR (XIRR đã tự phản ánh chi phí này qua dòng tiền thực, xem trên).
 
 ## Ca biên
@@ -51,4 +51,5 @@
 - Bán 50 FPT giá 130k → giá trị bán 6.500.000 → thuế 0.1% = 6.500 → tiền nhận ≈ 6.493.500 (trước phí).
 - Cổ tức tiền mặt gộp 200.000 → thuế 5% = 10.000 → thực nhận 190.000.
 - Bán 1 lượng vàng SJC → `SALE_TAX_GOLD` = 0% → `taxAmount = 0`, tiền nhận chỉ trừ phí (nếu có).
-- **Chi phí ăn mòn:** danh mục có `totalInvested` = 500.000.000; lịch sử cộng dồn `Cashflow.taxAmount` = 1.200.000, `Cashflow.feeAmount` = 800.000, `Dividend.taxAmount` = 300.000 → `costDragAmount` = 2.300.000 → `costDragPercent` ≈ 0.46%. Dòng phụ dưới lãi/lỗ hiển thị: "Bao gồm 1.500.000 thuế + 800.000 phí (0.46% vốn đã bỏ vào)".
+- **Chi phí ăn mòn:** danh mục có `grossInvested` (tổng tiền đã chi ra mua) = 500.000.000; lịch sử cộng dồn `Cashflow.taxAmount` = 1.200.000, `Cashflow.feeAmount` = 800.000, `Dividend.taxAmount` = 300.000 → `costDragAmount` = 2.300.000 → `costDragPercent` ≈ 0.46%. Dòng phụ dưới lãi/lỗ hiển thị: "Bao gồm 1.500.000 thuế + 800.000 phí (0.46% vốn đã bỏ ra mua)".
+  - **Ca bán nhiều làm rõ vì sao không dùng vốn ròng:** mua 100.000.000, sau đó bán bớt thu về 80.000.000 → vốn ròng còn ~20.000.000; nếu chi phí luỹ kế 2.000.000 thì chia vốn ròng ra **10%** (hoảng), còn chia `grossInvested` = 100.000.000 ra **2%** (đúng cảm nhận "phí ăn 2% số tiền tôi từng rót vào").
