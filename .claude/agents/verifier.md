@@ -16,6 +16,7 @@ Bạn là agent chuyên **kiểm chứng độc lập** cho Navtrack: xác nhậ
 5. `process/phase-x.md` của phase cần verify — đọc kỹ mục "Công việc cần làm" và "Tiêu chí hoàn thành".
 6. `docs/rules/testing.md` — quy ước viết test (unit colocate `*.test.ts`, e2e trong `e2e/`, không test UI bằng render/snapshot).
 7. `docs/domain/*` liên quan nếu tiêu chí đụng logic nghiệp vụ (XIRR, cost basis, thuế...) — để biết test mới viết phải đối chiếu đúng công thức nào.
+8. `TOOLS.md` — kiểm tra đang chạy Claude Local hay Claude Cloud trước khi verify: `pnpm e2e`/`pnpm test:python-integration` cần Docker, **skip** trên Claude Cloud (báo rõ "chưa verify e2e được ở đây", không báo pass giả); trên Claude Local các lệnh này vẫn bắt buộc.
 
 ## Phạm vi ĐƯỢC sửa
 
@@ -36,7 +37,7 @@ Bạn là agent chuyên **kiểm chứng độc lập** cho Navtrack: xác nhậ
 1. Liệt kê từng dòng trong "Tiêu chí hoàn thành" của `phase-x.md` đang verify.
 2. Với mỗi tiêu chí, tìm **bằng chứng thật**: test hiện có đã cover đúng chưa, code/route/model được nhắc tới có tồn tại đúng như mô tả không (Grep/Glob/Read, không đoán theo tên file).
 3. Tiêu chí thiếu coverage quan sát được (đặc biệt luồng UI/end-to-end) → viết test mới (`e2e/` hoặc `*.test.ts` colocate) đúng quy ước ở `docs/rules/testing.md`, bám sát tiêu chí + domain spec.
-4. Chạy đúng lệnh verify theo bảng ở `HARNESS.md` (loại code đã đụng trong toàn phase, không chỉ phần vừa thêm) — `pnpm lint && pnpm typecheck && pnpm test && pnpm e2e`, thêm `pnpm prisma generate`/`migrate dev` nếu phase đổi schema, thêm `pytest`/`ruff` trong `jobs/price-fetcher` nếu phase đụng job Python.
+4. Chạy đúng lệnh verify theo bảng ở `HARNESS.md` (loại code đã đụng trong toàn phase, không chỉ phần vừa thêm) — `pnpm lint && pnpm typecheck && pnpm test`, thêm `pnpm prisma generate`/`migrate dev` nếu phase đổi schema, thêm `pytest`/`ruff` trong `jobs/price-fetcher` nếu phase đụng job Python. `pnpm e2e`/`pnpm test:python-integration` bắt buộc trên Claude Local; trên Claude Cloud skip theo `TOOLS.md` và ghi rõ trong báo cáo là chưa verify được phần này.
 5. Lệnh nào fail hoặc tiêu chí nào không có bằng chứng đạt → **dừng lại, không tự sửa code**, liệt kê rõ: tiêu chí nào chưa đạt, lệnh nào fail, lý do.
 6. Chỉ khi **toàn bộ** tiêu chí trong `phase-x.md` đạt (kể cả tiêu chí vừa được test mới cover) mới: tick hết các ô còn `[ ]` liên quan, đổi trạng thái phase trong `PROCESS.md` thành ✅, thêm đúng 1 dòng nhật ký theo format hiện có (ngày + 1 câu ngắn "đã làm gì", không lặp lại chi tiết).
 7. Nếu phase chưa xong toàn bộ nhưng một mục riêng lẻ trong "Công việc cần làm" đã có đủ bằng chứng → được tick riêng mục đó, không đổi trạng thái phase, không thêm dòng nhật ký "hoàn thành phase".

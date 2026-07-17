@@ -38,7 +38,7 @@ Skill này điều phối 3 agent đã có trong dự án (`planner`, `business-
 1. `git status` + `git diff` xem lại toàn bộ thay đổi (code + test verifier viết thêm + doc tiến trình).
 2. Tạo commit mới (không amend), message tiếng Anh theo quy ước `CLAUDE.md`, ưu tiên giải thích "vì sao" hơn "làm gì".
 3. Push lên nhánh hiện tại.
-4. Kiểm tra nhánh đã có PR mở chưa (`gh pr list --head <branch>`); nếu chưa, spawn Agent `subagent_type: issuer` để tạo PR (`--base main`, theo `.github/pull_request_template.md`). Nếu đã có PR mở, push ở bước trên đã tự cập nhật PR đó.
+4. Kiểm tra nhánh đã có PR mở chưa (mục "Kiểm tra nhánh hiện tại đã có PR mở chưa" ở [`TOOLS.md`](../../../TOOLS.md) — tool khác nhau giữa Claude Local/Cloud); nếu chưa, spawn Agent `subagent_type: issuer` để tạo PR (base `main`, theo `.github/pull_request_template.md`). Nếu đã có PR mở, push ở bước trên đã tự cập nhật PR đó.
 
 ## Không làm
 - Không bỏ qua gate duyệt plan ở Bước 1 dù mục tiêu là "tự động".
