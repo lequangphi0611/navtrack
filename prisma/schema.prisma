@@ -170,6 +170,13 @@ model Dividend {
   holding       Holding      @relation(fields: [holdingId], references: [id], onDelete: Cascade)
   type          DividendType
   date          DateTime
+  // Ngày tiền/CP THỰC VỀ tài khoản — thuần thông tin hiển thị, có thể trễ vài
+  // tuần so với `date` (ngày chia) ngoài thực tế. KHÔNG dùng cho bất kỳ tính
+  // toán nào: không XIRR, không quantity timeline (buildQuantityTimeline luôn
+  // dùng `date`), không phải ngày ghi NavOverride bù pha loãng (luôn ghi tại
+  // `date`, xem features/dividends/actions.ts::recordDividend). Optional —
+  // user có thể không nhập.
+  paymentDate   DateTime?
   grossAmount   Decimal?     @db.Decimal(20, 4) // type = CASH: cổ tức gộp trước thuế
   taxAmount     Decimal?     @db.Decimal(20, 4) // type = CASH: thuế TNCN tự khấu trừ (~5%)
   netAmount     Decimal?     @db.Decimal(20, 4) // type = CASH: thực nhận sau thuế = dòng tiền dương cho XIRR

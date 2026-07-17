@@ -2,6 +2,7 @@
 
 import Decimal from "decimal.js";
 import {
+  Archive,
   Calculator,
   Calendar,
   Check,
@@ -12,6 +13,7 @@ import {
   Layers,
   Lock,
   Pencil,
+  Settings2,
   Sigma,
   TrendingUp,
   X,
@@ -102,6 +104,14 @@ function DividendForm({
   const [type, setType] = useState<DividendKind>("CASH");
   const [percent, setPercent] = useState("");
   const [date, setDate] = useState(defaultDateInputValue);
+  // Issue #61: ngày tiền/CP thực về TK — thuần thông tin, optional (không có
+  // default như `date`, để trống là hợp lệ).
+  const [paymentDate, setPaymentDate] = useState("");
+  // Issue #61: mặc định false (chưa tick) -> Server Action tự tạo NavOverride
+  // bù pha loãng. Submit qua hidden input chuỗi "true"/"false" bên dưới
+  // (cùng pattern hidden input "type"), KHÔNG submit trực tiếp checkbox thô.
+  const [priceAlreadyReflectsMarket, setPriceAlreadyReflectsMarket] =
+    useState(false);
   const [stockOverride, setStockOverride] = useState("");
   const [showOverrideInput, setShowOverrideInput] = useState(false);
   const [state, formAction, isPending] = useActionState(action, null);
@@ -175,6 +185,11 @@ function DividendForm({
         <form action={formAction} className="flex flex-col gap-4.5">
           <input type="hidden" name="holdingId" value={holding.id} />
           <input type="hidden" name="type" value={type} />
+          <input
+            type="hidden"
+            name="priceAlreadyReflectsMarket"
+            value={priceAlreadyReflectsMarket ? "true" : "false"}
+          />
 
           <HoldingSwitcher {...switcher} hidden={hidden} />
 
@@ -361,6 +376,38 @@ function DividendForm({
             </div>
           )}
 
+          <div>
+            <FieldLabel>
+              Ngày thanh toán{" "}
+              <span className="font-normal text-muted-faint">
+                · tuỳ chọn, tham khảo
+              </span>
+            </FieldLabel>
+            <div className="relative">
+              <Input
+                type="date"
+                name="paymentDate"
+                value={paymentDate}
+                onChange={(event) => setPaymentDate(event.target.value)}
+                className="h-11 rounded-xl pr-9 font-mono font-semibold"
+                disabled={isPending}
+              />
+              {isCash ? (
+                <Coins className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-faint" />
+              ) : (
+                <Archive className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-faint" />
+              )}
+            </div>
+            <div className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-faint">
+              <Info className="mt-0.5 size-3.25 shrink-0" />
+              <span>
+                Ngày {isCash ? "tiền" : holding.unit} thực về tài khoản. Không
+                dùng để tính XIRR hay giá điều chỉnh — mọi tính toán bám ngày
+                chia.
+              </span>
+            </div>
+          </div>
+
           {isCash ? (
             <div className="overflow-hidden rounded-2xl border border-border bg-card">
               <div className="flex items-center gap-1.75 border-b border-white/5 px-3.75 py-2.75 text-[11.5px] font-semibold text-muted-foreground">
@@ -441,6 +488,44 @@ function DividendForm({
               </div>
             </div>
           )}
+
+          {/* Issue #61: checkbox điều khiển việc Server Action có tự tạo
+              NavOverride bù pha loãng hay không — áp dụng cho cả CASH/STOCK.
+              Submit qua hidden input "true"/"false" ở đầu form, không phải
+              chính input này. */}
+          <div className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="flex items-center gap-1.75 border-b border-white/5 px-3.75 py-2.75 text-[11.5px] font-semibold text-muted-foreground">
+              <Settings2 className="size-3.75 text-accent" />
+              Giá điều chỉnh kỹ thuật
+              <span className="ml-auto text-[10.5px] font-medium text-muted-faint">
+                ngày chia
+              </span>
+            </div>
+            <label className="flex cursor-pointer items-start gap-2.75 px-3.75 py-3.25">
+              <input
+                type="checkbox"
+                checked={priceAlreadyReflectsMarket}
+                onChange={(event) =>
+                  setPriceAlreadyReflectsMarket(event.target.checked)
+                }
+                className="peer sr-only"
+                disabled={isPending}
+              />
+              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border border-border bg-white/4 transition-colors peer-checked:border-accent peer-checked:bg-accent">
+                <Check className="size-3.5 text-accent-foreground opacity-0 transition-opacity peer-checked:opacity-100" />
+              </span>
+              <span className="flex-1">
+                <span className="block text-[12.5px] font-semibold text-muted-foreground">
+                  Giá hiện tại đã phản ánh đợt chia này
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-faint">
+                  Bỏ trống → hệ thống tự tính và ghi giá điều chỉnh tại ngày
+                  chia. Tick nếu giá đang niêm yết đã đúng (vd job cập nhật giá
+                  đã chạy lại).
+                </span>
+              </span>
+            </label>
+          </div>
 
           {isCash ? (
             <div className="flex gap-2.25 rounded-xl border border-gain/22 bg-gain/7 p-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
@@ -528,6 +613,11 @@ function DividendSuccessContent({
             {isCash ? "Cổ tức tiền mặt" : "Cổ tức cổ phiếu"}{" "}
             {result.percentLabel}% · {result.dateLabel}
           </div>
+          {result.paymentDateLabel ? (
+            <div className="mt-0.5 text-[11px] text-muted-faint">
+              Thanh toán {result.paymentDateLabel}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -569,6 +659,26 @@ function DividendSuccessContent({
           ) : null}
         </div>
       )}
+
+      {/* Issue #61: chỉ hiện khi Server Action thực sự tự tạo/ghi đè
+          NavOverride (navOverrideAdjusted=true) — không hiện gì khi user đã
+          tick "giá hiện tại đã phản ánh đợt chia này". */}
+      {result.navOverrideAdjusted && result.oldPrice && result.newPrice ? (
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="flex items-center gap-1.75 border-b border-white/5 px-3.75 py-2.75 text-[11.5px] font-semibold text-muted-foreground">
+            <Settings2 className="size-3.75 text-accent" />
+            Giá đã tự động điều chỉnh
+          </div>
+          <div className="flex items-center justify-between px-3.75 py-3.25">
+            <span className="text-[13px] text-muted-foreground">
+              Giá tham chiếu
+            </span>
+            <span className="font-mono text-[13.5px] font-semibold text-foreground">
+              {formatMoney(result.oldPrice)} → {formatMoney(result.newPrice)}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {result.xirrBeforePercent && result.xirrAfterPercent ? (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">

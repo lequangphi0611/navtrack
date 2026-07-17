@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 import { Prisma, PrismaClient } from "@prisma/client";
+import Decimal from "decimal.js";
 
 import { daysAgo, isoDate } from "./support/dates";
 import {
@@ -391,5 +392,233 @@ test("Ghi cổ tức tiền mặt: hiện khối XIRR danh mục trước/sau + 
     await context.close();
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
+  }
+});
+
+// Issue #61: ghi cổ tức TIỀN MẶT thổi phồng NAV tạm thời (tiền rời khỏi vốn
+// công ty nhưng PriceQuote/NavOverride chưa kịp phản ánh) -> recordDividend
+// TỰ tạo NavOverride bù pha loãng, ghi TẠI `date` (ngày chia), trừ đúng
+// grossAmount/CP (GỘP, trước thuế — xem dividend-math.ts::computeCashDividendPriceAdjustment)
+// khỏi giá cũ.
+test("Ghi cổ tức tiền mặt khi đã có giá cũ: tự tạo NavOverride bù pha loãng theo đúng công thức", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dividend-nav-adjust-cash");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const quoteDate = daysAgo(30);
+
+  try {
+    // Giá cũ 50.000/CP, đủ xa trước ngày chia (hôm nay, mặc định của form) để
+    // chắc chắn là giá "cũ" dùng làm gốc điều chỉnh.
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol, date: quoteDate } },
+      create: { symbol, date: quoteDate, price: "50000", source: "vnstock" },
+      update: { price: "50000", source: "vnstock" },
+    });
+
+    // 100 CP, tỷ lệ 10%, mệnh giá 10.000, thuế 5% (seedDividendSettings) ->
+    // grossAmount = 10.000 × 10% × 100 = 100.000 -> 1.000/CP -> giá mới =
+    // 50.000 − 1.000 = 49.000.
+    const holdingUrl = await createStockHolding(page, symbol, "100");
+    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
+    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+
+    await page.goto(`${holdingUrl}/dividends/new`);
+    // "Tiền mặt" là mặc định -> không cần bấm SegmentedControl.
+    // KHÔNG tick "giá đã phản ánh thị trường" (chưa có checkbox thật trong UI
+    // — design-implementer sẽ thêm; mặc định form submit
+    // priceAlreadyReflectsMarket=undefined -> schema default "false", đúng
+    // hành vi "không tick").
+    await page.locator('input[name="percent"]').fill("10");
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+
+    await expect(
+      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
+    ).toBeVisible();
+
+    const override = await db.navOverride.findFirst({
+      where: { holdingId },
+      orderBy: { date: "desc" },
+    });
+    expect(override).not.toBeNull();
+    expect(new Decimal(override!.price.toString()).toString()).toBe("49000");
+  } finally {
+    await context.close();
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
+  }
+});
+
+// Issue #61: user tick "giá đã phản ánh thị trường" (vd đã tự cập nhật giá
+// tay, hoặc job giá đã chạy lại) -> recordDividend bỏ qua HOÀN TOÀN bước tự
+// điều chỉnh, dù có giá cũ để tính. UI checkbox thật (DividendForm.tsx, submit
+// qua hidden input `priceAlreadyReflectsMarket` "true"/"false") giờ đã có —
+// tương tác checkbox thật thay vì page.evaluate() inject hidden input (cách
+// verifier tự cập nhật theo đúng comment DECISION.md 2026-07-17: "sẽ đổi sang
+// tương tác checkbox thật khi UI xong").
+test("Ghi cổ tức cổ phiếu: tick “giá đã phản ánh thị trường” -> KHÔNG tự tạo NavOverride dù có giá cũ", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dividend-nav-adjust-skip");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const quoteDate = daysAgo(30);
+
+  try {
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol, date: quoteDate } },
+      create: { symbol, date: quoteDate, price: "50000", source: "vnstock" },
+      update: { price: "50000", source: "vnstock" },
+    });
+
+    const holdingUrl = await createStockHolding(page, symbol, "100");
+    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
+    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+
+    await page.goto(`${holdingUrl}/dividends/new`);
+    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
+    await page.locator('input[name="percent"]').fill("10");
+
+    // Checkbox thật (DividendForm.tsx) — accessible name lấy từ text trong
+    // cùng <label> bao input.
+    await page
+      .getByRole("checkbox", { name: "Giá hiện tại đã phản ánh đợt chia này" })
+      .check();
+
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+
+    await expect(
+      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
+    ).toBeVisible();
+    // Tick checkbox -> Server Action bỏ qua bước tự điều chỉnh -> khối "Giá
+    // đã tự động điều chỉnh" (DividendForm.tsx::DividendSuccessContent)
+    // KHÔNG được render.
+    await expect(page.getByText("Giá đã tự động điều chỉnh")).toHaveCount(0);
+
+    const override = await db.navOverride.findFirst({ where: { holdingId } });
+    expect(override).toBeNull();
+  } finally {
+    await context.close();
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
+  }
+});
+
+// Issue #61: ghi cổ tức CỔ PHIẾU không tick checkbox, có giá cũ -> tự tạo
+// NavOverride bù pha loãng theo công thức giá_mới = giá_cũ × SL_trước / SL_sau
+// (dividend-math.ts::computeStockDividendPriceAdjustment) — giữ nguyên TỔNG
+// GIÁ TRỊ trước/sau. Bổ sung coverage còn thiếu: các test STOCK hiện có (dòng
+// trên) chỉ verify case CASH không tick + case STOCK tick (bỏ qua), chưa có
+// case STOCK không tick.
+test("Ghi cổ tức cổ phiếu khi đã có giá cũ, không tick checkbox: tự tạo NavOverride giữ nguyên tổng giá trị", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dividend-nav-adjust-stock");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const quoteDate = daysAgo(30);
+
+  try {
+    // Giá cũ 60.000/CP, đủ xa trước ngày chia (hôm nay, mặc định form).
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol, date: quoteDate } },
+      create: { symbol, date: quoteDate, price: "60000", source: "vnstock" },
+      update: { price: "60000", source: "vnstock" },
+    });
+
+    // 100 CP, tỷ lệ 10% -> stockQuantity thưởng = 10 (tròn sẵn, không lẫn chủ
+    // đề làm tròn) -> SL_trước = 100, SL_sau = 110 -> giá mới = 60.000 × 100 /
+    // 110 = 54.545,4545... — dùng Decimal.js (không round số nguyên) để khớp
+    // đúng công thức thuần, không hardcode chuỗi làm tròn tay có thể sai lệch
+    // độ chính xác so với dividend-math.ts.
+    const holdingUrl = await createStockHolding(page, symbol, "100");
+    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
+    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+
+    await page.goto(`${holdingUrl}/dividends/new`);
+    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
+    await page.locator('input[name="percent"]').fill("10");
+    // KHÔNG tick checkbox — mặc định false, đúng hành vi "tự điều chỉnh".
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+
+    await expect(
+      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
+    ).toBeVisible();
+
+    const override = await db.navOverride.findFirst({
+      where: { holdingId },
+      orderBy: { date: "desc" },
+    });
+    expect(override).not.toBeNull();
+
+    // NavOverride.price là @db.Decimal(20, 4) (prisma/schema.prisma) -> giá
+    // trả về từ dividend-math.ts (full precision) bị Postgres làm tròn còn 4
+    // chữ số thập phân khi lưu -> so khớp với giá trị ĐÃ làm tròn 4dp (không
+    // phải full-precision) để không fail giả do sai khác độ chính xác lưu trữ.
+    const expectedNewPrice = new Decimal(60000)
+      .mul(100)
+      .div(110)
+      .toDecimalPlaces(4)
+      .toString();
+    expect(new Decimal(override!.price.toString()).toString()).toBe(
+      expectedNewPrice,
+    );
+
+    // Bất biến cốt lõi của công thức (docs/domain/03-dividends.md "Bù pha
+    // loãng NAV"): tổng giá trị SL×giá giữ nguyên trước/sau — cho phép sai số
+    // nhỏ (<= 0.01) phát sinh từ việc giá/CP bị làm tròn còn 4dp khi lưu
+    // (110 CP × tối đa 0,00005 lệch/CP ≈ 0,0055).
+    const valueBefore = new Decimal(60000).mul(100);
+    const valueAfter = new Decimal(override!.price.toString()).mul(110);
+    expect(valueAfter.minus(valueBefore).abs().lte(0.01)).toBe(true);
+  } finally {
+    await context.close();
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
+  }
+});
+
+// Issue #61: Holding chưa có giá nào (MISSING_PRICE — không PriceQuote lẫn
+// NavOverride) -> ghi cổ tức vẫn thành công bình thường, resolveOldPriceInTx
+// trả null nên KHÔNG tạo NavOverride nào (không có gì để điều chỉnh).
+test("Ghi cổ tức tiền mặt khi Holding chưa có giá nào: vẫn ghi được, không tạo NavOverride", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dividend-nav-adjust-missing");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+
+  try {
+    // Không seed PriceQuote nào cho symbol này -> MISSING_PRICE.
+    const holdingUrl = await createStockHolding(page, symbol, "100");
+    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
+    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+
+    await page.goto(`${holdingUrl}/dividends/new`);
+    await page.locator('input[name="percent"]').fill("10");
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+
+    await expect(
+      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
+    ).toBeVisible();
+
+    const override = await db.navOverride.findFirst({ where: { holdingId } });
+    expect(override).toBeNull();
+  } finally {
+    await context.close();
+    await cleanupTestUser(session.userId);
   }
 });
