@@ -160,6 +160,46 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 **Đóng quyết định treo từ #52: ghi cổ tức KHÔNG tự trigger `Snapshot{period: MANUAL}` (khác mua/bán).**
 - Bối cảnh: mọi giao dịch mua/bán (`createHolding`/`addTransaction`/`updateTransaction`/`deleteTransaction`) tự gọi `freezeManualSnapshot()` sau khi commit — đóng băng một mốc `Snapshot{date: hôm nay, period: MANUAL}`. `recordDividend` không làm việc này, để ngỏ từ Phase 4 (#52) như một quyết định nghiệp vụ chưa chốt; issue #61 (bù pha loãng NAV) không đụng tới.
 - Quyết định: **giữ nguyên — không trigger.** Lý do: mua/bán là quyết định phân bổ vốn thật (tiền vào/ra), NAV danh mục thực sự đổi — đóng một mốc ngay sau đó tách bạch được "NAV đổi vì giao dịch" khỏi "NAV đổi vì giá thị trường". Ghi cổ tức thì ngược lại: cơ chế `NavOverride` bù pha loãng (#61) được thiết kế **cố tình giữ NAV gần như liên tục** qua sự kiện chia cổ tức (STOCK: SL tăng, giá giảm tương ứng, tổng giá trị bất biến; CASH: giá ex-dividend giảm đúng bằng phần gross rời khỏi vốn, NAV cũng gần bất biến — cổ tức nhận về chỉ sống trong dòng tiền XIRR, không phải một tài sản Navtrack theo dõi số dư). Một Snapshot MANUAL đóng ngay sau ghi cổ tức gần như sẽ trùng số với mốc gần nhất (chỉ lệch do làm tròn floor SL cổ phiếu), không mang thêm thông tin, trong khi tạo thêm nhiễu ở "Các mốc đã chốt" (UI hiện chỉ có 1 badge "THỦ CÔNG" chung cho mọi trigger MANUAL — user dễ nhầm là một giao dịch thật đã xảy ra ngày đó).
+
+## 2026-07-17 (3)
+
+**Thảo luận nghiệp vụ Phase 5 (thuế bán) trước khi implement — chốt 3 điểm, để ngỏ 2 điểm sang lúc implement/Phase 7.**
+- Bối cảnh: trao đổi với user (vai chuyên gia tài chính cá nhân) để soát bất cập spec `docs/domain/07-tax.md`/`process/phase-5.md` trước khi giao việc cho `planner`/`dev-cycle`. Phát hiện: (1) `TransactionForm.tsx` từ Phase 1 có sẵn field "Thuế" nhập tay tự do cho **cả BUY lẫn SELL**, nhưng Phase 5 dự định tự động tính thuế — chưa có quyết định UI rõ ràng; (2) VN không đánh thuế TNCN khi mua chứng khoán — field thuế trên BUY vốn dĩ sai bản chất; (3) `SALE_TAX_GOLD` là "điểm còn mở" từ Phase 1 chưa chốt mức; (4) mô hình thuế-khi-bán generic áp cho mọi `SELL` không phân biệt được "đáo hạn trái phiếu" (không phải chuyển nhượng, không chịu thuế) với "bán trước hạn" (chịu thuế 0.1%).
+- **Quyết định (1) — SELL: tự tính prefill, KHÔNG khoá field.** `taxAmount` tự resolve từ `SALE_TAX_<loại>` tại ngày bán, hiển thị làm giá trị mặc định trên form, nhưng người dùng sửa tay được — giống cơ chế `NavOverride` (giá trị tự động là gợi ý, không phải nguồn sự thật duy nhất), để khớp đúng số thực trừ trên sao kê CTCK khi có lệch làm tròn.
+- **Quyết định (2) — BUY: bỏ hẳn field thuế khỏi form.** `taxAmount` luôn `= 0` cho `Cashflow{type: BUY}`, không có input — đúng bản chất thuế VN (không có thuế khi mua).
+- **Quyết định (3) — `SALE_TAX_GOLD` seed `= 0`.** Cá nhân bán vàng miếng/trang sức tại VN không chịu thuế TNCN chuyển nhượng (khác chứng khoán/CCQ). Vẫn phải seed dòng `Setting` tường minh (không được để thiếu — nguyên tắc "thiếu cấu hình → báo lỗi" của `09-settings.md` áp dụng cả khi mức thuế là 0).
+- **Để ngỏ (chưa chốt, không tự chọn thay):**
+  - Đáo hạn trái phiếu (nhận lại gốc, không phải chuyển nhượng) vs bán trước hạn (chịu `SALE_TAX_BOND` 0.1%) — user hiện chỉ giữ trái phiếu tới đáo hạn, không bán thứ cấp, nên **chưa xử lý ở Phase 5**; dời bàn kỹ sang Phase 7 (đã thêm vào `process/phase-7.md` mục "Phụ thuộc / ghi chú" điểm (4)).
+  - Sửa một SELL đã ghi (đổi ngày/giá) có tính lại `taxAmount` theo ngày mới hay giữ nguyên giá trị cũ (có thể đã bị sửa tay theo (1)) — chưa chốt, cần quyết định lúc implement.
+- Docs đã sync: `docs/domain/07-tax.md`, `docs/domain/09-settings.md`, `docs/domain/02-transactions-and-cost-basis.md`, `process/phase-5.md`, `process/phase-7.md`.
+
+## 2026-07-17 (4)
+
+**Thêm tính năng mới "Chi phí ăn mòn" (cost drag) vào Phase 5 — tổng thuế + phí luỹ kế, % trên vốn đã bỏ vào.**
+- Bối cảnh: tiếp tục thảo luận nghiệp vụ Phase 5, user chọn hiện thực hoá ngay ý tưởng "tổng chi phí thuế + phí đã trả từ đầu" (một trong 3 ý tưởng gợi ý ngoài roadmap) — trả lời câu hỏi gốc của `business-overview.md`: Sheet cũ không cho biết chi phí giao dịch đã ăn vào lợi nhuận bao nhiêu.
+- **Phạm vi (đã hỏi user, chọn phương án gộp cả 3 nguồn):** `Σ Cashflow.taxAmount` (thuế bán, Phase 5) + `Σ Cashflow.feeAmount` (phí, có từ Phase 1) + `Σ Dividend.taxAmount` (thuế cổ tức tiền mặt, có từ Phase 4) — không giới hạn riêng trong dữ liệu mới của Phase 5 để con số phản ánh đúng tổng chi phí thật.
+- **Mẫu số % (đã hỏi user, chọn "vốn đã bỏ vào"):** ~~tái dùng `totalInvested` đã có sẵn trong `lib/portfolio-valuation.ts`~~ **→ ĐÃ SỬA ở 2026-07-17 (6): dùng `grossInvested` (vốn gộp) thay vì `totalInvested` (vốn ròng), vì vốn ròng vỡ khi đã bán nhiều.** Xem entry (6) bên dưới.
+- **Vị trí UI (đã hỏi user, chọn dòng phụ):** một dòng ghi chú nhỏ dưới card lãi/lỗ hiện có (`ReturnMetrics` trong `DashboardScreen.tsx`) — KHÔNG dựng card/tile riêng, giữ phạm vi UI của Phase 5 gọn (chỉ sửa component có sẵn, không thêm component mới).
+- **Không phải chỉ số hiệu suất riêng, không đưa vào XIRR** — XIRR đã tự phản ánh chi phí này qua dòng tiền thực rồi; đây chỉ là phần diễn giải thêm cho lãi/lỗ.
+- **Không cần schema/model mới** — mọi field cần đều đã tồn tại (`Cashflow.taxAmount/feeAmount`, `Dividend.taxAmount`), chỉ cần một hàm tổng hợp (business-implementer) + một dòng UI (design-implementer, mở rộng component có sẵn không cần mockup mới lớn). Mẫu số `grossInvested` tính thêm từ chuỗi `Cashflow` (xem (6)).
+- Docs đã sync: `docs/domain/07-tax.md` (mục "Chi phí ăn mòn" mới), `docs/domain/05-returns-xirr-and-pnl.md` (cross-reference), `docs/03-roadmap.md` (Phase 5), `docs/business-overview.md` (mục 5), `process/phase-5.md`.
+
+## 2026-07-17 (5)
+
+**Thêm 2 ý tưởng còn lại vào roadmap: "Cảnh báo tập trung" (Phase 6) và "Lịch dòng tiền sắp tới" (Phase 8 mới) — cùng đảo quyết định treo Phase 7 (1).**
+- Bối cảnh: tiếp tục danh sách 3 ý tưởng gợi ý ngoài roadmap ban đầu (idea 1 — chi phí ăn mòn — đã vào Phase 5 ở quyết định trên). User xác nhận đưa nốt idea 2 (cảnh báo tập trung) và idea 3 (lịch dòng tiền) vào domain docs + roadmap + phase-x.
+- **Cảnh báo tập trung (Phase 6):**
+  - **Phạm vi (đã hỏi user, chọn theo Holding):** cảnh báo theo từng `Holding` riêng lẻ, KHÔNG theo `AssetType` nhóm — sát rủi ro thực tế hơn dù `AllocationBar` theo nhóm đã có sẵn dễ tái dùng hơn.
+  - **Ngưỡng (đã hỏi user):** 30%, cấu hình qua `Setting{CONCENTRATION_WARNING_THRESHOLD}` (group mới `RISK`) — user chủ động chọn "cấu hình trên Settings" thay vì hard-code, nhất quán nguyên tắc "cấu hình được, không hard-code" của `07-tax.md`.
+  - Resolve `atDate = hôm nay` (không effective-dated theo giao dịch) — cùng pattern với `MAX_MEMBERS`.
+  - Vị thế `MISSING_PRICE` loại khỏi tính cảnh báo (không mặc định 0%) — nhất quán nguyên tắc "thiếu giá không mặc định 0".
+  - Docs: `docs/domain/04-pricing-and-valuation.md` (mục "Cảnh báo tập trung" mới), `docs/domain/09-settings.md`, `process/phase-6.md`, `docs/03-roadmap.md`.
+- **Lịch dòng tiền sắp tới (Phase 8 mới):**
+  - **Phạm vi (đã hỏi user, chọn chỉ trái phiếu):** chỉ đáo hạn + coupon trái phiếu — cố tình KHÔNG dự đoán cổ tức STOCK/FUND vì không có ngày/mức cố định theo hợp đồng, dự đoán sẽ không đáng tin.
+  - **Đảo quyết định treo Phase 7 điểm mở (1)** (đã hỏi user, chọn lưu cố định trên Holding): mệnh giá/coupon rate **lưu cố định trên `Holding`** (5 field mới: `parValue`/`couponRatePercent`/`couponFrequencyMonths`/`maturityDate`/`nextCouponDate`, chỉ có ý nghĩa khi `type = BOND`) thay vì "nhập tay mỗi lần ghi" như đề xuất mặc định ban đầu của Phase 7 — cần thiết để suy ra "kỳ tới" cho Phase 8. `recordDividend` (Phase 7) đọc từ `Holding`, không hỏi lại; tự cộng `couponFrequencyMonths` vào `nextCouponDate` sau mỗi lần ghi thành công, vẫn cho user sửa tay.
+  - **Phase 8 phụ thuộc chặt Phase 7** (đọc field Phase 7 thêm, không tự thêm schema) — không phải trình tự ưu tiên gốc, giống Phase 7.
+  - Ước tính đáo hạn KHÔNG trừ thuế (nhất quán quyết định "đáo hạn không chịu SALE_TAX_BOND" ở `07-tax.md`); ước tính coupon hiển thị số gộp trước thuế (công thức thuế lãi trái phiếu chính xác vẫn là điểm mở của Phase 7, không tự chọn thay ở đây).
+  - Docs: `docs/domain/10-cashflow-calendar.md` (file mới), `docs/domain/README.md` (index #10), `docs/domain/01-assets-and-holdings.md`, `docs/02-data-model.md` (5 field mới trên `Holding`), `process/phase-7.md` (đảo điểm mở (1)), `process/phase-8.md` (file mới), `docs/03-roadmap.md` (Phase 7 cập nhật + Phase 8 mới), `process/PROCESS.md` (bảng trạng thái + nhật ký).
 - Ca biên đã cân nhắc: khi `MISSING_PRICE` (không có giá cũ để bù), NAV có thể lệch thật do SL tăng "chay" không giá đi kèm — nhưng đúng lúc này Snapshot cũng tự bỏ qua Holding đó (không resolve được giá, theo rule ở `06-snapshots.md`), nên trigger snapshot cũng không cứu được ca này.
 - Docs đã sync: `docs/domain/03-dividends.md` (mục "Bù pha loãng NAV khi ghi cổ tức", bỏ khung "quyết định treo", ghi rõ đã chốt + lý do).
 
@@ -171,6 +211,26 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - Quyết định: **xử lý giống `MISSING_PRICE`** — `computeCashDividendPriceAdjustment()` trả `null` khi kết quả `<= 0` (dùng `.gt(0)`, không dùng `.isPositive()` vì API đó có thể coi `0` dương tùy dấu nội bộ của decimal.js). Caller (`recordDividend`) không cần sửa gì thêm — `if (newPrice)` đã coi `null` = bỏ qua tạo `NavOverride`, dividend vẫn ghi thành công bình thường. Không clamp về một sàn tối thiểu (vd 1 VND) — giá trị đó không phản ánh đúng công thức bù trừ, không mang ý nghĩa tài chính thật, dễ gây hiểu nhầm hơn là hữu ích.
 - Không thêm log cảnh báo riêng cho ca này — giữ nhất quán với `MISSING_PRICE` (cũng không có log riêng, xem `docs/domain/03-dividends.md` "Không xử lý MISSING_PRICE khác gì bình thường").
 - Docs đã sync: `docs/domain/03-dividends.md` (mục "Bù pha loãng NAV khi ghi cổ tức", đổi "Ca biên chưa xử lý" thành đã chốt).
+
+## 2026-07-17 (6)
+
+**Sửa A1: "Chi phí ăn mòn" đổi mẫu số từ `totalInvested` (vốn ròng) sang `grossInvested` (vốn gộp đã triển khai `Σ|BUY.amount|`).**
+- Bối cảnh: rà soát lại nghiệp vụ dưới góc nhìn tài chính (thảo luận với user), phát hiện mẫu số `totalInvested` chốt ở (4) là **sai** cho chỉ số chi phí. `totalInvested = -(Σ Cashflow.amount + Σ Dividend.netAmount)` là **vốn ròng** — đã bị phần đã bán + cổ tức rút bớt. Khi user bán nhiều, mẫu số co lại (bán sạch → về ~0 hoặc âm) làm `costDragPercent` phình vô lý (thậm chí âm), dù chi phí thật không đổi. Ví dụ: mua 100tr, bán bớt thu 80tr → vốn ròng ~20tr; chi phí 2tr chia vốn ròng ra 10% (sai), chia vốn gộp 100tr ra 2% (đúng).
+- Quyết định: **mẫu số = `grossInvested` = `Σ |Cashflow.amount|` trên các dòng `type = BUY`** (tổng tiền mặt đã chi ra để mua, gồm cả phí mua), tính tới `cutoffDate`. Lý do tài chính: chi phí ăn mòn là chi phí tích luỹ trên **hoạt động giao dịch** → mẫu số phải là vốn đã *rót vào để mua* (chỉ đi lên, không bị bán làm co) chứ không phải vốn *còn lại*. Cân nhắc turnover (Σ|BUY|+Σ|SELL|) nhưng chọn `Σ|BUY|` vì trực giác hơn với user cá nhân ("phí ăn X% số tiền tôi từng rót vào"). `grossInvested = 0` (chưa mua gì) → 0%, không chia 0.
+- `totalInvested` (vốn ròng) **vẫn đúng** cho `navDeltaPercent` (lợi suất trên vốn đang làm việc) — không đụng tới chỗ đó; chỉ tách khái niệm cho riêng chi phí ăn mòn.
+- Tính năng chưa implement (chỉ mới ở docs) nên đây là sửa spec, không đụng code.
+- Docs đã sync: `docs/domain/07-tax.md` (công thức + ví dụ ca bán nhiều), `docs/domain/05-returns-xirr-and-pnl.md` (cross-reference), `docs/03-roadmap.md` (Phase 5), `process/phase-5.md`, cùng ghi chú đính chính ở entry (4).
+
+## 2026-07-17 (7)
+
+**Rà soát nghiệp vụ dưới góc nhìn tài chính — chốt A2 (sửa docs), log C1/C2/B1 thành issue để sửa sau; B2 giữ ở Backlog.**
+- Bối cảnh: tiếp tục rà bất cập nghiệp vụ với user. Phân loại theo "đã phản ánh vào code hay chưa": vấn đề nằm trong code đã ship → tạo issue sửa sau; vấn đề chỉ ở spec Phase 5+ chưa code → sửa docs ngay.
+- **A2 (sửa docs — spec Phase 6 chưa code):** cảnh báo tập trung dùng `NAV(danh mục)` làm mẫu số; khi danh mục còn mã `MISSING_PRICE` thì mẫu số là **NAV một phần** (`navValueIsPartial`), làm `concentrationPercent` của các mã *có giá* bị thổi phồng → báo động giả (vd FPT 180tr + trái phiếu 300tr chưa nhập giá → FPT "100%"). **Quyết định: khi `navValueIsPartial` thì TREO cảnh báo tập trung** (không kết luận trên mẫu số khuyết), kèm ghi chú cần cập nhật giá — giống cách NAV gắn dấu `*`. Chỉ tính khi NAV danh mục đầy đủ. Docs: `docs/domain/04-pricing-and-valuation.md` (mục "Cảnh báo tập trung"), `process/phase-6.md` (tiêu chí).
+- **C1/C2/B1 (đã phản ánh trong code Phase 1/2/4 → log issue, sửa sau):**
+  - **#65 (C1):** dòng tiền cổ tức/coupon vào XIRR đặt tại `date` (ngày chia) thay vì `paymentDate` (ngày tiền thực về) — `xirr-cashflow.ts:21`; lợi suất bị thổi nhẹ, rõ hơn với coupon trái phiếu kỳ dài. Sẽ đảo một phần quyết định #61 ("paymentDate thuần thông tin") khi làm.
+  - **#66 (C2):** phí mua không gộp vào `avgCost` (`cost-basis.ts:54`) → "lãi đã thực hiện" per-lot hơi cao hơn thực. Hai hướng (A gộp phí vào cost basis / B giữ + sửa nhãn), chốt lúc implement.
+  - **#67 (B1):** lãi/lỗ tuyệt đối gộp chung đã-thực-hiện vs chưa-thực-hiện (`portfolio-valuation.ts`) — đề xuất tách, gộp làm ở Phase 6, phụ thuộc C2.
+- **B2 (benchmark lãi suất tiết kiệm):** đã nằm ở Backlog (`docs/03-roadmap.md`) — đây là câu hỏi gốc của `business-overview.md` ("có hơn gửi tiết kiệm không?"). Không tạo issue trùng; nếu muốn kéo lên phase gần thì sửa roadmap (chưa làm, chờ user quyết).
 
 ## 2026-07-18
 
