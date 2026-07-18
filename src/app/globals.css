@@ -130,4 +130,11 @@
   html {
     @apply font-sans;
   }
+  /* iOS Safari không co native date control xuống dưới min-content ngầm định
+     của nó (bug lâu năm của WebKit), khiến `<input type="date">` tràn ngang
+     ra ngoài container dù đã set `w-full` — ép `min-width: 0` để trình duyệt
+     tôn trọng width được gán thay vì giữ kích thước tối thiểu riêng. */
+  input[type="date"] {
+    min-width: 0;
+  }
 }
