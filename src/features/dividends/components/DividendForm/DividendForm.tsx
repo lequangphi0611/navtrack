@@ -2,9 +2,7 @@
 
 import Decimal from "decimal.js";
 import {
-  Archive,
   Calculator,
-  Calendar,
   Check,
   CheckCircle2,
   Coins,
@@ -335,18 +333,15 @@ function DividendForm({
             <div className="flex flex-col gap-4.5">
               <div>
                 <FieldLabel>Ngày nhận</FieldLabel>
-                <div className="relative">
-                  <Input
-                    type="date"
-                    name="date"
-                    value={date}
-                    onChange={(event) => setDate(event.target.value)}
-                    className="h-11 rounded-xl pr-9 font-mono font-semibold"
-                    required
-                    disabled={isPending}
-                  />
-                  <Calendar className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-faint" />
-                </div>
+                <Input
+                  type="date"
+                  name="date"
+                  value={date}
+                  onChange={(event) => setDate(event.target.value)}
+                  className="h-11 rounded-xl font-mono font-semibold"
+                  required
+                  disabled={isPending}
+                />
               </div>
               <div>
                 <FieldLabel>Thuế</FieldLabel>
@@ -361,18 +356,15 @@ function DividendForm({
           ) : (
             <div>
               <FieldLabel>Ngày nhận</FieldLabel>
-              <div className="relative">
-                <Input
-                  type="date"
-                  name="date"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  className="h-11 rounded-xl pr-9 font-mono font-semibold"
-                  required
-                  disabled={isPending}
-                />
-                <Calendar className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-faint" />
-              </div>
+              <Input
+                type="date"
+                name="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className="h-11 rounded-xl font-mono font-semibold"
+                required
+                disabled={isPending}
+              />
             </div>
           )}
 
@@ -383,21 +375,14 @@ function DividendForm({
                 · tuỳ chọn, tham khảo
               </span>
             </FieldLabel>
-            <div className="relative">
-              <Input
-                type="date"
-                name="paymentDate"
-                value={paymentDate}
-                onChange={(event) => setPaymentDate(event.target.value)}
-                className="h-11 rounded-xl pr-9 font-mono font-semibold"
-                disabled={isPending}
-              />
-              {isCash ? (
-                <Coins className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-faint" />
-              ) : (
-                <Archive className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-faint" />
-              )}
-            </div>
+            <Input
+              type="date"
+              name="paymentDate"
+              value={paymentDate}
+              onChange={(event) => setPaymentDate(event.target.value)}
+              className="h-11 rounded-xl font-mono font-semibold"
+              disabled={isPending}
+            />
             <div className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-faint">
               <Info className="mt-0.5 size-3.25 shrink-0" />
               <span>
