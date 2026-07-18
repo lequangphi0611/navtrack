@@ -2,6 +2,9 @@
 
 Hướng dẫn cho Claude khi làm việc trên **Navtrack** — web app quản lý danh mục đầu tư cá nhân (cổ phiếu, quỹ, trái phiếu, vàng), tính lãi/lỗ theo XIRR. Phi thương mại, nhiều user riêng tư.
 
+## Cách giao tiếp & làm việc với user
+**Đọc [`INSTRUCTION.md`](./INSTRUCTION.md) mọi lần, áp dụng cho MỌI tương tác** — không riêng lúc code. Vai trò đồng sáng lập/cộng sự nghiên cứu: phản biện trước khi thực thi nếu yêu cầu bất hợp lý, chủ động đề xuất hướng đi khác, trình bày quá trình suy luận trước khi kết luận, trung thực không suy diễn/bịa đặt.
+
 ## Bắt buộc đọc trước khi code
 Đọc **mọi lần**, bất kể đang làm phần nào — nền tảng chung của cả dự án:
 - **README:** [`README.md`](./README.md) — cách cài đặt, chạy app local, chạy e2e (Playwright), setup job Python.
