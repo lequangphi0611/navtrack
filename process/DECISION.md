@@ -231,3 +231,18 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
   - **#66 (C2):** phí mua không gộp vào `avgCost` (`cost-basis.ts:54`) → "lãi đã thực hiện" per-lot hơi cao hơn thực. Hai hướng (A gộp phí vào cost basis / B giữ + sửa nhãn), chốt lúc implement.
   - **#67 (B1):** lãi/lỗ tuyệt đối gộp chung đã-thực-hiện vs chưa-thực-hiện (`portfolio-valuation.ts`) — đề xuất tách, gộp làm ở Phase 6, phụ thuộc C2.
 - **B2 (benchmark lãi suất tiết kiệm):** đã nằm ở Backlog (`docs/03-roadmap.md`) — đây là câu hỏi gốc của `business-overview.md` ("có hơn gửi tiết kiệm không?"). Không tạo issue trùng; nếu muốn kéo lên phase gần thì sửa roadmap (chưa làm, chờ user quyết).
+
+## 2026-07-18
+
+**Bề mặt preview component dev-only + Playwright MCP — để `design-implementer` tự soi UI thay vì dựng mù.**
+- Bối cảnh: `design-implementer` dựng Presentational không thấy được thành phẩm, tệ nhất với component design-first chưa wire vào route nào.
+- Cấu trúc: `src/app/preview/<slug>/page.tsx` render component cô lập + sample props (import component thật, cấm chép markup). Soi qua Playwright MCP (`.mcp.json` → `scripts/playwright-mcp.mjs`). **Việc soi/chụp là của orchestrator (`dev-cycle`/main context), KHÔNG phải subagent** — ảnh chụp bên trong subagent kẹt lại đó, không tới được user; orchestrator chụp rồi `SendUserFile` để user thấy bằng chứng thật.
+- **Footgun (đã trả giá khi làm):** chặn production **ở `src/proxy.ts` (trả 404 TRƯỚC khi route render)**, KHÔNG dùng `notFound()` trong page/layout — `notFound()` vẫn để Next render page rồi **nhúng markup vào payload RSC ở body 404** → lộ nội dung. Mẹo `pageExtensions` đuôi `.dev.tsx` **không dùng được** cho App Router/Turbopack (resolver khớp `tsx` trước, coi `page.dev` ≠ `page`). `force-dynamic` ở `preview/layout.tsx` để không prerender tĩnh (khỏi sinh HTML chứa sample markup trong build output).
+- **Bất biến:** soi UI **không phải cổng verify** — e2e suite + unit test vẫn là source of truth (soi chỉ self-check lúc author). Chạy được cả Cloud lẫn Local vì component cô lập không cần Docker/DB (khác e2e — xem `TOOLS.md`). Trên Cloud, wrapper ép `--executable-path /opt/pw-browsers/chromium` (revision lệch sẽ fail launch).
+- Docs sync: `docs/rules/component-architecture.md` (mục "Bề mặt preview" + quy tắc viết preview page), `docs/rules/testing.md`, `TOOLS.md` (dòng "Soi UI component qua browser"), `.claude/agents/design-implementer.md`, `.claude/skills/dev-cycle/SKILL.md`, `CLAUDE.md`.
+
+**`design-fetcher`: owner DUY NHẤT kéo mockup Claude Design, front-load digest cho cả chuỗi.**
+- Bối cảnh: `design-implementer` tự kéo DesignSync lúc implement → mọi khâu chạy trước (`planner`, `issue-breakdown`) đều mù, không biết phase có mấy màn/component/state.
+- Quyết định: tách agent `design-fetcher` chạy ĐẦU phase, là nơi **duy nhất** gọi DesignSync + ghi `.claude/design-cache/`; sinh digest `process/UI_phase_N.md` (màn → component → atom tái dùng → Props phác thảo). `design-implementer` thành **người đọc** (bỏ `DesignSync`/`ToolSearch` khỏi tools), chỉ firm up phần Props khi component thật ra đời. `planner`/`issue-breakdown`/`business-implementer` đều đọc digest.
+- **Bất biến:** file mockup để kéo **do user/caller chỉ định**, `design-fetcher` KHÔNG tự suy từ số phase (`Phase {N} Screens.dc.html` chỉ là quy ước tên tham khảo); chưa rõ thì `list_files` báo lại cho người gọi chọn, không tự đoán.
+- Docs sync: `.claude/agents/design-fetcher.md` (mới), `design-implementer.md`, `planner.md`, `business-implementer.md`, `.claude/skills/{dev-cycle,issue-breakdown}/SKILL.md`, `CLAUDE.md`.

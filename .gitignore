@@ -47,6 +47,10 @@ next-env.d.ts
 /test-results/
 /blob-report/
 
+# Playwright MCP: ảnh soi UI component (design-implementer) — chỉ là artifact
+# tạm để main context gửi cho user, không cần persist qua git.
+/.playwright-mcp/
+
 # job Python
 jobs/*/.venv/
 jobs/*/__pycache__/

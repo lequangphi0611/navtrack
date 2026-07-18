@@ -86,6 +86,13 @@ Lệnh nào fail thì sửa rồi chạy lại — không báo hoàn thành khi 
 tắc quy trình tham khảo (đọc bằng mắt/tự áp dụng), **không phải hook tự động** — không có gì
 tự chặn nếu bỏ qua bước này; xem `docs/rules/*` để biết chi tiết lint/test rule từng mảng.
 
+**Bảng trên viết cho Claude Local (hạ tầng tối thiểu bắt buộc).** Các bước cần Docker (`pnpm
+e2e`, `pnpm test:python-integration`, `docker compose up`) không chạy được trên Claude Cloud
+(không có Docker daemon) — xem [`TOOLS.md`](./TOOLS.md) để biết việc nào skip trên Claude
+Cloud và việc nào vẫn bắt buộc. Trên Claude Cloud, báo rõ "chưa verify e2e được ở đây" thay vì
+báo pass giả; verify thật (kể cả `pnpm e2e`) vẫn phải chạy trên Claude Local trước khi coi là
+xong việc.
+
 ## Khi cần lệnh không có trong allow
 
 Mọi lệnh không khớp `allow` lẫn `deny` sẽ rơi vào **hỏi xác nhận** (hành vi mặc định của
