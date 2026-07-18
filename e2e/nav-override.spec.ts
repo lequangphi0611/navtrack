@@ -7,6 +7,7 @@ import { daysAgo, isoDate } from "./support/dates";
 import { fillDatePicker } from "./support/date-picker";
 import {
   cleanupTestUser,
+  closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
@@ -94,7 +95,7 @@ test("nhập giá tay (NavOverride) cho vị thế Vàng cập nhật NAV toàn 
     // đã thắng — GOLD không có nguồn AUTO nào để so sánh).
     await expect(page.getByText(/dùng giá nhập tay/)).toBeVisible();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });
@@ -202,7 +203,7 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
     ).toContainText("3.000.000");
     await expect(page.getByText(/dùng giá nhập tay/)).toHaveCount(0);
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({
       where: { symbol, date: { in: [oldQuoteDate, newQuoteDate] } },

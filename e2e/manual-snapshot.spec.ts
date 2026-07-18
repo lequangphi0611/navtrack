@@ -6,6 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { daysAgo } from "./support/dates";
 import {
   cleanupTestUser,
+  closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
@@ -94,7 +95,7 @@ test("mua tạo Snapshot MANUAL cho holding + tổng danh mục, banner 'vừa g
     expect(aggregateRow?.source).toBe("AUTO");
     expect(holdingRow?.source).toBe("AUTO");
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -182,7 +183,7 @@ test("số liệu Snapshot đã đóng băng không đổi khi PriceQuote cập 
       page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
     ).toContainText("9.999.999.990");
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -224,7 +225,7 @@ test("bấm 'Chốt ngay' trên Dashboard hiện badge 'Đã chốt lúc HH:mm';
     expect(rows[0]?.holdingId).toBeNull();
     expect(rows[0]?.value.toNumber()).toBe(0);
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });
@@ -280,7 +281,7 @@ test("bấm 'Đóng băng số liệu' trên /snapshots nhiều lần trong ngà
     });
     expect(rows).toHaveLength(2);
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -366,8 +367,8 @@ test("2 tab bấm 'Đóng băng số liệu' CÙNG LÚC (Promise.all, không qua
     });
     expect(rows).toHaveLength(2);
   } finally {
-    await contextA.close();
-    await contextB.close();
+    await closeContext(contextA);
+    await closeContext(contextB);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }

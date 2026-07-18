@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   cleanupTestUser,
+  closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
@@ -68,7 +69,7 @@ test("đổi mốc chốt ở Cài đặt lan đúng sang Dashboard (không bị
       "Cuối tháng này",
     );
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });

@@ -45,6 +45,16 @@ export async function cleanupTestUser(userId: string) {
   await db.user.delete({ where: { id: userId } }).catch(() => {});
 }
 
+// Khi test bị Playwright timeout, context/browser đã bị kill TRƯỚC khi lỗi
+// được ném ra — context.close() gọi sau đó tự throw "Target page, context or
+// browser has been closed". Nếu đây là dòng đầu trong `finally`, lỗi đó chặn
+// luôn các bước dọn dẹp phía sau (cleanupTestUser, xoá PriceQuote đã seed...)
+// không bao giờ chạy, làm leak dữ liệu test. Luôn nuốt lỗi ở đây, không nuốt
+// ở các bước dọn dẹp khác — để lỗi thật của chúng (nếu có) vẫn lộ ra.
+export async function closeContext(context: BrowserContext) {
+  await context.close().catch(() => {});
+}
+
 export async function disconnectTestDb() {
   await db.$disconnect();
 }
