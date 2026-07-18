@@ -60,6 +60,14 @@ test("ẩn số tiền che giá trị VND nhưng giữ phần trăm", async ({ p
 });
 ```
 
+## Soi UI qua preview + Playwright MCP — KHÔNG phải verify
+
+Lớp UI có một bề mặt **preview dev-only** (`src/app/preview/`, xem [`component-architecture.md`](./component-architecture.md) mục "Bề mặt preview") để soi component cô lập qua browser (Playwright MCP). Đây là công cụ **self-check/khám phá lúc author** — giúp UI tự nhìn thành phẩm, **không** phải cổng verify:
+
+- **Không** thay một e2e/unit test đã commit. Soi bằng mắt không lặp lại được, không chặn regression tự động.
+- **Không** tick tiêu chí `phase-x.md` dựa trên "đã soi thấy đẹp". Việc tick thuộc `verifier`, dựa trên e2e + unit test thật.
+- **Nguồn pass/fail vẫn là:** unit test (logic) + e2e Playwright (luồng người dùng). Soi chỉ bổ trợ ở khâu dựng UI.
+
 ## Integration test — job Python
 
 Mỗi job Python (jobs/*/) cần thêm integration test chạy trên Postgres thật (ephemeral, tái

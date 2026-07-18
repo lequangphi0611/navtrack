@@ -21,14 +21,15 @@ Skill này tạo một loạt issue GitHub cho một phase hoặc một mảng v
 4. `docs/domain/*` liên quan tới phase — mỗi issue business phải trích dẫn đúng file/mục domain doc làm căn cứ, không tự suy diễn rule.
 5. `docs/02-data-model.md` nếu phase đụng schema mới — bản nháp model có thể đã có sẵn ở đây, chỉ cần hiện thực vào `prisma/schema.prisma`.
 6. `docs/rules/*` liên quan (đặc biệt `python-job.md` nếu phase có job chạy GitHub Actions, `component-architecture.md` nếu có UI mới) — quyết định ranh giới ngôn ngữ/công cụ của từng việc.
-7. Nếu phase đã có UI dựng sẵn từ trước (đã tồn tại `process/UI_phase_x.md`) — đọc để biết Props contract có sẵn, KHÔNG cần issue Design & UI riêng nữa.
-8. Kiểm tra trùng: liệt kê issue đang mở gắn nhãn `phase-N` (GitHub MCP `list_issues` với `labels: ["phase-N"]`, hoặc `gh issue list --label phase-N` nếu có `gh` CLI) — không tạo lại việc đã có issue.
+7. **Digest mockup `process/UI_phase_N.md`** (do `design-fetcher` sinh) — nếu phase đụng UI mà digest **chưa có**, spawn Agent `subagent_type: design-fetcher` (foreground) **trước** để có bản kê màn hình → component → atom tái dùng → Props phác thảo, rồi mới chia issue theo đó (không mù). **Truyền đúng file mockup user chỉ định** (design-fetcher không tự suy từ số phase); user chưa nói rõ thì hỏi trước. Có digest rồi thì đọc thẳng.
+   - **Lưu ý:** digest tồn tại **không** đồng nghĩa UI đã dựng xong — nó chỉ là bản kế hoạch từ mockup. Vẫn phải kiểm component thật trong `src/` (Bước 2) để quyết còn cần issue "Design & UI" hay không.
+8. Kiểm tra trùng: liệt kê issue đang mở gắn nhãn `phase-N` (mục "Liệt kê issue" ở [`TOOLS.md`](../../../TOOLS.md), filter theo `phase-N`) — không tạo lại việc đã có issue.
 
 ## Bước 2 — Chia nhỏ theo nguyên tắc
 
 - **Schema/migration luôn tách issue riêng, làm trước tiên** nếu phase có model Prisma mới — mọi issue khác trong phase phụ thuộc issue này (không có bảng thì chưa ghi được gì).
-- **UI/Presentational chưa có sẵn → tách 1 issue "Design & UI" riêng**, đúng ranh giới agent `design-implementer` (`.claude/agents/design-implementer.md`): không viết `queries.ts`, không Server Action, không đụng Prisma, dùng mock/sample data, output là component + `process/UI_phase_N.md` (Props contract từng component, theo đúng format `process/UI_phase_2.md`: bảng trạng thái wiring, `type Props`, sample data). Issue này **không phụ thuộc** issue schema (làm song song được) — chỉ các issue business cần Props contract của nó mới phụ thuộc nó.
-  - Nếu UI **đã có sẵn** (đã có `UI_phase_N.md` từ đầu phase, như Phase 2 lúc bắt đầu) → bỏ qua bước này, các issue business đọc thẳng Props contract có sẵn.
+- **Component Presentational chưa dựng → tách 1 issue "Design & UI" riêng**, đúng ranh giới agent `design-implementer` (`.claude/agents/design-implementer.md`): không viết `queries.ts`, không Server Action, không đụng Prisma, đọc digest `process/UI_phase_N.md` (do `design-fetcher` seed) + sample data, output là component + preview page (`src/app/preview/<slug>/`) + firm up phần Props của digest. Issue này **không phụ thuộc** issue schema (làm song song được) — chỉ các issue business cần Props contract của nó mới phụ thuộc nó.
+  - Phân biệt rõ: **digest `UI_phase_N.md` có sẵn** (design-fetcher đã seed) ≠ **component đã dựng**. Chỉ bỏ issue "Design & UI" khi **component thật đã tồn tại trong `src/`** (grep `features/*/components`, `src/components`) — không chỉ vì file digest tồn tại.
 - **Khác ngôn ngữ/công cụ → luôn tách issue riêng**, dù cùng phục vụ một tính năng (vd job Python chạy GitHub Actions vs Server Action TS trong app — xem mẫu #36 vs #37 của Phase 3). Không gộp việc thuộc 2 ranh giới agent khác nhau vào một issue.
 - **Mỗi issue là một khối việc một agent làm gọn trong một lượt** — đúng ranh giới `business-implementer` HOẶC `design-implementer`, không gộp cả hai loại việc.
 - **Việc chỉ là hệ quả/bất biến có sẵn, không phát sinh code mới** (vd "mốc hôm nay tính động, không lưu" — đã đúng từ trước) → **không** tạo issue riêng, ghi chú gộp vào issue liên quan gần nhất nếu cần nhắc lại.
@@ -47,11 +48,9 @@ Skill này tạo một loạt issue GitHub cho một phase hoặc một mảng v
 
 1. Tạo issue **không phụ thuộc issue nào trong phase trước** (thường là schema + design/UI) trước.
 2. Tạo tiếp issue phụ thuộc chúng — ở mục "Phụ thuộc", điền **số issue thật** vừa tạo ở bước 1 (không còn "sẽ tạo sau").
-3. Nếu một issue tạo trước (bước 1) có ghi tạm "sẽ tạo sau, ghi rõ số issue khi có" cho một issue tạo sau — **bắt buộc quay lại `issue_write` method `update`** điền đúng số issue thật ngay sau khi issue đó được tạo (đúng như đã làm cho #35 sau khi #37 ra đời). Không bỏ sót bước này.
+3. Nếu một issue tạo trước (bước 1) có ghi tạm "sẽ tạo sau, ghi rõ số issue khi có" cho một issue tạo sau — **bắt buộc quay lại (qua `issuer`) sửa issue đó** điền đúng số issue thật ngay sau khi issue phụ thuộc được tạo (đúng như đã làm cho #35 sau khi #37 ra đời). Không bỏ sót bước này.
 
-**Công cụ tạo issue:**
-- Có `gh` CLI khả dụng (Claude Code chạy cục bộ) → spawn `Agent` với `subagent_type: issuer` cho từng issue, giao đúng nội dung đã soạn — giữ đúng ranh giới `.claude/agents/issuer.md` (chỉ `gh issue *`/`gh pr create`, không merge/close).
-- Không có `gh` CLI (Claude Code on the web/remote — chỉ có GitHub MCP tools, xem hướng dẫn môi trường trong system prompt) → dùng thẳng `mcp__github__issue_write` (method `create`/`update`) + `mcp__github__list_issues` để check trùng ở Bước 1. Tự áp đúng các quy tắc nội dung mà agent `issuer` đáng lẽ áp dụng (đọc file template thật trước khi soạn, không tự sáng tác cấu trúc khác).
+**Công cụ tạo issue:** spawn `Agent` với `subagent_type: issuer` cho **mỗi** issue (tạo mới lẫn update số issue thật ở bước 3), giao đúng nội dung đã soạn — `issuer` tự xác định đúng tool theo hạ tầng đang chạy (mục "Tạo / sửa GitHub issue" ở [`TOOLS.md`](../../../TOOLS.md): `gh issue create`/`edit` trên Claude Local, `mcp__github__issue_write` trên Claude Cloud) và giữ đúng ranh giới của nó (`.claude/agents/issuer.md` — chỉ issue + tạo PR, không merge/close). Skill này **không tự phân nhánh** `gh` CLI vs GitHub MCP hay tự soạn/gọi tool GitHub thay `issuer`.
 
 ## Xác nhận trước khi tạo hàng loạt
 

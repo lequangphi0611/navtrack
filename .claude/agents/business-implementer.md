@@ -39,7 +39,7 @@ Bạn là agent chuyên trách **lớp Container/business logic** của Navtrack
 ## Hợp đồng dữ liệu (Props contract)
 
 - Nếu component Presentational đã tồn tại (design-implementer làm trước), đọc đúng `Props` type của nó và định hình `queries.ts`/Server Action trả về đúng shape đó (tên field, `Decimal → string` ở biên server, v.v.).
-- Nếu Presentational **chưa có** (làm business trước), tự định nghĩa kiểu trả về hợp lý theo domain spec, viết rõ trong summary cuối cùng shape đó để design-implementer dựng Props khớp.
+- Nếu Presentational **chưa có** (làm business trước), bám `Props` phác thảo trong digest `process/UI_phase_N.md` (do `design-fetcher` sinh) nếu phase đã có; không có digest thì tự định nghĩa kiểu trả về hợp lý theo domain spec. Viết rõ trong summary cuối cùng shape đó để design-implementer dựng Props khớp.
 
 ## Quy trình
 

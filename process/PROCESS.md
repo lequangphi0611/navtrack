@@ -13,6 +13,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 5 | Thuế bán (áp dụng) | ⬜ | [phase-5.md](./phase-5.md) |
 | 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
 | 7 | Trái tức (lãi trái phiếu) | ⬜ | [phase-7.md](./phase-7.md) |
+| 8 | Lịch dòng tiền sắp tới | ⬜ | [phase-8.md](./phase-8.md) |
 
 ## Cách dùng
 - Bắt đầu một phase → đổi trạng thái sang 🟨, đọc `phase-x.md` **và [`DECISION.md`](./DECISION.md)** (quyết định quan trọng đã chốt ở phase trước).
@@ -48,3 +49,8 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-17: verify issue #61 (follow-up Phase 4): `recordDividend` tự bù pha loãng NAV qua `NavOverride` + `Dividend.paymentDate` — khớp spec, unit/lint/typecheck sạch; bổ sung e2e case STOCK-không-tick + chuyển case tick sang tương tác checkbox thật; `pnpm e2e` không tự chạy được trong sandbox này (không có Docker, tải Playwright browser bị egress policy chặn).
 - 2026-07-17: review PR #62 (issue #61) — fix finding #2 (note trên NavOverride tự tạo), #3 (validate `paymentDate >= date`), #4 (e2e ghi cổ tức 2 lần cùng ngày), sửa mô tả PR khớp diff thật (finding #1).
 - 2026-07-17: đóng quyết định treo từ #52 — ghi cổ tức KHÔNG tự trigger `Snapshot{period: MANUAL}` (lý do: cơ chế bù pha loãng NAV giữ NAV gần như liên tục qua sự kiện chia cổ tức, khác mua/bán).
+- 2026-07-17: thảo luận nghiệp vụ Phase 5 (thuế bán) — chốt SELL prefill+sửa tay, BUY bỏ field thuế, `SALE_TAX_GOLD = 0`; để ngỏ đáo hạn trái phiếu (dời Phase 7) + hành vi sửa SELL đã ghi.
+- 2026-07-17: thêm tính năng "Chi phí ăn mòn" vào Phase 5 — tổng thuế + phí luỹ kế (thuế bán + thuế cổ tức + phí), % trên `totalInvested`, dòng phụ dưới card lãi/lỗ.
+- 2026-07-17: thêm "Cảnh báo tập trung" vào Phase 6 (`Setting{CONCENTRATION_WARNING_THRESHOLD}` = 30%, theo từng Holding) và **Phase 8 mới — Lịch dòng tiền sắp tới** (đáo hạn + coupon trái phiếu, phụ thuộc Phase 7); đảo quyết định treo Phase 7 (1): mệnh giá/coupon rate lưu cố định trên `Holding` thay vì nhập tay mỗi lần.
+- 2026-07-17: sửa A1 — "Chi phí ăn mòn" đổi mẫu số từ `totalInvested` (vốn ròng, vỡ khi bán nhiều) sang `grossInvested` (vốn gộp `Σ|BUY.amount|`); xem `DECISION.md` (6).
+- 2026-07-17: rà nghiệp vụ tài chính — sửa docs A2 (treo cảnh báo tập trung khi NAV danh mục khuyết giá); log #65 (C1 timing cổ tức), #66 (C2 phí mua vào avgCost), #67 (B1 realized/unrealized) để sửa sau; B2 benchmark giữ ở Backlog. Xem `DECISION.md` (7).

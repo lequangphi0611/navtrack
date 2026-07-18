@@ -251,6 +251,47 @@ holdings/(overview)/page.tsx     // <Suspense><HoldingsPositionsSection status="
 holdings/(overview)/closed/page.tsx // status="closed"
 ```
 
+## Bề mặt preview (soi UI component)
+
+Navtrack có một **bề mặt preview dev-only** ở `src/app/preview/` để render một component Presentational **cô lập với sample data**, rồi soi UI qua browser (Playwright MCP — xem [`TOOLS.md`](../../TOOLS.md) dòng "Soi UI component qua browser"). Mục đích là để lớp UI **tự nhìn được thành phẩm** thay vì dựng mù; nó **không phải cổng verify** (e2e suite vẫn là thẩm quyền pass/fail — xem [`testing.md`](./testing.md)).
+
+Vì route này chỉ đi qua root layout (không chạm `auth()`/DB), nó render được **chỉ với `pnpm dev`**, không cần Postgres/Docker → soi được trên cả Claude Local lẫn Claude Cloud.
+
+**Cơ chế dev-only (đã có sẵn, không cần lặp lại khi thêm preview page mới):** `src/proxy.ts` chặn `/preview` ở tầng middleware — production trả **404 trước khi page render** (nên page không chạy, không sinh payload RSC để lộ markup ra body 404), dev cho qua **không cần đăng nhập** để soi. `preview/layout.tsx` khai `export const dynamic = "force-dynamic"` để không prerender tĩnh lúc build (khỏi sinh HTML chứa sample markup trong output). Guard bằng `notFound()` trong page/layout **không đủ** (Next vẫn nhúng nội dung page đã render vào body 404) — đừng dựa vào nó.
+
+### Quy tắc viết preview page
+
+- **Vị trí + tên:** một page mỏng `src/app/preview/<slug>/page.tsx`; `<slug>` là **kebab-case** tên component (vd `AssetTypeBadge` → `preview/asset-type-badge`). Default export đặt tên `<Component>Preview`.
+- **LUÔN import component THẬT** từ module của nó (`@/components/...` hoặc `@/features/...`). **Cấm copy/chép lại markup** của component vào preview (nếu chép là nhân bản nguồn — sửa component ở nguồn sẽ không đổi preview, mất luôn ý nghĩa soi cho giống thật).
+- **Chỉ dữ liệu mẫu hardcode**, hợp lý theo domain: đúng tên field trong `type Props`, **tiền là `string`** (đã serialize từ `Decimal`), phần trăm/số lượng đúng kiểu. Tái dùng sample data đã có trong `process/UI_phase_N.md` nếu có.
+- **Render đủ biến thể/trạng thái đáng soi trong một page**: mọi giá trị của prop union (như 4 `AssetType`), và nếu component có state riêng thì cả empty/error/skeleton — để soi một lượt thấy hết.
+- **Thuần Presentational, KHÔNG chạm dữ liệu**: không `queries.ts`, không Server Action, không Prisma, không `auth()`, không fetch. Nếu để render cần mấy thứ đó thì component không phải Presentational thuần — nó không thuộc bề mặt này.
+- **Không tự guard trong page**: chốt dev-only nằm ở `proxy.ts` (404 khi production) + `force-dynamic` ở `preview/layout.tsx` — xem "Cơ chế dev-only" ở trên. Không thêm `notFound()`/check `NODE_ENV` ở từng page (thừa và không đủ).
+- **Preview page được commit và giữ lại** — lần sau đụng component đó, `/preview/<slug>` có sẵn để soi lại (kiểm regression UI bằng mắt).
+
+```tsx
+// ✅ Good — src/app/preview/asset-type-badge/page.tsx
+import { AssetTypeBadge, type AssetType } from "@/components/AssetTypeBadge";
+
+const ASSET_TYPES: AssetType[] = ["STOCK", "FUND", "BOND", "GOLD"];
+
+export default function AssetTypeBadgePreview() {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      {ASSET_TYPES.map((assetType) => (
+        <AssetTypeBadge key={assetType} assetType={assetType} />
+      ))}
+    </div>
+  );
+}
+
+// ❌ Bad — chép markup component vào preview (nhân bản nguồn) + tự fetch data
+export default async function BadPreview() {
+  const holdings = await getHoldings(); // KHÔNG được chạm dữ liệu ở preview
+  return <div className="rounded-xl border ...">{/* ...chép lại JSX của component... */}</div>;
+}
+```
+
 ## Đặc thù Navtrack
 
 - Format tiền/số qua **helper dùng chung** (`lib/format.ts`); helper nhận cờ privacy và tôn trọng chế độ **ẩn số tiền** — ẩn **mọi giá trị tiền tuyệt đối bằng VND**, **giữ** phần trăm và số lượng cổ phần.

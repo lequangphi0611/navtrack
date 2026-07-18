@@ -7,6 +7,7 @@
 - `Holding`: `userId`, `type` (`AssetType`), `symbol`, `name?`, `unit`, `quantity`, `avgCost`, quan hệ tới `Cashflow`/`Dividend`/`NavOverride`/`Snapshot`.
 - `quantity`/`avgCost`: **materialized cache** của vị thế hiện tại (SL đang giữ + giá vốn bình quân) — dẫn xuất từ `Cashflow`, không phải nguồn độc lập; xem bất biến bên dưới và `02-transactions-and-cost-basis.md`.
 - `AssetType` enum: `STOCK`, `FUND`, `BOND`, `GOLD`.
+- **`parValue`/`couponRatePercent`/`couponFrequencyMonths`/`maturityDate`/`nextCouponDate`** (Phase 8, chỉ có ý nghĩa khi `type = BOND`, `null` cho loại khác) — phục vụ "Lịch dòng tiền sắp tới", xem `10-cashflow-calendar.md`.
 
 ## Quy tắc & bất biến
 - **Một bảng `Holding` cho cả 4 loại**, phân biệt bằng `type`. Không tách bảng theo loại (lý do: phân tích toàn danh mục — xem `02-data-model.md`).
