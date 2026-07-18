@@ -314,6 +314,20 @@ export default async function BadPreview() {
 - **Ngày:** hiển thị kiểu Việt `dd/MM/yyyy`. Lưu UTC, hiển thị theo giờ Việt Nam (`Asia/Ho_Chi_Minh`).
 - **Phần trăm:** số chữ số thập phân nhất quán (vd 2 chữ số); luôn kèm nhãn rõ khi là tỷ suất "theo năm" (XIRR).
 
+### Chọn ngày trong form
+
+- **Mọi field chọn ngày trong app dùng `components/ui/date-picker.tsx` (`DatePicker`), KHÔNG dùng `<input type="date">` native.** Lý do: Safari iOS thật không cho style lại control ngày native đầy đủ (quirk WebKit đã biết — 2 lần fix CSS trước đó ở PR #72/#73 không giải quyết được, phải thay hẳn bằng `DatePicker` tự vẽ ở PR #74). `DatePicker` giữ nguyên contract `FormData` qua hidden input (`formData.get(name)` không đổi) nên wiring Server Action không cần sửa gì.
+- `DatePicker` là **controlled component** (`value`/`onChange`, chuỗi `yyyy-MM-dd`) — không nhận `defaultValue` như `<Input type="date">` cũ. Nếu component đang dùng `defaultValue`, chuyển field đó sang `useState` (khởi tạo bằng giá trị default cũ) trước khi wiring `DatePicker`.
+
+```tsx
+// ❌ Bad — native date input
+<Input type="date" name="date" defaultValue={defaultDateInputValue} required />
+
+// ✅ Good — DatePicker, controlled
+const [date, setDate] = useState(defaultDateInputValue);
+<DatePicker name="date" value={date} onChange={setDate} required />
+```
+
 ```ts
 // ✅ Good
 new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(Number(amount));

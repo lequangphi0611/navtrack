@@ -7,6 +7,7 @@ import { useActionState, useRef, useState } from "react";
 import { Alert } from "@/components/Alert";
 import type { AssetType } from "@/components/AssetTypeBadge";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatMoney } from "@/lib/format";
@@ -104,6 +105,7 @@ function NewHoldingForm() {
   const [unit, setUnit] = useState(defaultUnit("STOCK"));
   const [quantity, setQuantity] = useState("");
   const [pricePerUnit, setPricePerUnit] = useState("");
+  const [date, setDate] = useState(todayInputValue());
 
   function changeAssetType(next: AssetType) {
     setAssetType(next);
@@ -142,6 +144,7 @@ function NewHoldingForm() {
       formRef.current?.reset();
       setQuantity("");
       setPricePerUnit("");
+      setDate(todayInputValue());
       return { ok: true, savedSymbol: symbol };
     }
 
@@ -249,11 +252,10 @@ function NewHoldingForm() {
 
       <div>
         <FieldLabel>Ngày chốt vị thế</FieldLabel>
-        <Input
-          type="date"
+        <DatePicker
           name="date"
-          defaultValue={todayInputValue()}
-          className="h-11 rounded-xl font-mono font-semibold"
+          value={date}
+          onChange={setDate}
           required
           disabled={isPending}
         />
