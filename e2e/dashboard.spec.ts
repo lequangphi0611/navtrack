@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
 import { daysAgo, isoDate } from "./support/dates";
+import { fillDatePicker } from "./support/date-picker";
 import {
   cleanupTestUser,
   createTestSession,
@@ -63,7 +64,7 @@ test("Dashboard hiển thị đúng NAV/XIRR/lãi-lỗ khi vị thế có giá t
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("100");
     await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await page.locator('input[name="date"]').fill(buyDate);
+    await fillDatePicker(page, "date", buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
     await page.waitForURL(
@@ -133,7 +134,7 @@ test("Dashboard hiển thị đúng màu/mũi tên khi NAV lỗ so với vốn",
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("100");
     await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await page.locator('input[name="date"]').fill(buyDate);
+    await fillDatePicker(page, "date", buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
     await page.waitForURL(

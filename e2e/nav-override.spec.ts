@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
 import { daysAgo, isoDate } from "./support/dates";
+import { fillDatePicker } from "./support/date-picker";
 import {
   cleanupTestUser,
   createTestSession,
@@ -63,7 +64,7 @@ test("nhập giá tay (NavOverride) cho vị thế Vàng cập nhật NAV toàn 
     await page.goto(`${holdingUrl}/price`);
     await page.locator('input[name="price"]').fill("8000000");
     const today = new Date().toISOString().slice(0, 10);
-    await page.locator('input[name="date"]').fill(today);
+    await fillDatePicker(page, "date", today);
     await page.getByRole("button", { name: "Lưu giá nhập tay" }).click();
 
     // saveNavOverride (Server Action) redirect về đúng chi tiết vị thế khi
@@ -139,7 +140,7 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("10");
     await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await page.locator('input[name="date"]').fill(buyDate);
+    await fillDatePicker(page, "date", buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
     await page.waitForURL(
@@ -160,7 +161,7 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
     // 10 ngày trước) -> MANUAL thắng theo rule so ngày.
     await page.goto(`${holdingUrl}/price`);
     await page.locator('input[name="price"]').fill("200000");
-    await page.locator('input[name="date"]').fill(isoDate(overrideDate));
+    await fillDatePicker(page, "date", isoDate(overrideDate));
     await page.getByRole("button", { name: "Lưu giá nhập tay" }).click();
     await page.waitForURL(holdingUrl);
 

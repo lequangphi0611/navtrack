@@ -5,6 +5,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import Decimal from "decimal.js";
 
 import { daysAgo, isoDate } from "./support/dates";
+import { fillDatePicker } from "./support/date-picker";
 import {
   cleanupTestUser,
   createTestSession,
@@ -351,7 +352,7 @@ test("Ghi cổ tức tiền mặt: hiện khối XIRR danh mục trước/sau + 
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("10");
     await page.locator('input[name="pricePerUnit"]').fill("90000");
-    await page.locator('input[name="date"]').fill(buyDate);
+    await fillDatePicker(page, "date", buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     await page.waitForURL(
       /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
