@@ -23,6 +23,7 @@ import { Alert } from "@/components/Alert";
 import { PageHeader } from "@/components/PageHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import {
   HoldingSwitcher,
@@ -333,12 +334,10 @@ function DividendForm({
             <div className="flex flex-col gap-4.5">
               <div>
                 <FieldLabel>Ngày nhận</FieldLabel>
-                <Input
-                  type="date"
+                <DatePicker
                   name="date"
                   value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  className="h-11 rounded-xl font-mono font-semibold"
+                  onChange={setDate}
                   required
                   disabled={isPending}
                 />
@@ -356,12 +355,10 @@ function DividendForm({
           ) : (
             <div>
               <FieldLabel>Ngày nhận</FieldLabel>
-              <Input
-                type="date"
+              <DatePicker
                 name="date"
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
-                className="h-11 rounded-xl font-mono font-semibold"
+                onChange={setDate}
                 required
                 disabled={isPending}
               />
@@ -375,12 +372,10 @@ function DividendForm({
                 · tuỳ chọn, tham khảo
               </span>
             </FieldLabel>
-            <Input
-              type="date"
+            <DatePicker
               name="paymentDate"
               value={paymentDate}
-              onChange={(event) => setPaymentDate(event.target.value)}
-              className="h-11 rounded-xl font-mono font-semibold"
+              onChange={setPaymentDate}
               disabled={isPending}
             />
             <div className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-faint">
