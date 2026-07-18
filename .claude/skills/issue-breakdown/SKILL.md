@@ -21,7 +21,7 @@ Skill này tạo một loạt issue GitHub cho một phase hoặc một mảng v
 4. `docs/domain/*` liên quan tới phase — mỗi issue business phải trích dẫn đúng file/mục domain doc làm căn cứ, không tự suy diễn rule.
 5. `docs/02-data-model.md` nếu phase đụng schema mới — bản nháp model có thể đã có sẵn ở đây, chỉ cần hiện thực vào `prisma/schema.prisma`.
 6. `docs/rules/*` liên quan (đặc biệt `python-job.md` nếu phase có job chạy GitHub Actions, `component-architecture.md` nếu có UI mới) — quyết định ranh giới ngôn ngữ/công cụ của từng việc.
-7. **Digest mockup `process/UI_phase_N.md`** (do `design-fetcher` sinh) — nếu phase đụng UI mà digest **chưa có**, spawn Agent `subagent_type: design-fetcher` (foreground) **trước** để có bản kê màn hình → component → atom tái dùng → Props phác thảo, rồi mới chia issue theo đó (không mù). Có digest rồi thì đọc thẳng.
+7. **Digest mockup `process/UI_phase_N.md`** (do `design-fetcher` sinh) — nếu phase đụng UI mà digest **chưa có**, spawn Agent `subagent_type: design-fetcher` (foreground) **trước** để có bản kê màn hình → component → atom tái dùng → Props phác thảo, rồi mới chia issue theo đó (không mù). **Truyền đúng file mockup user chỉ định** (design-fetcher không tự suy từ số phase); user chưa nói rõ thì hỏi trước. Có digest rồi thì đọc thẳng.
    - **Lưu ý:** digest tồn tại **không** đồng nghĩa UI đã dựng xong — nó chỉ là bản kế hoạch từ mockup. Vẫn phải kiểm component thật trong `src/` (Bước 2) để quyết còn cần issue "Design & UI" hay không.
 8. Kiểm tra trùng: liệt kê issue đang mở gắn nhãn `phase-N` (mục "Liệt kê issue" ở [`TOOLS.md`](../../../TOOLS.md), filter theo `phase-N`) — không tạo lại việc đã có issue.
 
