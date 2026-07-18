@@ -332,8 +332,8 @@ function DividendForm({
           </div>
 
           {isCash ? (
-            <div className="flex gap-2.5">
-              <div className="min-w-0 flex-1">
+            <div className="flex flex-col gap-4.5">
+              <div>
                 <FieldLabel>Ngày nhận</FieldLabel>
                 <div className="relative">
                   <Input
@@ -348,9 +348,9 @@ function DividendForm({
                   <Calendar className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-faint" />
                 </div>
               </div>
-              <div className="w-27 shrink-0">
+              <div>
                 <FieldLabel>Thuế</FieldLabel>
-                <div className="flex h-11 items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3">
+                <div className="flex h-11 w-full items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3">
                   <Lock className="size-3.5 shrink-0 text-muted-faint" />
                   <span className="font-mono text-[13.5px] font-semibold text-muted-foreground">
                     {taxRatePercent}%
