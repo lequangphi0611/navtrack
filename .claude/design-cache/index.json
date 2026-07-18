@@ -3,5 +3,10 @@
     "designFile": "Phase 4 Screens.dc.html",
     "section": "4a-4f (Ghi cổ tức tiền mặt/cổ phiếu, chọn mã, đã ghi, lịch sử, menu nhanh Dashboard) — bản cập nhật issue #61: thêm field \"Ngày thanh toán\" (4a/4c) và checkbox \"Giá hiện tại đã phản ánh đợt chia này\" trong card \"Giá điều chỉnh kỹ thuật\" (4a/4c); 4d (Đã ghi) không có thiết kế hiển thị lại giá đã điều chỉnh/ngày thanh toán",
     "cachedAt": "2026-07-17"
+  },
+  "process/phase-5": {
+    "designFile": "Phase 5 Screens.dc.html",
+    "section": "5a-5f (Ghi lệnh bán thuế tự tính, bán lỗ vẫn có thuế, bán vàng thuế 0%, dashboard lãi/lỗ thực nhận + chi phí ăn mòn, sheet chi tiết chi phí ăn mòn, sửa lệnh bán tính lại thuế theo ngày mới)",
+    "cachedAt": "2026-07-18"
   }
 }
