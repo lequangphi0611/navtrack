@@ -21,14 +21,15 @@ Skill này tạo một loạt issue GitHub cho một phase hoặc một mảng v
 4. `docs/domain/*` liên quan tới phase — mỗi issue business phải trích dẫn đúng file/mục domain doc làm căn cứ, không tự suy diễn rule.
 5. `docs/02-data-model.md` nếu phase đụng schema mới — bản nháp model có thể đã có sẵn ở đây, chỉ cần hiện thực vào `prisma/schema.prisma`.
 6. `docs/rules/*` liên quan (đặc biệt `python-job.md` nếu phase có job chạy GitHub Actions, `component-architecture.md` nếu có UI mới) — quyết định ranh giới ngôn ngữ/công cụ của từng việc.
-7. Nếu phase đã có UI dựng sẵn từ trước (đã tồn tại `process/UI_phase_x.md`) — đọc để biết Props contract có sẵn, KHÔNG cần issue Design & UI riêng nữa.
+7. **Digest mockup `process/UI_phase_N.md`** (do `design-fetcher` sinh) — nếu phase đụng UI mà digest **chưa có**, spawn Agent `subagent_type: design-fetcher` (foreground) **trước** để có bản kê màn hình → component → atom tái dùng → Props phác thảo, rồi mới chia issue theo đó (không mù). Có digest rồi thì đọc thẳng.
+   - **Lưu ý:** digest tồn tại **không** đồng nghĩa UI đã dựng xong — nó chỉ là bản kế hoạch từ mockup. Vẫn phải kiểm component thật trong `src/` (Bước 2) để quyết còn cần issue "Design & UI" hay không.
 8. Kiểm tra trùng: liệt kê issue đang mở gắn nhãn `phase-N` (mục "Liệt kê issue" ở [`TOOLS.md`](../../../TOOLS.md), filter theo `phase-N`) — không tạo lại việc đã có issue.
 
 ## Bước 2 — Chia nhỏ theo nguyên tắc
 
 - **Schema/migration luôn tách issue riêng, làm trước tiên** nếu phase có model Prisma mới — mọi issue khác trong phase phụ thuộc issue này (không có bảng thì chưa ghi được gì).
-- **UI/Presentational chưa có sẵn → tách 1 issue "Design & UI" riêng**, đúng ranh giới agent `design-implementer` (`.claude/agents/design-implementer.md`): không viết `queries.ts`, không Server Action, không đụng Prisma, dùng mock/sample data, output là component + `process/UI_phase_N.md` (Props contract từng component, theo đúng format `process/UI_phase_2.md`: bảng trạng thái wiring, `type Props`, sample data). Issue này **không phụ thuộc** issue schema (làm song song được) — chỉ các issue business cần Props contract của nó mới phụ thuộc nó.
-  - Nếu UI **đã có sẵn** (đã có `UI_phase_N.md` từ đầu phase, như Phase 2 lúc bắt đầu) → bỏ qua bước này, các issue business đọc thẳng Props contract có sẵn.
+- **Component Presentational chưa dựng → tách 1 issue "Design & UI" riêng**, đúng ranh giới agent `design-implementer` (`.claude/agents/design-implementer.md`): không viết `queries.ts`, không Server Action, không đụng Prisma, đọc digest `process/UI_phase_N.md` (do `design-fetcher` seed) + sample data, output là component + preview page (`src/app/preview/<slug>/`) + firm up phần Props của digest. Issue này **không phụ thuộc** issue schema (làm song song được) — chỉ các issue business cần Props contract của nó mới phụ thuộc nó.
+  - Phân biệt rõ: **digest `UI_phase_N.md` có sẵn** (design-fetcher đã seed) ≠ **component đã dựng**. Chỉ bỏ issue "Design & UI" khi **component thật đã tồn tại trong `src/`** (grep `features/*/components`, `src/components`) — không chỉ vì file digest tồn tại.
 - **Khác ngôn ngữ/công cụ → luôn tách issue riêng**, dù cùng phục vụ một tính năng (vd job Python chạy GitHub Actions vs Server Action TS trong app — xem mẫu #36 vs #37 của Phase 3). Không gộp việc thuộc 2 ranh giới agent khác nhau vào một issue.
 - **Mỗi issue là một khối việc một agent làm gọn trong một lượt** — đúng ranh giới `business-implementer` HOẶC `design-implementer`, không gộp cả hai loại việc.
 - **Việc chỉ là hệ quả/bất biến có sẵn, không phát sinh code mới** (vd "mốc hôm nay tính động, không lưu" — đã đúng từ trước) → **không** tạo issue riêng, ghi chú gộp vào issue liên quan gần nhất nếu cần nhắc lại.

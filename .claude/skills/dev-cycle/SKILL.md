@@ -25,9 +25,12 @@ Khi user yêu cầu hotfix, còn phải xác nhận **cả 3 điều kiện** sa
 
 ## Full flow
 
+### Bước 0b — Kéo mockup trước khi plan (khi phase đụng UI)
+Nếu task/phase có dựng/sửa UI và digest `process/UI_phase_N.md` **chưa có** hoặc mockup vừa đổi → spawn Agent `subagent_type: design-fetcher` (foreground) **trước** planner, để planner (và design-implementer sau này) plan chuẩn theo digest thay vì mù. Digest đã có sẵn và mockup không đổi → bỏ qua bước này. Phase thuần business/không UI → bỏ qua.
+
 ### Bước 1 — Plan (bắt buộc qua Plan Mode, có gate duyệt)
 1. Gọi `EnterPlanMode` nếu chưa ở Plan Mode.
-2. Spawn Agent `subagent_type: planner` (foreground — cần nội dung để tiếp tục), giao task cụ thể + phase liên quan.
+2. Spawn Agent `subagent_type: planner` (foreground — cần nội dung để tiếp tục), giao task cụ thể + phase liên quan (planner đọc digest `process/UI_phase_N.md` nếu Bước 0b vừa tạo).
 3. Ghi nội dung plan planner trả về, gọi `ExitPlanMode` xin user duyệt. **Đây là gate bắt buộc, không bỏ qua** — mọi bước sau (sửa code, push, PR) chỉ chạy sau khi user duyệt plan.
 4. User yêu cầu sửa plan → quay lại spawn `planner` với phản hồi, lặp tới khi được duyệt.
 
