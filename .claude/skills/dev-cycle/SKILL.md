@@ -36,6 +36,16 @@ Khi user yêu cầu hotfix, còn phải xác nhận **cả 3 điều kiện** sa
 2. Spawn agent tương ứng (foreground), giao đúng phần việc trong plan.
 3. Ghi lại danh sách file đã đổi mỗi agent báo cáo.
 
+### Bước 2b — Soi UI (chỉ khi `design-implementer` chạy ở Bước 2)
+
+Chỉ áp dụng khi Bước 2 có dựng/sửa component Presentational (có preview page `src/app/preview/<slug>/`). Bỏ qua bước này nếu chỉ đụng business/domain. **Chạy được trên cả Claude Cloud lẫn Local** — preview component cô lập không cần Docker/DB (khác e2e ở Bước 4), xem [`TOOLS.md`](../../../TOOLS.md) dòng "Soi UI component qua browser".
+
+1. Đảm bảo dev server chạy: `pnpm dev` (nền, tái dùng nếu đã có ở cổng 3000), chờ `http://localhost:3000` sẵn sàng.
+2. Với mỗi component vừa dựng/sửa, dùng **Playwright MCP** (`.mcp.json` → `scripts/playwright-mcp.mjs`): `browser_navigate` tới `/preview/<slug>`, `browser_resize` viewport mobile (mockup mobile-first, vd 390×844), `browser_take_screenshot`.
+3. **`SendUserFile` ảnh cho user** — đây là điểm cốt lõi của phương án: user thấy đúng cái đang soi, không phải tin lời khai.
+4. Đối chiếu ảnh với mockup (từ cache/digest). Lệch rõ → quay lại Bước 2, giao `design-implementer` sửa kèm mô tả lệch trực quan cụ thể, rồi lặp lại Bước 2b. Đếm vào giới hạn 3 lần lặp chung.
+5. **Không phải cổng verify** (xem `docs/rules/testing.md`): chỉ self-check trực quan trước khi vào verify cơ học. Khớp mắt xong vẫn phải qua Bước 3→5 như thường.
+
 ### Bước 3 — Quality verify (luôn chạy, kể cả hotfix)
 1. Spawn Agent `subagent_type: quality-verifier` (foreground).
 2. `KẾT QUẢ: CHƯA ĐẠT` → quay lại Bước 2, giao lại đúng lỗi (kèm nguyên văn báo cáo) cho implementer liên quan. Đếm số lần lặp.

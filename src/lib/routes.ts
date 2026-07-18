@@ -5,6 +5,10 @@ export const ROUTES = {
   // Prefix route handler Auth.js — không phải app route, nhưng vẫn qua đây để
   // proxy.ts (middleware) không hardcode string riêng.
   apiAuth: "/api/auth",
+  // Bề mặt preview component — dev-only. proxy.ts dùng prefix này: cho qua không
+  // cần đăng nhập KHI dev (soi UI component cô lập qua Playwright MCP), trả 404
+  // khi production. Xem src/app/preview/layout.tsx + docs/rules/component-architecture.md.
+  preview: "/preview",
   // Trang chủ (Tổng quan/Dashboard) — src/app/(dashboard)/page.tsx.
   dashboard: "/",
   holdings: "/holdings",
