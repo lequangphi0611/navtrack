@@ -137,4 +137,22 @@
   input[type="date"] {
     min-width: 0;
   }
+
+  /* Bug WebKit khác: các pseudo-element nội bộ của date control
+     (`-webkit-datetime-edit*`) tự thêm padding/line-height riêng, khiến
+     input[type="date"] cao hơn hẳn input type khác dù cùng class `h-11` —
+     reset về 0/line-height:1 để control tôn trọng chiều cao đã gán, không
+     tái hiện được trên Chromium (chỉ ảnh hưởng Safari, các trình duyệt
+     khác bỏ qua selector không nhận diện được). */
+  input[type="date"]::-webkit-datetime-edit {
+    padding: 0;
+    line-height: 1;
+  }
+  input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    padding: 0;
+    margin: 0;
+  }
 }
