@@ -1,7 +1,7 @@
-# Phase 5 — Thuế bán (áp dụng)
+# Phase 5 — Thuế bán & phí giao dịch (áp dụng)
 
 ## Mục tiêu
-Áp dụng thuế khi bán, hiển thị lãi/lỗ **sau thuế**, và hiển thị **chi phí ăn mòn luỹ kế** (tổng thuế + phí) để trả lời "chi phí giao dịch đã ăn bao nhiêu % vốn tôi bỏ ra". Bảng `Setting` và `resolveSetting` **đã tạo ở Phase 1** — phase này chỉ dùng, không tạo bảng.
+Áp dụng thuế khi bán, **phí tự tính cho cả mua lẫn bán**, hiển thị lãi/lỗ **sau thuế + phí**, và hiển thị **chi phí ăn mòn luỹ kế** (tổng thuế + phí) để trả lời "chi phí giao dịch đã ăn bao nhiêu % vốn tôi bỏ ra". Bảng `Setting` và `resolveSetting` **đã tạo ở Phase 1** — phase này chỉ dùng, không tạo bảng.
 
 ## Công việc cần làm
 - [ ] Seed `SALE_TAX_STOCK/FUND/BOND` (mức % — xác nhận trước khi seed) + `SALE_TAX_GOLD = 0` (**đã chốt 2026-07-17**, xem `process/DECISION.md`)
@@ -13,6 +13,9 @@
 - [ ] **Sửa một SELL đã ghi (đã chốt 2026-07-18):** đổi **ngày** → tự tính lại `taxAmount` theo `SALE_TAX_<loại>` tại ngày mới, hiển thị giá trị cũ (gạch ngang) cạnh giá trị mới + tên `Setting`/ngày hiệu lực áp dụng; vẫn cho sửa tay sau khi tính lại (không khoá field) — xem `docs/domain/07-tax.md` mục "Ca biên", mockup 5f (`process/UI_phase_5.md`)
 - [ ] **Chi phí ăn mòn — sheet chi tiết (mở rộng phạm vi, đã chốt 2026-07-18):** dòng phụ dưới card lãi/lỗ **bấm được**, mở sheet breakdown theo 3 nguồn (phí giao dịch / thuế bán / thuế cổ tức) kèm % đóng góp mỗi nguồn trong tổng `costDragAmount` — mockup 5e (`process/UI_phase_5.md`)
 - [ ] **Cấu trúc lại `ReturnMetrics`/card lãi-lỗ trên Dashboard (đã chốt 2026-07-18, bám đúng mockup 5d):** tách card lãi/lỗ (thực nhận) đứng riêng full-width (có footer "Chi phí ăn mòn" tappable, xem trên) khỏi hàng 2 cột XIRR; hàng 2 cột mới ghép "XIRR (sau thuế)" với chỉ số **mới** "Vốn đã bỏ ra mua" (hiển thị trực tiếp `grossInvested`, không chỉ dùng ngầm làm mẫu số %) — khác cấu trúc `ReturnMetrics` hiện tại (2 cột XIRR + PnL cạnh nhau, xem `src/components/ReturnMetrics/ReturnMetrics.tsx`)
+- [ ] **Phí giao dịch tự tính (mới, bổ sung requirement 2026-07-18):** seed 8 key `TRANSACTION_FEE_BUY/SELL_<STOCK/FUND/BOND/GOLD>` (group `FEE`) — `STOCK` = `0.3%` (đã xác nhận, theo TPS); `FUND`/`BOND`/`GOLD` **cần xác nhận mức trước khi seed**, mặc định `0` nếu chưa dùng kênh tính phí % (áp dụng nguyên tắc "seed tường minh, không để thiếu dòng" như `SALE_TAX_GOLD`) — xem `docs/domain/07-tax.md` mục "Phí giao dịch"
+- [ ] **`feeAmount` tự prefill cho CẢ BUY lẫn SELL** theo `TRANSACTION_FEE_<chiều>_<loại>` tại ngày giao dịch (`resolveSetting`), **vẫn cho sửa tay** (không khoá field, giống cơ chế thuế) — sửa `TransactionForm.tsx`
+- [ ] **`avgCost` gộp phí mua (đóng issue #66):** cập nhật `derivePosition()`/`lib/cost-basis.ts` — giá vốn bình quân tính cả `feeAmount` của lần mua, không chỉ `quantity × pricePerUnit` — xem `docs/domain/02-transactions-and-cost-basis.md` mục "Cách tính"
 
 ## Tiêu chí hoàn thành
 - [ ] Thuế tra đúng theo **ngày giao dịch** (kiểm với giao dịch lùi ngày + đổi thuế suất)
@@ -23,8 +26,12 @@
 - [ ] Thiếu cấu hình → báo lỗi, không âm thầm dùng 0 (kể cả `GOLD` — vẫn phải seed dòng `0` tường minh)
 - [ ] Sửa ngày một SELL đã ghi → `taxAmount` tự tính lại theo `SALE_TAX_<loại>` tại ngày mới, hiển thị rõ giá trị cũ vs mới, vẫn sửa tay được sau đó
 - [ ] Sheet chi tiết "chi phí ăn mòn" mở từ dòng phụ → breakdown đúng 3 nguồn (phí/thuế bán/thuế cổ tức) + % đóng góp từng nguồn khớp tổng `costDragAmount`
+- [ ] Phí mua/bán tự prefill đúng theo `AssetType` + ngày giao dịch (kiểm effective dating giống thuế), vẫn sửa tay được sau đó
+- [ ] `avgCost` phản ánh đúng phí mua đã gộp — kiểm ví dụ tay (mua 100 FPT giá 100k + phí 30.000 → giá vốn bình quân 100.300, không phải 100.000)
+- [ ] Lãi/lỗ đã thực hiện khi bán không trừ phí mua 2 lần (phí mua đã nằm trong giá vốn bình quân, chỉ trừ phí bán + thuế bán ở bước tính lãi/lỗ)
 
 ## Phụ thuộc / ghi chú
-- Bảng `Setting` + `resolveSetting` đến từ **Phase 1**. Phase này thuần về **logic áp thuế bán** + hiển thị sau thuế + chi phí ăn mòn.
+- Bảng `Setting` + `resolveSetting` đến từ **Phase 1**. Phase này gồm **logic áp thuế bán + phí giao dịch (mới)** + hiển thị sau thuế/phí + chi phí ăn mòn.
 - **Đáo hạn trái phiếu vs bán trước hạn:** cố ý chưa xử lý riêng ở Phase 5 (áp `SALE_TAX_BOND` chung cho mọi SELL) — bàn kỹ khi làm Phase 7, xem `docs/domain/07-tax.md` mục "Ca biên" và `process/phase-7.md`.
 - **Chi phí ăn mòn dùng lại dữ liệu có sẵn** (`Cashflow.feeAmount` từ Phase 1, `Dividend.taxAmount` từ Phase 4, `Cashflow.taxAmount` mới của Phase 5) — không cần field/model mới, chỉ cần một hàm tổng hợp + một dòng UI. Mẫu số `grossInvested` = `Σ|BUY.amount|` tính thêm từ chuỗi `Cashflow` (không tái dùng `totalInvested` vốn ròng — xem A1/`process/DECISION.md` 2026-07-17 (6)).
+- **Phí giao dịch tự tính (bổ sung requirement, 2026-07-18):** trước đây `feeAmount` 100% nhập tay tự do từ Phase 1 (`process/phase-1.md`), không có Setting/auto-calc — khác hẳn `taxAmount` đã có `SALE_TAX_<loại>` từ đầu Phase 5. Nay áp dụng đúng cơ chế Setting + prefill-nhưng-sửa-được y hệt thuế, không cần model/migration mới (`Setting` đã là bảng key-value generic). **Đóng luôn issue #66** (phí mua chưa gộp vào `avgCost`) trong đợt này — vì phí giờ auto-prefill khác `0` cho MỌI giao dịch mua thay vì thường bị bỏ trống như trước, sai số `avgCost` nếu không sửa sẽ lộ rõ và thường xuyên hơn hẳn. Xem `process/DECISION.md` 2026-07-18 (4).

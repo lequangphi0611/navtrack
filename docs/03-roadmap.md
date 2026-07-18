@@ -37,11 +37,12 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
 - **Cổ tức tiền mặt tự khấu trừ thuế TNCN (~5%):** lưu gộp/thuế/thực nhận, dòng tiền dương cho XIRR = số thực nhận sau thuế
 - UI ghi nhận cổ tức gắn với từng `Holding`
 
-## Phase 5 — Thuế bán (áp dụng)
+## Phase 5 — Thuế bán & phí giao dịch (áp dụng)
 - Bảng `Setting` + `resolveSetting` **đã tạo ở Phase 1** — phase này chỉ dùng.
 - Tự động trừ thuế khi ghi giao dịch bán theo `SALE_TAX_<LOẠI>` (tra tại ngày giao dịch), hiển thị lãi/lỗ sau thuế
 - Thuế suất chỉnh **trực tiếp trên DB** (không có UI admin)
 - Xác nhận mức thuế suất cụ thể trước khi seed; `SALE_TAX_GOLD = 0` **đã chốt** (2026-07-17, cá nhân bán vàng tại VN không chịu thuế TNCN)
+- **Phí giao dịch tự tính (mới, 2026-07-18):** `feeAmount` tự prefill cho cả mua lẫn bán theo `TRANSACTION_FEE_BUY/SELL_<LOẠI>` (`STOCK` = 0.3% theo TPS, đã xác nhận), vẫn sửa tay được — khác thuế (chỉ áp bán); `avgCost` gộp luôn phí mua (đóng issue #66) — xem `docs/domain/07-tax.md` mục "Phí giao dịch"
 - **Chi phí ăn mòn (mới):** dòng phụ dưới lãi/lỗ trên dashboard — tổng thuế + phí luỹ kế (thuế bán + thuế cổ tức + phí giao dịch) và % trên vốn gộp đã triển khai (`Σ|BUY.amount|`, không phải vốn ròng), xem `docs/domain/07-tax.md`
 
 ## Phase 6 — Biểu đồ + hoàn thiện dashboard
