@@ -331,7 +331,7 @@ function DividendForm({
           </div>
 
           {isCash ? (
-            <div className="flex flex-col gap-4.5">
+            <div className="grid grid-cols-[minmax(0,1fr)_6.75rem] gap-2.5">
               <div>
                 <FieldLabel>Ngày nhận</FieldLabel>
                 <DatePicker

@@ -4,8 +4,10 @@ import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
 import { daysAgo, isoDate } from "./support/dates";
+import { fillDatePicker } from "./support/date-picker";
 import {
   cleanupTestUser,
+  closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
@@ -63,7 +65,7 @@ test("Dashboard hiển thị đúng NAV/XIRR/lãi-lỗ khi vị thế có giá t
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("100");
     await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await page.locator('input[name="date"]').fill(buyDate);
+    await fillDatePicker(page, "date", buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
     await page.waitForURL(
@@ -96,7 +98,7 @@ test("Dashboard hiển thị đúng NAV/XIRR/lãi-lỗ khi vị thế có giá t
     // priceFreshnessNote (mốc giá tự động gần nhất).
     await expect(page.getByText(/Giá tự động cập nhật EOD/)).toBeVisible();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     // Dọn PriceQuote đã seed — bảng dùng chung, không cascade theo User.
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
@@ -133,7 +135,7 @@ test("Dashboard hiển thị đúng màu/mũi tên khi NAV lỗ so với vốn",
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("100");
     await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await page.locator('input[name="date"]').fill(buyDate);
+    await fillDatePicker(page, "date", buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
     await page.waitForURL(
@@ -158,7 +160,7 @@ test("Dashboard hiển thị đúng màu/mũi tên khi NAV lỗ so với vốn",
     await expect(navDeltaIcon).toHaveClass(/text-destructive/);
     await expect(navDeltaIcon).not.toHaveClass(/text-gain/);
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -224,7 +226,7 @@ test('FAB "Mua / Bán" mở picker chọn mã, chọn xong vào thẳng màn gia
     const transactionFormUrl = stripQuery(page.url());
     expect(transactionFormUrl).toContain("/transactions/new");
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });
@@ -261,7 +263,7 @@ test('Picker "Mua / Bán": gõ mã không tồn tại hiện đúng no-match sta
     await expect(page.getByText("Không tìm thấy mã phù hợp.")).toBeVisible();
     await expect(page.getByText("Chưa có vị thế nào đang mở.")).toHaveCount(0);
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });

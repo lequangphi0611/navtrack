@@ -6,6 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { daysAgo } from "./support/dates";
 import {
   cleanupTestUser,
+  closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
@@ -160,7 +161,7 @@ test("mở /snapshots thấy đúng lịch sử thật (không phải sample cũ
       page.getByText("Giá trị từng vị thế").locator("..").locator(".."),
     ).toContainText("1tr");
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -204,8 +205,8 @@ test("cách ly quyền: user khác cố mở URL /snapshots/[id] của snapshot 
     await expect(pageB.getByRole("heading", { name: "404" })).toBeVisible();
     await expect(pageB.getByText("12.345.678")).toHaveCount(0);
   } finally {
-    await contextA.close();
-    await contextB.close();
+    await closeContext(contextA);
+    await closeContext(contextB);
     await cleanupTestUser(sessionA.userId);
     await cleanupTestUser(sessionB.userId);
   }
@@ -251,7 +252,7 @@ test("mở /snapshots/[id] khi holdingId không null hoặc snapshot không tồ
     await page.goto("/snapshots/does-not-exist");
     await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });
@@ -346,7 +347,7 @@ test("giá lịch sử khác giá hiện tại đủ ngưỡng -> hiện đúng 
       page.getByText(/Giá trị đóng băng dùng giá EOD tại/),
     ).toHaveCount(0);
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({
       where: {

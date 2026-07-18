@@ -5,8 +5,10 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import Decimal from "decimal.js";
 
 import { daysAgo, isoDate } from "./support/dates";
+import { fillDatePicker } from "./support/date-picker";
 import {
   cleanupTestUser,
+  closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
@@ -135,7 +137,7 @@ test("Ghi cổ tức tiền mặt: tự tính gộp/thuế/thực nhận, hiện
     await expect(page.getByText("Tiền mặt 10%")).toBeVisible();
     await expect(page.getByText("+95k", { exact: true })).toBeVisible();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });
@@ -187,7 +189,7 @@ test("Ghi cổ tức cổ phiếu: số lẻ tự làm tròn xuống, báo rõ +
     await expect(page.getByText("Cổ phiếu 11%")).toBeVisible();
     await expect(page.getByText(/105 cổ phần → 117 cổ phần/)).toBeVisible();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });
@@ -250,7 +252,7 @@ test("Ghi cổ tức cổ phiếu: cho phép chỉnh tay số lượng, chặn k
     await expect(page.getByText("Cổ phiếu 13%")).toBeVisible();
     await expect(page.getByText(/105 cổ phần → 119 cổ phần/)).toBeVisible();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });
@@ -310,7 +312,7 @@ test("Cổ tức cổ phiếu: SL hiện đúng ngay sau khi ghi, không bị gi
       .innerText();
     expect(avgCostAfterSell).toContain("50k");
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });
@@ -351,7 +353,7 @@ test("Ghi cổ tức tiền mặt: hiện khối XIRR danh mục trước/sau + 
     await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
     await page.locator('input[name="quantity"]').fill("10");
     await page.locator('input[name="pricePerUnit"]').fill("90000");
-    await page.locator('input[name="date"]').fill(buyDate);
+    await fillDatePicker(page, "date", buyDate);
     await page.getByRole("button", { name: "Xong", exact: true }).click();
     await page.waitForURL(
       /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
@@ -393,7 +395,7 @@ test("Ghi cổ tức tiền mặt: hiện khối XIRR danh mục trước/sau + 
     await expect(page.getByText(`Tổng cổ tức ${symbol} đã nhận`)).toBeVisible();
     await expect(page.getByText("95k", { exact: true })).toBeVisible();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -451,7 +453,7 @@ test("Ghi cổ tức tiền mặt khi đã có giá cũ: tự tạo NavOverride 
     expect(override).not.toBeNull();
     expect(new Decimal(override!.price.toString()).toString()).toBe("49000");
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -513,7 +515,7 @@ test("Ghi cổ tức cổ phiếu: tick “giá đã phản ánh thị trường
     const override = await db.navOverride.findFirst({ where: { holdingId } });
     expect(override).toBeNull();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -590,7 +592,7 @@ test("Ghi cổ tức cổ phiếu khi đã có giá cũ, không tick checkbox: t
     const valueAfter = new Decimal(override!.price.toString()).mul(110);
     expect(valueAfter.minus(valueBefore).abs().lte(0.01)).toBe(true);
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -669,7 +671,7 @@ test("Ghi cổ tức cổ phiếu 2 lần cùng ngày chia trên cùng vị th�
       new Decimal(overridesAfterSecond[0]!.price.toString()).toString(),
     ).toBe(expectedSecondPrice);
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
     await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
   }
@@ -705,7 +707,7 @@ test("Ghi cổ tức tiền mặt khi Holding chưa có giá nào: vẫn ghi đ�
     const override = await db.navOverride.findFirst({ where: { holdingId } });
     expect(override).toBeNull();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(session.userId);
   }
 });

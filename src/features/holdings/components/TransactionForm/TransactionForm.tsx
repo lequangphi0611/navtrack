@@ -8,6 +8,7 @@ import { Alert } from "@/components/Alert";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { SymbolAvatar } from "@/components/SymbolAvatar";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { holdingDetailAfterTransaction } from "@/lib/routes";
@@ -78,6 +79,7 @@ function TransactionForm(props: TransactionFormProps) {
   );
   const [quantity, setQuantity] = useState(defaults.quantity);
   const [pricePerUnit, setPricePerUnit] = useState(defaults.pricePerUnit);
+  const [date, setDate] = useState(toDateInputValue(defaults.date));
   const isBuy = cashflowType === "BUY";
 
   async function submitTransaction(
@@ -207,11 +209,10 @@ function TransactionForm(props: TransactionFormProps) {
 
       <div>
         <FieldLabel>Ngày giao dịch</FieldLabel>
-        <Input
-          type="date"
+        <DatePicker
           name="date"
-          defaultValue={toDateInputValue(defaults.date)}
-          className="h-11 rounded-xl font-mono font-semibold"
+          value={date}
+          onChange={setDate}
           required
           disabled={isPending}
         />

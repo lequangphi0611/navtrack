@@ -1,12 +1,13 @@
 "use client";
 
 import Decimal from "decimal.js";
-import { CalendarDays, History, Info, Pencil, Zap } from "lucide-react";
+import { History, Info, Pencil, Zap } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import { Alert } from "@/components/Alert";
 import type { AssetType } from "@/components/AssetTypeBadge";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/PageHeader";
 import { formatMoney, formatQuantity, formatSignedPercent } from "@/lib/format";
@@ -25,7 +26,7 @@ type NavOverrideFormProps = {
   quantity: string;
   totalCostBasis: string;
   lastManualPrice?: { price: string; appliedDate: string };
-  // yyyy-MM-dd cho <input type="date">, mặc định hôm nay — Container tính.
+  // yyyy-MM-dd cho DatePicker, mặc định hôm nay — Container tính.
   defaultDateInputValue: string;
   // Đích nút đóng (X) — Container quyết định (hiện chưa có route NavOverride
   // thật, thường trỏ về chi tiết vị thế), xem process/UI_phase_2.md.
@@ -85,6 +86,7 @@ function NavOverrideForm({
   action,
 }: NavOverrideFormProps) {
   const [price, setPrice] = useState("");
+  const [date, setDate] = useState(defaultDateInputValue);
   const autoSupported = AUTO_PRICED_ASSET_TYPES.has(assetType);
   const [state, formAction, isPending] = useActionState(action, null);
 
@@ -161,17 +163,13 @@ function NavOverrideForm({
           </div>
           <div>
             <FieldLabel>Áp dụng từ ngày</FieldLabel>
-            <div className="relative">
-              <Input
-                type="date"
-                name="date"
-                defaultValue={defaultDateInputValue}
-                className="h-11 rounded-xl pr-9 font-mono font-semibold"
-                required
-                disabled={isPending}
-              />
-              <CalendarDays className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-faint" />
-            </div>
+            <DatePicker
+              name="date"
+              value={date}
+              onChange={setDate}
+              required
+              disabled={isPending}
+            />
           </div>
         </div>
 

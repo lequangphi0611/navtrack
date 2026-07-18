@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   cleanupTestUser,
+  closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
@@ -89,7 +90,7 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     await page.waitForURL(afterTransactionUrl(holdingUrl));
     await expect(page.getByText("160 cổ phần", { exact: true })).toBeVisible();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(sessionA.userId);
   }
 });
@@ -154,7 +155,7 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
       .click();
     await expect(page.getByText("50 cổ phần", { exact: true })).toBeVisible();
   } finally {
-    await context.close();
+    await closeContext(context);
     await cleanupTestUser(sessionA.userId);
   }
 });
@@ -188,8 +189,8 @@ test("cách ly dữ liệu giữa hai tài khoản", async ({ browser }) => {
     await pageB.goto(holdingUrl);
     await expect(pageB.getByRole("heading", { name: "404" })).toBeVisible();
   } finally {
-    await contextA.close();
-    await contextB.close();
+    await closeContext(contextA);
+    await closeContext(contextB);
     await cleanupTestUser(sessionA.userId);
     await cleanupTestUser(sessionB.userId);
   }
