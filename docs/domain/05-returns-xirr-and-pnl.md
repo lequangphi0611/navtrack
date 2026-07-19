@@ -18,7 +18,7 @@
 - **Lãi/lỗ tuyệt đối đi kèm một dòng phụ "chi phí ăn mòn"** (tổng thuế + phí luỹ kế, % trên `grossInvested` = vốn gộp đã triển khai `Σ|BUY.amount|`, **không** phải `totalInvested` vốn ròng) — xem công thức và ví dụ ở `07-tax.md` mục "Chi phí ăn mòn".
 
 ## Cách tính
-- **Chuỗi dòng tiền cho XIRR** = các `Cashflow.amount` (đã mang dấu) + các `Dividend.netAmount` (dương) + dòng tiền giả định NAV tại mốc chốt (dương).
+- **Chuỗi dòng tiền cho XIRR** = các `Cashflow.amount` (đã mang dấu, tại `date`) + các `Dividend.netAmount` (dương, tại `paymentDate ?? date` — mốc tiền thực về tay, fallback `date` khi `paymentDate` bỏ trống; quyết định 2026-07-19 #65, đảo một phần quyết định #61 trước đó vốn coi `paymentDate` thuần hiển thị) + dòng tiền giả định NAV tại mốc chốt (dương). Đặt cổ tức tại `date` (ngày chia) thay vì `paymentDate` sẽ đưa dòng tiền dương vào chuỗi sớm hơn thực tế, thổi nhẹ XIRR — rõ nhất với coupon trái phiếu (Phase 7/8) khi khoảng trễ chia→trả có thể vài tuần.
 - **XIRR** = nghiệm r của: Σ [ CFᵢ / (1+r)^((dateᵢ − date₀)/365) ] = 0. Giải bằng Newton-Raphson + bisection dự phòng (xem `rules/tooling.md` / lớp bọc XIRR).
 - **Lãi/lỗ tuyệt đối trong kỳ** = giá trị cuối kỳ (NAV tại mốc) − tổng vốn ròng đã bỏ vào.
   - Tổng vốn ròng = Σ tiền ra (mua) − Σ tiền vào đã rút (bán + cổ tức) trước mốc.

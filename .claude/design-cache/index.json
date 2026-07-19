@@ -3,5 +3,10 @@
     "designFile": "Phase 4 Screens.dc.html",
     "section": "4a-4f (Ghi cổ tức tiền mặt/cổ phiếu, chọn mã, đã ghi, lịch sử, menu nhanh Dashboard) — bản cập nhật issue #61: thêm field \"Ngày thanh toán\" (4a/4c) và checkbox \"Giá hiện tại đã phản ánh đợt chia này\" trong card \"Giá điều chỉnh kỹ thuật\" (4a/4c); 4d (Đã ghi) không có thiết kế hiển thị lại giá đã điều chỉnh/ngày thanh toán",
     "cachedAt": "2026-07-17"
+  },
+  "process/phase-5": {
+    "designFile": "Phase 5 Screens.dc.html",
+    "section": "5a-5f (Ghi lệnh bán thuế tự tính, bán lỗ vẫn có thuế, bán vàng thuế 0%, dashboard lãi/lỗ thực nhận + chi phí ăn mòn, sheet chi tiết chi phí ăn mòn, sửa lệnh bán tính lại thuế & phí theo ngày mới) — bản refetch 2026-07-18 bổ sung phần \"phí giao dịch tự tính\": 5a/5b thêm card \"Phí giao dịch\" tự-điền-sửa-được (badge TỰ ĐIỀN · SỬA ĐƯỢC, công thức giá_trị_bán × 0,3% — biểu phí TPS · cổ phiếu) đứng cạnh card \"Thuế bán\"; dòng giá vốn thêm chú thích \"(gồm phí mua)\"; 5f thêm card \"Phí giao dịch · tính lại\" cùng cấu trúc so sánh cũ/mới với card thuế, banner đổi text thành \"thuế & phí được tính lại\". Digest tương ứng: process/UI_phase_5.md",
+    "cachedAt": "2026-07-18 (refetch)"
   }
 }

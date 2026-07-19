@@ -261,8 +261,10 @@ export async function recordDividend(
               holdingId,
               type: "CASH",
               date,
-              // Thuần thông tin — không dùng cho tính toán nào (xem
-              // prisma/schema.prisma::Dividend.paymentDate).
+              // Với CASH: mốc dòng tiền dùng để tính XIRR (fallback `date`
+              // khi bỏ trống) — xem buildXirrCashflows (src/lib/xirr-cashflow.ts)
+              // và docs/domain/05-returns-xirr-and-pnl.md. KHÔNG ảnh hưởng
+              // NavOverride bù pha loãng phía trên — mốc đó vẫn luôn `date`.
               paymentDate: parsed.data.paymentDate ?? null,
               grossAmount: grossAmount.toString(),
               taxAmount: taxAmount.toString(),
@@ -353,8 +355,10 @@ export async function recordDividend(
             holdingId,
             type: "STOCK",
             date,
-            // Thuần thông tin — không dùng cho tính toán nào (xem
-            // prisma/schema.prisma::Dividend.paymentDate).
+            // Với STOCK: thuần thông tin, KHÔNG dùng cho tính toán nào —
+            // buildXirrCashflows chỉ ghép cổ tức CASH (có netAmount) vào chuỗi
+            // dòng tiền XIRR, STOCK không tạo dòng tiền (chỉ cộng thêm
+            // stockQuantity) nên paymentDate không góp vào XIRR ở đây.
             paymentDate: parsed.data.paymentDate ?? null,
             stockQuantity: finalStockQuantity.toString(),
           },

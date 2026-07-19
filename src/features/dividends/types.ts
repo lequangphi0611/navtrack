@@ -39,8 +39,9 @@ export type DividendRecordedResult = {
   // (rawStockQuantity), để hiển thị so sánh với addedQuantity đã floor.
   rawAddedQuantity?: string;
   // Issue #61: ngày tiền/CP thực về tài khoản, đã format dd/MM/yyyy — chỉ có
-  // mặt khi user nhập `paymentDate` (field thuần thông tin, không dùng cho
-  // tính toán — xem prisma/schema.prisma::Dividend.paymentDate).
+  // mặt khi user nhập `paymentDate`. Với CASH: mốc dòng tiền dùng để tính
+  // XIRR (fallback `date` khi bỏ trống). Với STOCK: thuần thông tin, không
+  // dùng cho tính toán nào (xem src/lib/xirr-cashflow.ts::buildXirrCashflows).
   paymentDateLabel?: string;
   // Issue #61: true khi hệ thống TỰ tạo/ghi đè NavOverride bù pha loãng
   // (recordDividend, chỉ xảy ra khi priceAlreadyReflectsMarket=false VÀ có

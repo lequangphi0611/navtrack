@@ -61,18 +61,21 @@ describe("derivePosition", () => {
         date: new Date("2026-01-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(100_000),
+        feeAmount: new Decimal(0),
       },
       {
         type: "BUY",
         date: new Date("2026-02-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(120_000),
+        feeAmount: new Decimal(0),
       },
       {
         type: "SELL",
         date: new Date("2026-03-01"),
         quantity: new Decimal(50),
         pricePerUnit: new Decimal(130_000),
+        feeAmount: new Decimal(0),
       },
     ]);
 
@@ -88,6 +91,7 @@ describe("derivePosition", () => {
         date: new Date("2026-01-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(100_000),
+        feeAmount: new Decimal(0),
       },
     ]);
 
@@ -101,12 +105,14 @@ describe("derivePosition", () => {
         date: new Date("2026-01-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(100_000),
+        feeAmount: new Decimal(0),
       },
       {
         type: "SELL",
         date: new Date("2026-02-01"),
         quantity: new Decimal(150),
         pricePerUnit: new Decimal(120_000),
+        feeAmount: new Decimal(0),
       },
     ]);
 
@@ -120,18 +126,21 @@ describe("derivePosition", () => {
         date: new Date("2026-01-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(100_000),
+        feeAmount: new Decimal(0),
       },
       {
         type: "SELL",
         date: new Date("2026-02-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(120_000),
+        feeAmount: new Decimal(0),
       },
       {
         type: "BUY",
         date: new Date("2026-03-01"),
         quantity: new Decimal(50),
         pricePerUnit: new Decimal(200_000),
+        feeAmount: new Decimal(0),
       },
     ]);
 
@@ -147,12 +156,14 @@ describe("derivePosition", () => {
         date: new Date("2026-01-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(100_000),
+        feeAmount: new Decimal(0),
       },
       {
         type: "SELL",
         date: new Date("2026-02-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(120_000),
+        feeAmount: new Decimal(0),
       },
     ]);
 
@@ -168,12 +179,14 @@ describe("derivePosition", () => {
         date: new Date("2026-01-01"),
         quantity: new Decimal("0.5"),
         pricePerUnit: new Decimal(6_000_000),
+        feeAmount: new Decimal(0),
       },
       {
         type: "BUY",
         date: new Date("2026-02-01"),
         quantity: new Decimal("0.25"),
         pricePerUnit: new Decimal(6_400_000),
+        feeAmount: new Decimal(0),
       },
     ]);
 
@@ -197,23 +210,66 @@ describe("derivePosition", () => {
         date: new Date("2026-03-01"),
         quantity: new Decimal(50),
         pricePerUnit: new Decimal(130_000),
+        feeAmount: new Decimal(0),
       },
       {
         type: "BUY",
         date: new Date("2026-01-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(100_000),
+        feeAmount: new Decimal(0),
       },
       {
         type: "BUY",
         date: new Date("2026-02-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(120_000),
+        feeAmount: new Decimal(0),
       },
     ]);
 
     expect(position.quantity.toString()).toBe("150");
     expect(position.avgCost.toString()).toBe("110000");
+  });
+
+  // Đóng issue #66 (docs/domain/07-tax.md mục "Ví dụ", docs/domain/02-transactions-and-cost-basis.md
+  // mục "Cách tính") — phí mua giờ gộp vào avgCost.
+  test("mua có phí: avgCost gộp phí mua theo đúng ví dụ domain doc (100 FPT giá 100k, phí 30.000 -> 100.300)", () => {
+    const position = derivePosition([
+      {
+        type: "BUY",
+        date: new Date("2026-01-01"),
+        quantity: new Decimal(100),
+        pricePerUnit: new Decimal(100_000),
+        feeAmount: new Decimal(30_000),
+      },
+    ]);
+
+    expect(position.avgCost.toString()).toBe("100300");
+  });
+
+  test("bán có phí KHÔNG ảnh hưởng avgCost — phí bán chỉ trừ vào amount khi bán, không gộp vào giá vốn", () => {
+    const position = derivePosition([
+      {
+        type: "BUY",
+        date: new Date("2026-01-01"),
+        quantity: new Decimal(100),
+        pricePerUnit: new Decimal(100_000),
+        feeAmount: new Decimal(0),
+      },
+      {
+        type: "SELL",
+        date: new Date("2026-02-01"),
+        quantity: new Decimal(50),
+        pricePerUnit: new Decimal(130_000),
+        feeAmount: new Decimal(19_500),
+      },
+    ]);
+
+    expect(position.quantity.toString()).toBe("50");
+    // avgCost vẫn 100.000 dù lệnh bán có phí 19.500 — phí bán không gộp vào
+    // giá vốn (tránh trừ trùng ở bước "lãi/lỗ đã thực hiện").
+    expect(position.avgCost.toString()).toBe("100000");
   });
 });
 
@@ -231,6 +287,7 @@ describe("derivePositionIncludingStockDividends", () => {
           createdAt: new Date("2026-01-01"),
           quantity: new Decimal(100),
           pricePerUnit: new Decimal(100_000),
+          feeAmount: new Decimal(0),
         },
       ],
       [
@@ -260,6 +317,7 @@ describe("derivePositionIncludingStockDividends", () => {
           createdAt: new Date("2026-01-01"),
           quantity: new Decimal(100),
           pricePerUnit: new Decimal(100_000),
+          feeAmount: new Decimal(0),
         },
         {
           id: "sell-1",
@@ -268,6 +326,7 @@ describe("derivePositionIncludingStockDividends", () => {
           createdAt: new Date("2026-03-01"),
           quantity: new Decimal(105),
           pricePerUnit: new Decimal(120_000),
+          feeAmount: new Decimal(0),
         },
       ],
       [
@@ -294,6 +353,7 @@ describe("derivePositionIncludingStockDividends", () => {
           createdAt: new Date("2026-01-01"),
           quantity: new Decimal(100),
           pricePerUnit: new Decimal(100_000),
+          feeAmount: new Decimal(0),
         },
         {
           id: "sell-1",
@@ -302,6 +362,7 @@ describe("derivePositionIncludingStockDividends", () => {
           createdAt: new Date("2026-03-01"),
           quantity: new Decimal(200),
           pricePerUnit: new Decimal(120_000),
+          feeAmount: new Decimal(0),
         },
       ],
       [
@@ -330,6 +391,7 @@ describe("derivePositionIncludingStockDividends", () => {
           createdAt: new Date("2026-01-01"),
           quantity: new Decimal(100),
           pricePerUnit: new Decimal(100_000),
+          feeAmount: new Decimal(0),
         },
         {
           id: "sell-1",
@@ -338,6 +400,7 @@ describe("derivePositionIncludingStockDividends", () => {
           createdAt: new Date("2026-02-01"),
           quantity: new Decimal(105),
           pricePerUnit: new Decimal(120_000),
+          feeAmount: new Decimal(0),
         },
       ],
       [
@@ -362,6 +425,7 @@ describe("derivePositionIncludingStockDividends", () => {
         createdAt: new Date("2026-01-01"),
         quantity: new Decimal(100),
         pricePerUnit: new Decimal(100_000),
+        feeAmount: new Decimal(0),
       },
     ];
 

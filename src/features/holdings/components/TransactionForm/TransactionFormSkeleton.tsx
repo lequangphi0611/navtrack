@@ -19,6 +19,9 @@ function TransactionFormSkeleton() {
           <Skeleton className="h-11 rounded-xl" />
         </div>
       </div>
+      {/* Card "Thuế bán" + "Phí giao dịch" tự-điền-sửa-được (Phase 5) */}
+      <Skeleton className="h-28.5 rounded-2xl" />
+      <Skeleton className="h-28.5 rounded-2xl" />
       <div className="flex flex-col gap-2">
         <Skeleton className="h-3.5 w-28" />
         <Skeleton className="h-11 rounded-xl" />

@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 
+import type { CashflowType } from "@prisma/client";
 import { type AssetType, ASSET_TYPE_LABEL } from "@/components/AssetTypeBadge";
 import type { XirrResult as XirrResultUi } from "@/components/ReturnMetrics";
 import type { AllocationSlice } from "@/features/dashboard/components/AllocationBar";
@@ -10,6 +11,10 @@ import {
 } from "@/features/holdings/queries";
 import type { HoldingSummary } from "@/features/holdings/types";
 import { getSession } from "@/lib/auth";
+import {
+  computeCostDrag,
+  computeCostDragContributionPercent,
+} from "@/lib/cost-drag";
 import {
   CUTOFF_LABELS,
   type CutoffSelection,
@@ -26,6 +31,18 @@ import type { HoldingValuation } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
 import { buildXirrCashflows } from "@/lib/xirr-cashflow";
+
+// Một nguồn "chi phí ăn mòn" (docs/domain/07-tax.md mục "Chi phí ăn mòn") —
+// `source` là enum thuần, KHÔNG kèm nhãn tiếng Việt (nhất quán cách tách UI
+// copy khỏi lib đã làm ở missingPriceReasonLabel bên dưới); design-implementer
+// tự gắn nhãn ("Phí giao dịch"/"Thuế bán"/"Thuế cổ tức") ở tầng UI.
+// contributionPercent tính trên costDragAmount (KHÁC mẫu số costDragPercent ở
+// dưới, vốn tính trên grossInvested) — 2 phép chia riêng biệt, dễ nhầm mẫu số.
+export type CostDragBreakdownEntry = {
+  source: "FEE" | "SALE_TAX" | "DIVIDEND_TAX";
+  amount: string;
+  contributionPercent: number;
+};
 
 // Shape trả về bởi getPortfolioValuation() — khớp NGUYÊN VĂN
 // DashboardScreenProps (features/dashboard/components/DashboardScreen) TRỪ
@@ -54,6 +71,14 @@ export type PortfolioValuation = {
   // expose ở đây thay vì viết lại phép tính để NAV/XIRR/PnL/vốn LUÔN nhất
   // quán giữa Dashboard và Danh mục (cùng một lần gọi computeXirrAndPnlCore).
   totalCostBasis: string;
+  // Vốn GỘP đã triển khai (Σ|BUY.amount|, KHÁC totalCostBasis vốn RÒNG ở
+  // trên) — mẫu số của costDragPercent, và hiển thị trực tiếp là chỉ số "Vốn
+  // đã bỏ ra mua" (mockup 5d). Không co lại khi đã bán nhiều (process/DECISION.md
+  // 2026-07-17 (6)).
+  grossInvested: string;
+  costDragAmount: string;
+  costDragPercent: number;
+  costDragBreakdown: CostDragBreakdownEntry[];
 };
 
 // Thứ tự hiển thị cố định cho allocation — khớp thứ tự dùng ở
@@ -79,30 +104,57 @@ function missingPriceReasonLabel(type: AssetType): string {
 }
 
 // Batch theo tập holdingId (không N+1) — process/phase-2.md mục cache/N+1.
+// type/taxAmount/feeAmount thêm cho "chi phí ăn mòn" (docs/domain/07-tax.md
+// mục "Chi phí ăn mòn") — cùng round-trip đã có, không query thêm lần 2.
 async function getAllCashflowsForXirr(
   holdingIds: string[],
   cutoffDate: Date,
-): Promise<{ date: Date; amount: Decimal }[]> {
+): Promise<
+  {
+    date: Date;
+    amount: Decimal;
+    type: CashflowType;
+    taxAmount: Decimal;
+    feeAmount: Decimal;
+  }[]
+> {
   if (holdingIds.length === 0) return [];
 
   const rows = await db.cashflow.findMany({
     where: { holdingId: { in: holdingIds }, date: { lte: cutoffDate } },
-    select: { date: true, amount: true },
+    select: {
+      date: true,
+      amount: true,
+      type: true,
+      taxAmount: true,
+      feeAmount: true,
+    },
   });
 
   return rows.map((row) => ({
     date: row.date,
     amount: new Decimal(row.amount.toString()),
+    type: row.type,
+    taxAmount: new Decimal(row.taxAmount.toString()),
+    feeAmount: new Decimal(row.feeAmount.toString()),
   }));
 }
 
 // Cổ tức tiền mặt <= cutoffDate cho toàn danh mục — cùng pattern
 // getCashDividends trong holdings/queries.ts nhưng gộp nhiều holdingId một
-// lượt thay vì 1, tránh N+1 khi lặp qua từng vị thế.
+// lượt thay vì 1, tránh N+1 khi lặp qua từng vị thế. taxAmount thêm cho "chi
+// phí ăn mòn" (docs/domain/07-tax.md).
 async function getAllCashDividendsForXirr(
   holdingIds: string[],
   cutoffDate: Date,
-): Promise<{ date: Date; netAmount: Decimal }[]> {
+): Promise<
+  {
+    date: Date;
+    paymentDate: Date | null;
+    netAmount: Decimal;
+    taxAmount: Decimal | null;
+  }[]
+> {
   if (holdingIds.length === 0) return [];
 
   const rows = await db.dividend.findMany({
@@ -112,13 +164,19 @@ async function getAllCashDividendsForXirr(
       netAmount: { not: null },
       date: { lte: cutoffDate },
     },
-    select: { date: true, netAmount: true },
+    select: { date: true, paymentDate: true, netAmount: true, taxAmount: true },
   });
 
   return rows.map((row) => ({
     date: row.date,
+    paymentDate: row.paymentDate,
     // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
     netAmount: new Decimal(row.netAmount!.toString()),
+    // taxAmount CÓ THỂ null (dividend CASH ghi trước khi thuế cổ tức có mặt,
+    // hoặc chưa resolve được) — coi như 0 khi cộng dồn costDragAmount, KHÔNG
+    // ép non-null assertion như netAmount ở trên.
+    taxAmount:
+      row.taxAmount !== null ? new Decimal(row.taxAmount.toString()) : null,
   }));
 }
 
@@ -219,6 +277,17 @@ type XirrAndPnlCore = {
   // vốn của holding đang mở theo HÔM NAY, không theo cutoff — sai denominator
   // cho navDeltaPercent khi cutoff khác "hôm nay", xem code review #2).
   totalInvested: Decimal;
+  // "Chi phí ăn mòn" (docs/domain/07-tax.md mục "Chi phí ăn mòn") — grossInvested
+  // là vốn GỘP (Σ|BUY.amount|), KHÁC totalInvested vốn RÒNG ở trên (không co
+  // lại khi bán nhiều, process/DECISION.md 2026-07-17 (6)). feeTotal/
+  // saleTaxTotal/dividendTaxTotal giữ riêng (không chỉ costDragAmount đã cộng
+  // dồn) để getPortfolioValuation() build costDragBreakdown theo 3 nguồn.
+  grossInvested: Decimal;
+  feeTotal: Decimal;
+  saleTaxTotal: Decimal;
+  dividendTaxTotal: Decimal;
+  costDragAmount: Decimal;
+  costDragPercent: number;
 };
 
 async function computeXirrAndPnlCore(
@@ -292,6 +361,17 @@ async function computeXirrAndPnlCore(
   );
   const totalInvested = cashflowSum.plus(dividendSum).negated();
 
+  // "Chi phí ăn mòn" (docs/domain/07-tax.md mục "Chi phí ăn mòn") — công thức
+  // thuần tách riêng ở lib/cost-drag.ts (unit test không cần DB).
+  const {
+    grossInvested,
+    feeTotal,
+    saleTaxTotal,
+    dividendTaxTotal,
+    costDragAmount,
+    costDragPercent,
+  } = computeCostDrag(cashflows, dividends);
+
   return {
     cutoffDate,
     open,
@@ -301,6 +381,12 @@ async function computeXirrAndPnlCore(
     xirr,
     absolutePnl,
     totalInvested,
+    grossInvested,
+    feeTotal,
+    saleTaxTotal,
+    dividendTaxTotal,
+    costDragAmount,
+    costDragPercent,
   };
 }
 
@@ -321,6 +407,12 @@ export async function getPortfolioValuation(
     xirr,
     absolutePnl,
     totalInvested,
+    grossInvested,
+    feeTotal,
+    saleTaxTotal,
+    dividendTaxTotal,
+    costDragAmount,
+    costDragPercent,
   } = await computeXirrAndPnlCore(selection);
 
   const missingPriceHoldings: MissingPriceHolding[] = open
@@ -346,6 +438,35 @@ export async function getPortfolioValuation(
     cutoffDate,
   );
 
+  // % đóng góp của MỖI nguồn trên costDragAmount (KHÁC costDragPercent — %
+  // trên grossInvested), xem lib/cost-drag.ts::computeCostDragContributionPercent.
+  const costDragBreakdown: CostDragBreakdownEntry[] = [
+    {
+      source: "FEE",
+      amount: feeTotal.toString(),
+      contributionPercent: computeCostDragContributionPercent(
+        feeTotal,
+        costDragAmount,
+      ),
+    },
+    {
+      source: "SALE_TAX",
+      amount: saleTaxTotal.toString(),
+      contributionPercent: computeCostDragContributionPercent(
+        saleTaxTotal,
+        costDragAmount,
+      ),
+    },
+    {
+      source: "DIVIDEND_TAX",
+      amount: dividendTaxTotal.toString(),
+      contributionPercent: computeCostDragContributionPercent(
+        dividendTaxTotal,
+        costDragAmount,
+      ),
+    },
+  ];
+
   return {
     cutoffLabel: CUTOFF_LABELS[selection.key],
     cutoffDate: formatDate(cutoffDate),
@@ -361,6 +482,10 @@ export async function getPortfolioValuation(
     priceFreshnessNote,
     missingPriceHoldings,
     totalCostBasis: totalInvested.toString(),
+    grossInvested: grossInvested.toString(),
+    costDragAmount: costDragAmount.toString(),
+    costDragPercent,
+    costDragBreakdown,
   };
 }
 
