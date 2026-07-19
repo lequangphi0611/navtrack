@@ -20,20 +20,19 @@ import {
   formatQuantity,
 } from "@/lib/format";
 import { holdingDetailAfterTransaction } from "@/lib/routes";
-import {
-  parseSettingValue,
-  pickEffectiveSetting,
-  type SettingRow,
-} from "@/lib/settings-resolution";
 import { cn } from "@/lib/utils";
 
 import { addTransaction, updateTransaction } from "../../actions";
 import { SellRecomputeCompareCard } from "../SellRecomputeCompareCard";
-import type {
-  CashflowRow,
-  TransactionSettingRow,
-  TransactionSettingRows,
-} from "../../types";
+import type { CashflowRow, TransactionSettingRows } from "../../types";
+import {
+  computeAutoFieldPreview,
+  feeKeyLabel,
+  resolveComputedAmount,
+  resolveFormulaLabel,
+  saleTaxKeyLabel,
+  type AutoFieldPreview,
+} from "./TransactionForm.utils";
 
 type FormState = {
   ok: boolean;
@@ -103,96 +102,6 @@ function toGrossValueDecimal(
   } catch {
     return null;
   }
-}
-
-type AutoFieldPreview = {
-  amount: Decimal;
-  ratePercent: Decimal;
-  effectiveFrom: Date;
-};
-
-function toSettingRows(rows: TransactionSettingRow[]): SettingRow[] {
-  return rows.map((row) => ({
-    value: row.value,
-    valueType: row.valueType,
-    effectiveFrom: new Date(row.effectiveFrom),
-  }));
-}
-
-// Chọn dòng Setting hiệu lực tại `atDate` (pickEffectiveSetting, thuần — an
-// toàn client, xem @/lib/settings-resolution) rồi nhân với baseAmount. null
-// khi chưa có dòng nào hiệu lực (vd ngày trước BASELINE_DATE lúc seed).
-function computeAutoFieldPreview(
-  rows: TransactionSettingRow[],
-  atDate: Date,
-  baseAmount: Decimal,
-): AutoFieldPreview | null {
-  const effective = pickEffectiveSetting(toSettingRows(rows), atDate);
-  if (!effective) return null;
-  const rate = parseSettingValue(effective.value, effective.valueType);
-  if (!(rate instanceof Decimal)) return null;
-  return {
-    amount: baseAmount.mul(rate).div(100),
-    ratePercent: rate,
-    effectiveFrom: effective.effectiveFrom,
-  };
-}
-
-// Nhãn Setting key THUẦN cosmetic (hiển thị trong dòng công thức) — KHÔNG
-// import saleTaxKey/transactionFeeKey từ @/lib/settings: file đó `import { db }`
-// ở đầu, kéo cả PrismaClient vào bundle client nếu import trực tiếp vào
-// component "use client" (xem @/lib/settings-resolution, phase-5-plan-DRAFT.md
-// mục A2). Trùng convention đặt tên key thật (SETTING_KEYS, lib/settings.ts) —
-// chỉ để hiển thị, không phải nguồn sự thật resolve giá trị.
-function saleTaxKeyLabel(assetType: AssetType): string {
-  return `SALE_TAX_${assetType}`;
-}
-
-function feeKeyLabel(direction: "BUY" | "SELL", assetType: AssetType): string {
-  return `TRANSACTION_FEE_${direction}_${assetType}`;
-}
-
-function formatFormulaLabel(
-  grossValue: Decimal,
-  preview: AutoFieldPreview,
-  keyLabel: string,
-): string {
-  return `${formatMoney(grossValue.toString())} × ${formatPercent(preview.ratePercent.toNumber())} — ${keyLabel} @ ${formatDate(preview.effectiveFrom)}`;
-}
-
-// Ở chế độ edit, khi quantity/pricePerUnit/date/cashflowType CHƯA đổi so với
-// cashflow gốc, card hiện GIÁ TRỊ ĐÃ LƯU (không phải formula tính lại) — tránh
-// bug im lặng: nếu chỉ vì rời khỏi việc sửa field khác (vd "Ghi chú") mà
-// AutoFilledAmountCard đổi số hiển thị sang giá trị recompute (có thể lệch
-// giá trị đã lưu, vd do user từng sửa tay lúc tạo giao dịch), user bấm "Cập
-// nhật giao dịch" sẽ vô tình ghi đè taxAmount/feeAmount dù không có ý định sửa
-// trường đó. Một khi user chủ động đổi 1 trong 4 field trên, chuyển hẳn sang
-// chế độ "tính lại theo công thức" (đúng tinh thần "Recompute lại mỗi khi
-// quantity/pricePerUnit/date/cashflowType đổi" — process/phase-5-plan-DRAFT.md
-// mục B2).
-function resolveComputedAmount(
-  editCashflow: CashflowRow | null,
-  editUnchanged: boolean,
-  storedField: "taxAmount" | "feeAmount",
-  preview: AutoFieldPreview | null,
-): string {
-  if (editCashflow && editUnchanged) return editCashflow[storedField];
-  return preview ? preview.amount.toString() : "0";
-}
-
-function resolveFormulaLabel(
-  editUnchanged: boolean,
-  grossValue: Decimal | null,
-  preview: AutoFieldPreview | null,
-  keyLabel: string,
-  emptyHint: string,
-): string {
-  if (editUnchanged) {
-    return "Giá trị đã lưu cho giao dịch này — sửa tay nếu cần khớp lại.";
-  }
-  return grossValue && preview
-    ? formatFormulaLabel(grossValue, preview, keyLabel)
-    : emptyHint;
 }
 
 // Khối "Thuế bán · tính lại" + "Phí giao dịch · tính lại" khi sửa ngày một
@@ -433,6 +342,7 @@ function TransactionForm(props: TransactionFormProps) {
     taxPreview,
     saleTaxKeyLabel(props.holding.type),
     "Nhập đủ số lượng & giá bán để tính thuế",
+    `Thiếu cấu hình ${saleTaxKeyLabel(props.holding.type)} cho ngày này — nhập tay số thuế.`,
   );
 
   const feeFormulaLabel = resolveFormulaLabel(
@@ -441,6 +351,7 @@ function TransactionForm(props: TransactionFormProps) {
     feePreview,
     feeKeyLabel(isBuy ? "BUY" : "SELL", props.holding.type),
     "Nhập đủ số lượng & giá để tính phí",
+    `Thiếu cấu hình ${feeKeyLabel(isBuy ? "BUY" : "SELL", props.holding.type)} cho ngày này — nhập tay số phí.`,
   );
 
   return (
