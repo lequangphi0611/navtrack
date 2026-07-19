@@ -136,7 +136,7 @@ export async function hasAnyHolding(): Promise<boolean> {
 async function getCashDividends(
   holdingId: string,
   cutoffDate: Date,
-): Promise<{ date: Date; netAmount: Decimal }[]> {
+): Promise<{ date: Date; paymentDate: Date | null; netAmount: Decimal }[]> {
   const rows = await db.dividend.findMany({
     where: {
       holdingId,
@@ -144,11 +144,12 @@ async function getCashDividends(
       netAmount: { not: null },
       date: { lte: cutoffDate },
     },
-    select: { date: true, netAmount: true },
+    select: { date: true, paymentDate: true, netAmount: true },
   });
 
   return rows.map((row) => ({
     date: row.date,
+    paymentDate: row.paymentDate,
     // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
     netAmount: new Decimal(row.netAmount!.toString()),
   }));
@@ -462,7 +463,14 @@ async function getCashflowsForHoldings(
 async function getCashDividendsForHoldings(
   holdingIds: string[],
   cutoffDate: Date,
-): Promise<{ holdingId: string; date: Date; netAmount: Decimal }[]> {
+): Promise<
+  {
+    holdingId: string;
+    date: Date;
+    paymentDate: Date | null;
+    netAmount: Decimal;
+  }[]
+> {
   if (holdingIds.length === 0) return [];
 
   const rows = await db.dividend.findMany({
@@ -472,12 +480,13 @@ async function getCashDividendsForHoldings(
       netAmount: { not: null },
       date: { lte: cutoffDate },
     },
-    select: { holdingId: true, date: true, netAmount: true },
+    select: { holdingId: true, date: true, paymentDate: true, netAmount: true },
   });
 
   return rows.map((row) => ({
     holdingId: row.holdingId,
     date: row.date,
+    paymentDate: row.paymentDate,
     // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
     netAmount: new Decimal(row.netAmount!.toString()),
   }));

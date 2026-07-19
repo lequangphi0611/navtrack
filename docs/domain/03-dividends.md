@@ -6,7 +6,7 @@
 ## Entity / field
 - `Dividend`: `holdingId`, `type` (`CASH`/`STOCK`), `date`, `paymentDate?`, `grossAmount?`, `taxAmount?`, `netAmount?`, `stockQuantity?`, `note?`.
 - Tách khỏi `Cashflow` vì cổ tức cổ phiếu không phải dòng tiền.
-- `paymentDate` (issue #61) — ngày tiền/CP **thực về** tài khoản, có thể trễ vài tuần so với `date` (ngày chia) ngoài thực tế. **Thuần thông tin hiển thị** — KHÔNG dùng cho bất kỳ tính toán nào (không XIRR, không quantity timeline, không phải mốc ghi `NavOverride` bù pha loãng bên dưới — luôn ghi tại `date`). Optional, user có thể bỏ trống.
+- `paymentDate` (issue #61) — ngày tiền/CP **thực về** tài khoản, có thể trễ vài tuần so với `date` (ngày chia) ngoài thực tế. Optional, user có thể bỏ trống. **Từ 2026-07-19 (issue #65): là mốc dòng tiền XIRR của cổ tức `CASH`** — `buildXirrCashflows` (`lib/xirr-cashflow.ts`) ghép điểm dòng tiền tại `paymentDate ?? date` (fallback `date` khi bỏ trống), vì XIRR quy đổi lợi suất theo thời gian nên phải đặt đúng lúc tiền thực về tay thay vì ngày chia. **KHÔNG** dùng cho `buildQuantityTimeline()` (số lượng nắm giữ) và **KHÔNG** phải mốc ghi `NavOverride` bù pha loãng bên dưới — hai chỗ đó vẫn luôn dùng `date`.
 
 ## Quy tắc & bất biến
 - **Cổ tức tiền mặt (`CASH`)** là tiền **nhận về** — dòng tiền **dương** trong XIRR (không phải khoản trừ).

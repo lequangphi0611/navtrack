@@ -368,9 +368,7 @@ function DividendForm({
           <div>
             <FieldLabel>
               Ngày thanh toán{" "}
-              <span className="font-normal text-muted-faint">
-                · tuỳ chọn, tham khảo
-              </span>
+              <span className="font-normal text-muted-faint">· tuỳ chọn</span>
             </FieldLabel>
             <DatePicker
               name="paymentDate"
@@ -381,9 +379,18 @@ function DividendForm({
             <div className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-faint">
               <Info className="mt-0.5 size-3.25 shrink-0" />
               <span>
-                Ngày {isCash ? "tiền" : holding.unit} thực về tài khoản. Không
-                dùng để tính XIRR hay giá điều chỉnh — mọi tính toán bám ngày
-                chia.
+                {isCash ? (
+                  <>
+                    Ngày tiền thực về tài khoản. Dùng làm mốc tính XIRR (bỏ
+                    trống thì tính theo ngày chia). Không ảnh hưởng giá điều
+                    chỉnh — mốc đó vẫn luôn bám ngày chia.
+                  </>
+                ) : (
+                  <>
+                    Ngày {holding.unit} thực về tài khoản. Không dùng để tính
+                    XIRR hay giá điều chỉnh — mọi tính toán bám ngày chia.
+                  </>
+                )}
               </span>
             </div>
           </div>

@@ -147,7 +147,14 @@ async function getAllCashflowsForXirr(
 async function getAllCashDividendsForXirr(
   holdingIds: string[],
   cutoffDate: Date,
-): Promise<{ date: Date; netAmount: Decimal; taxAmount: Decimal | null }[]> {
+): Promise<
+  {
+    date: Date;
+    paymentDate: Date | null;
+    netAmount: Decimal;
+    taxAmount: Decimal | null;
+  }[]
+> {
   if (holdingIds.length === 0) return [];
 
   const rows = await db.dividend.findMany({
@@ -157,11 +164,12 @@ async function getAllCashDividendsForXirr(
       netAmount: { not: null },
       date: { lte: cutoffDate },
     },
-    select: { date: true, netAmount: true, taxAmount: true },
+    select: { date: true, paymentDate: true, netAmount: true, taxAmount: true },
   });
 
   return rows.map((row) => ({
     date: row.date,
+    paymentDate: row.paymentDate,
     // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
     netAmount: new Decimal(row.netAmount!.toString()),
     // taxAmount CÓ THỂ null (dividend CASH ghi trước khi thuế cổ tức có mặt,

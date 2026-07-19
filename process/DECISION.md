@@ -288,3 +288,15 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - **(4) 6 key `TRANSACTION_FEE_BUY/SELL_<FUND/BOND/GOLD>` seed = 0%** (chỉ `STOCK` = 0.3%) — xác nhận lại đúng như `phase-5.md`/`docs/domain/07-tax.md` đã ghi "mặc định 0 nếu chưa dùng kênh tính phí %", không có mức thật nào khác cần áp ngay.
 - **(Không hỏi, tự quyết kỹ thuật)** Gộp 1 component `AutoFilledAmountCard` dùng chung cho card Thuế/Phí thay vì viết 2 khối JSX riêng — thuần DRY, không ảnh hưởng nghiệp vụ, đúng tiền lệ tái dùng pattern `NavOverrideForm`.
 - Docs đã sync: `docs/domain/07-tax.md` (mục "Ca biên" — `SALE_TAX_BOND`, mục "Phí giao dịch" — mức FUND/BOND/GOLD), `process/phase-5.md` (mục "Công việc cần làm"), `process/phase-5-plan-DRAFT.md` (mục "Quyết định còn mở" → đánh dấu đã chốt).
+
+## 2026-07-19
+
+**Issue #65 — mốc dòng tiền XIRR của cổ tức tiền mặt đổi từ `date` (ngày chia) sang `paymentDate ?? date` (tiền thực về, fallback `date`) — đảo một phần quyết định 2026-07-17 #61.**
+- Bối cảnh: log ở entry 2026-07-17 (7) mục C1 — `buildXirrCashflows` (`lib/xirr-cashflow.ts`) ghép điểm cổ tức tại `Dividend.date` (ngày chia), trong khi `paymentDate` (ngày tiền thực về tài khoản, có thể trễ vài tuần) từ #61 chỉ để hiển thị, không dùng cho tính toán nào.
+- **Quyết định:** `XirrCashflowInput.dividends` nhận thêm `paymentDate: Date | null`; điểm dòng tiền XIRR của cổ tức CASH đặt tại `paymentDate ?? date` thay vì luôn `date`. Áp dụng ở 3 nơi build input: `lib/portfolio-valuation.ts::getAllCashDividendsForXirr` (dashboard + widget XIRR toàn danh mục), `features/holdings/queries.ts::getCashDividends` (chi tiết một vị thế), `features/holdings/queries.ts::getCashDividendsForHoldings` (danh sách vị thế đang mở, batch).
+- **Lý do tài chính:** XIRR quy đổi lợi suất theo thời gian (annualized) — đặt dòng tiền dương sớm hơn thời điểm tiền thực sự về tay sẽ thổi nhẹ lợi suất tính được (dòng tiền dương xuất hiện sớm hơn → nghiệm r lớn hơn thực tế). Sai số này rõ nhất với coupon trái phiếu (Phase 7/8), nơi khoảng trễ chia→trả thường dài hơn cổ tức cổ phiếu vài tuần.
+- **KHÔNG đổi** 2 mốc khác vẫn dùng `Dividend.date`: mốc ghi `NavOverride` bù pha loãng (`features/dividends/dividend-math.ts`/`actions.ts`) và mốc `buildQuantityTimeline()` (`lib/position-trail.ts`, số lượng nắm giữ tại ngày chia) — cả hai gắn với **ngày chia** theo đúng bản chất nghiệp vụ (pha loãng NAV xảy ra tại ngày chia; số lượng cổ tức cổ phiếu cộng vào đúng ngày chia), không liên quan tới thời điểm tiền/CP thực về.
+- Việc lọc `date <= cutoffDate` ở tầng query (3 hàm trên) **giữ nguyên theo `date`** (ngày chia) — không đổi sang lọc theo `paymentDate`, tránh vênh với "cổ tức đã ghi nhận tính tới mốc chốt" (một cổ tức chia trước cutoff nhưng `paymentDate` rơi sau cutoff vẫn được tính, chỉ lệch mốc dòng tiền trong chuỗi XIRR).
+- Không đụng Prisma schema/migration — field `paymentDate` đã tồn tại từ #61.
+- Docs đã sync: `docs/domain/03-dividends.md` (mục "Entity / field"), `docs/domain/05-returns-xirr-and-pnl.md` (mục "Cách tính"), `docs/02-data-model.md` (comment field `paymentDate` trong snippet `Dividend`).
+- Tham chiếu: GitHub issue #65.

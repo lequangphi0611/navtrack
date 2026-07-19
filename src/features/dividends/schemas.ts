@@ -22,9 +22,12 @@ export const recordDividendSchema = z
     stockQuantityOverride: nonNegativeDecimal(
       "Số lượng không hợp lệ",
     ).optional(),
-    // Ngày tiền/CP thực về tài khoản — thuần thông tin, KHÔNG dùng cho tính
-    // toán nào (xem comment Dividend.paymentDate, prisma/schema.prisma). User
-    // có thể bỏ trống.
+    // Ngày tiền/CP thực về tài khoản. Với CASH: mốc dòng tiền dùng để tính
+    // XIRR (fallback `date` khi bỏ trống) — xem buildXirrCashflows
+    // (src/lib/xirr-cashflow.ts). Với STOCK: thuần thông tin, không dùng cho
+    // tính toán nào (STOCK không tạo dòng tiền XIRR). Không ảnh hưởng
+    // NavOverride bù pha loãng ở cả 2 loại (mốc đó luôn là `date`). User có
+    // thể bỏ trống.
     paymentDate: z.coerce.date({ error: "Ngày không hợp lệ" }).optional(),
     // Issue #61: user tick khi giá hiện có (PriceQuote/NavOverride) ĐÃ phản
     // ánh đúng thị trường sau chia tách/chia cổ tức (vd job giá đã chạy lại,
@@ -40,9 +43,9 @@ export const recordDividendSchema = z
       .transform((v) => v === "true"),
   })
   // `paymentDate` là ngày tiền/CP THỰC VỀ — không thể sớm hơn `date` (ngày
-  // chia) về mặt nghiệp vụ. Không chặn calculation nào (paymentDate thuần
-  // thông tin) nhưng bắt lỗi gõ nhầm ngày rõ ràng thay vì âm thầm lưu dữ liệu
-  // vô lý (review PR #62, finding #3).
+  // chia) về mặt nghiệp vụ. Với CASH, paymentDate giờ là mốc dòng tiền XIRR
+  // nên validate này còn chặn cả việc lệch chuỗi dòng tiền theo thời gian,
+  // không chỉ bắt lỗi gõ nhầm ngày như trước (review PR #62, finding #3).
   .refine((data) => !data.paymentDate || data.paymentDate >= data.date, {
     message: "Ngày thanh toán không thể trước ngày chia",
     path: ["paymentDate"],

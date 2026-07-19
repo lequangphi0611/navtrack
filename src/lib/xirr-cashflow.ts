@@ -6,10 +6,14 @@ import type { CashflowPoint } from "./xirr";
 // = NAV tại mốc chốt (docs/domain/05-returns-xirr-and-pnl.md "Chưa bán vẫn
 // tính được") thành CashflowPoint[] sẵn sàng đưa vào computeXirr. Pure —
 // không đụng DB; caller (queries.ts) chịu trách nhiệm lọc cashflows/dividends
-// theo cutoffDate trước khi truyền vào đây.
+// theo cutoffDate trước khi truyền vào đây. Điểm cổ tức dùng `paymentDate`
+// (mốc tiền thực về tay, fallback `date` khi null — docs/domain/03-dividends.md,
+// docs/domain/05-returns-xirr-and-pnl.md, quyết định 2026-07-19 #65) làm mốc
+// dòng tiền XIRR — KHÁC với `buildQuantityTimeline()`/NavOverride bù pha loãng,
+// hai chỗ đó vẫn dùng `date`.
 export type XirrCashflowInput = {
   cashflows: { date: Date; amount: Decimal }[]; // đã lọc date <= cutoffDate, dấu +/- theo docs/domain/02
-  dividends: { date: Date; netAmount: Decimal }[]; // Dividend type=CASH, netAmount khác null, đã lọc date <= cutoffDate
+  dividends: { date: Date; paymentDate: Date | null; netAmount: Decimal }[]; // Dividend type=CASH, netAmount khác null, đã lọc date <= cutoffDate theo `date` (ngày chia)
   isOpenPosition: boolean; // vị thế hiện đang mở (quantity hiện tại != 0) hay đã đóng
   cutoffDate: Date;
   currentNav: Decimal | null; // NAV tại cutoffDate từ valuateHolding — null khi MISSING_PRICE hoặc đã đóng
@@ -18,7 +22,12 @@ export type XirrCashflowInput = {
 export function buildXirrCashflows(input: XirrCashflowInput): CashflowPoint[] {
   const points: CashflowPoint[] = [
     ...input.cashflows.map((cf) => ({ date: cf.date, amount: cf.amount })),
-    ...input.dividends.map((d) => ({ date: d.date, amount: d.netAmount })),
+    // Mốc dòng tiền XIRR của cổ tức = paymentDate (tiền thực về tay) khi có,
+    // fallback date (ngày chia) khi paymentDate chưa ghi — xem comment đầu file.
+    ...input.dividends.map((d) => ({
+      date: d.paymentDate ?? d.date,
+      amount: d.netAmount,
+    })),
   ];
 
   // Vị thế đã đóng (SL=0): KHÔNG ghép NAV giả định — dòng bán cuối đã là dòng
