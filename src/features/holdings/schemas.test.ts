@@ -138,6 +138,51 @@ describe("newHoldingSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // Phase 5 (docs/domain/07-tax.md "Quy tắc & bất biến"): VN không đánh thuế
+  // TNCN khi mua — server phải chặn taxAmount khác 0 cho BUY dù request tới
+  // bằng cách nào (không tin client, form chỉ ẩn field ở UI). Nếu refine này
+  // bị revert/xoá, test dưới sẽ fail vì input rõ ràng phải bị từ chối.
+  test("BUY kèm taxAmount khác 0 bị từ chối (VN không đánh thuế khi mua)", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "FPT",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+      cashflowType: "BUY",
+      taxAmount: "5200",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issue = result.error.issues.find(
+        (i) => i.path.join(".") === "taxAmount",
+      );
+      expect(issue?.message).toBe("Giao dịch mua không có thuế");
+    }
+  });
+
+  test("BUY với taxAmount = 0 (mặc định) được chấp nhận", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "FPT",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+      cashflowType: "BUY",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("SELL kèm taxAmount khác 0 được chấp nhận (thuế bán hợp lệ)", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "FPT",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+      cashflowType: "SELL",
+      taxAmount: "5200",
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("addTransactionSchema", () => {
@@ -155,6 +200,18 @@ describe("addTransactionSchema", () => {
       ...validTransactionFields,
     });
     expect(result.success).toBe(true);
+  });
+
+  // Cùng bất biến với newHoldingSchema ở trên — addTransaction là đường ghi
+  // giao dịch cho holding ĐÃ TỒN TẠI, cùng lỗ hổng nếu thiếu refine.
+  test("BUY kèm taxAmount khác 0 bị từ chối", () => {
+    const result = addTransactionSchema.safeParse({
+      holdingId: "holding-1",
+      ...validTransactionFields,
+      cashflowType: "BUY",
+      taxAmount: "1000",
+    });
+    expect(result.success).toBe(false);
   });
 });
 
@@ -174,6 +231,19 @@ describe("updateTransactionSchema", () => {
       cashflowType: "SELL",
     });
     expect(result.success).toBe(true);
+  });
+
+  // Ca quan trọng nhất trong 3 schema: sửa MỘT giao dịch đã ghi từ SELL (có
+  // taxAmount > 0) sang BUY qua form sửa — server phải chặn, không chỉ
+  // newHoldingSchema/addTransactionSchema mới cần refine này.
+  test("sửa giao dịch đổi cashflowType sang BUY nhưng vẫn còn taxAmount cũ -> bị từ chối", () => {
+    const result = updateTransactionSchema.safeParse({
+      cashflowId: "cf-1",
+      ...validTransactionFields,
+      cashflowType: "BUY",
+      taxAmount: "5200",
+    });
+    expect(result.success).toBe(false);
   });
 });
 

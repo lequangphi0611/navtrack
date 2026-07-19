@@ -35,7 +35,13 @@ import type { NavOverrideFormState } from "./types";
 function toCashflowInput(
   cf: Pick<
     Cashflow,
-    "id" | "type" | "date" | "createdAt" | "quantity" | "pricePerUnit"
+    | "id"
+    | "type"
+    | "date"
+    | "createdAt"
+    | "quantity"
+    | "pricePerUnit"
+    | "feeAmount"
   >,
 ): CashflowInputWithEvent {
   return {
@@ -45,6 +51,7 @@ function toCashflowInput(
     createdAt: cf.createdAt,
     quantity: new Decimal(cf.quantity.toString()),
     pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
+    feeAmount: new Decimal(cf.feeAmount.toString()),
   };
 }
 
@@ -145,6 +152,7 @@ export async function createHolding(
                 createdAt: true,
                 quantity: true,
                 pricePerUnit: true,
+                feeAmount: true,
               },
               // Khớp thứ tự tie-break của migration backfill (date, createdAt, id) —
               // derivePositionIncludingStockDividends() sort theo (date, createdAt, id)
@@ -175,6 +183,7 @@ export async function createHolding(
           createdAt: CANDIDATE_CREATED_AT,
           quantity: new Decimal(quantity),
           pricePerUnit: new Decimal(pricePerUnit),
+          feeAmount: new Decimal(feeAmount),
         };
 
         const position = derivePositionIncludingStockDividends(
@@ -314,6 +323,7 @@ export async function addTransaction(
                 createdAt: true,
                 quantity: true,
                 pricePerUnit: true,
+                feeAmount: true,
               },
               // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
               orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
@@ -341,6 +351,7 @@ export async function addTransaction(
           createdAt: CANDIDATE_CREATED_AT,
           quantity: new Decimal(quantity),
           pricePerUnit: new Decimal(pricePerUnit),
+          feeAmount: new Decimal(feeAmount),
         };
 
         const position = derivePositionIncludingStockDividends(
@@ -454,6 +465,7 @@ export async function updateTransaction(
                     createdAt: true,
                     quantity: true,
                     pricePerUnit: true,
+                    feeAmount: true,
                   },
                   // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
                   orderBy: [
@@ -487,6 +499,7 @@ export async function updateTransaction(
           createdAt: CANDIDATE_CREATED_AT,
           quantity: new Decimal(quantity),
           pricePerUnit: new Decimal(pricePerUnit),
+          feeAmount: new Decimal(feeAmount),
         };
 
         const position = derivePositionIncludingStockDividends(
@@ -598,6 +611,7 @@ export async function deleteTransaction(
                     createdAt: true,
                     quantity: true,
                     pricePerUnit: true,
+                    feeAmount: true,
                   },
                   // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
                   orderBy: [

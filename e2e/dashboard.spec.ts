@@ -84,15 +84,30 @@ test("Dashboard hiển thị đúng NAV/XIRR/lãi-lỗ khi vị thế có giá t
     // XIRR tính được — không rơi vào "Chưa tính được" (docs/domain/05: có ít
     // nhất 1 dòng tiền âm (mua) + 1 dòng tiền dương (NAV giả định tại mốc)).
     await expect(page.getByText("Chưa tính được")).toHaveCount(0);
+    // Nhãn "XIRR" trơn (PortfolioStatsRow.tsx) — cố ý đổi thành "XIRR (sau
+    // thuế)" ở Phase 5 (process/phase-5.md mục "Cấu trúc lại ReturnMetrics/
+    // card lãi-lỗ trên Dashboard", process/DECISION.md 2026-07-18): hàng 2 cột
+    // Dashboard-only ghép "XIRR (sau thuế)" + "Vốn đã bỏ ra mua", thay hẳn
+    // ReturnMetrics 2 cột XIRR+PnL cũ. Cùng cấp cha-con trực tiếp (label +
+    // value là 2 con của cùng 1 div, xem PortfolioStatsRow.tsx) — chỉ cần lên
+    // 1 cấp, không phải 2 như trước.
     const xirrCard = page
-      .getByText("XIRR", { exact: true })
-      .locator("..")
+      .getByText("XIRR (sau thuế)", { exact: true })
       .locator("..");
     await expect(xirrCard).toContainText("%");
 
     // Lãi/lỗ tuyệt đối dương = NAV - vốn đã bỏ vào = 15tr - 10tr = 5.000.000.
+    // Nhãn "Lãi/lỗ tuyệt đối" (ReturnMetrics cũ) đổi thành "Lãi/lỗ (thực nhận)"
+    // ở Phase 5 (process/phase-5.md: "nhãn 'Lãi/lỗ (thực nhận)'... vì đã trừ
+    // cả phí, không chỉ thuế", process/DECISION.md 2026-07-18) — card riêng
+    // full-width mới (PnlCostDragCard.tsx) thay nửa PnL của ReturnMetrics cũ.
+    // Cấu trúc: label -> div cha (.p-4.5) -> root card (2 cấp, xem
+    // PnlCostDragCard.tsx) chứa cả pnlValue span, khác 1 cấp của XIRR ở trên.
     await expect(
-      page.getByText("Lãi/lỗ tuyệt đối").locator(".."),
+      page
+        .getByText("Lãi/lỗ (thực nhận)", { exact: true })
+        .locator("..")
+        .locator(".."),
     ).toContainText("5.000.000");
 
     // priceFreshnessNote (mốc giá tự động gần nhất).

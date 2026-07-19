@@ -35,6 +35,8 @@ import {
 // (live binding), không phải "true" circular init dependency.
 import { toUiXirr } from "@/lib/portfolio-valuation";
 import { ROUTES } from "@/lib/routes";
+import type { SettingKey } from "@/lib/settings";
+import { saleTaxKey, transactionFeeKey } from "@/lib/settings";
 import type { PriceSource } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
@@ -47,6 +49,8 @@ import type {
   HoldingDetailValuation,
   HoldingsOverview,
   HoldingSummary,
+  TransactionSettingRow,
+  TransactionSettingRows,
 } from "./types";
 
 // Nhãn nguồn giá cho priceNote/priceSourceLabel của khối định giá chi tiết vị
@@ -232,6 +236,7 @@ export async function getHoldingDetail(
       createdAt: cf.createdAt,
       quantity: new Decimal(cf.quantity.toString()),
       pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
+      feeAmount: new Decimal(cf.feeAmount.toString()),
     })),
     stockDividendsUpToCutoff.map((dividend) => ({
       id: dividend.id,
@@ -345,6 +350,45 @@ export async function getHoldingDetail(
     totalCostBasis: position.quantity.mul(position.avgCost).toString(),
     cashflows,
     valuation,
+  };
+}
+
+// Setting rows cho form ghi giao dịch (thuế bán + phí mua/bán, process/phase-5-plan-DRAFT.md
+// mục A3) — dùng ở NewTransactionFormSection/EditTransactionFormSection, gọi song song
+// (Promise.all) với getHoldingDetail. Trả về đã serialize (client component không nhận
+// Decimal/enum thô) — TransactionForm (client) tự pickEffectiveSetting() lại tại ngày
+// đang chọn trên form mỗi khi user đổi ngày, không round-trip DB (@/lib/settings-resolution,
+// thuần, an toàn bundle client).
+export async function getTransactionSettingRows(
+  assetType: HoldingSummary["type"],
+): Promise<TransactionSettingRows> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const keys: SettingKey[] = [
+    saleTaxKey(assetType),
+    transactionFeeKey("BUY", assetType),
+    transactionFeeKey("SELL", assetType),
+  ];
+
+  const rows = await db.setting.findMany({
+    where: { key: { in: keys } },
+    select: { key: true, value: true, valueType: true, effectiveFrom: true },
+  });
+
+  const toRows = (key: SettingKey): TransactionSettingRow[] =>
+    rows
+      .filter((row) => row.key === key)
+      .map((row) => ({
+        value: row.value,
+        valueType: row.valueType,
+        effectiveFrom: row.effectiveFrom.toISOString(),
+      }));
+
+  return {
+    saleTaxRows: toRows(saleTaxKey(assetType)),
+    feeBuyRows: toRows(transactionFeeKey("BUY", assetType)),
+    feeSellRows: toRows(transactionFeeKey("SELL", assetType)),
   };
 }
 

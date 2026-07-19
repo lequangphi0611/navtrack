@@ -1,7 +1,19 @@
 import Decimal from "decimal.js";
 
-import type { SettingValueType } from "@prisma/client";
+import type { AssetType } from "@prisma/client";
 import { db } from "@/lib/db";
+import {
+  AppError,
+  parseSettingValue,
+  pickEffectiveSetting,
+} from "@/lib/settings-resolution";
+
+// Re-export cho code cũ (docs/rules/typescript-style.md: một nguồn sự thật) —
+// pickEffectiveSetting/parseSettingValue/AppError giờ SỐNG ở settings-resolution.ts
+// (thuần, không import `db`) để dùng được từ client component (xem
+// process/phase-5-plan-DRAFT.md mục A2). File này giữ nguyên chữ ký
+// resolveSetting/resolveDecimalSetting cho mọi chỗ gọi hiện có.
+export { AppError, parseSettingValue, pickEffectiveSetting };
 
 // Một nguồn sự thật cho mọi key của bảng Setting — không hardcode string key
 // rải rác ở seed/queries/actions (xem docs/rules/schema.md#key-value-config).
@@ -13,76 +25,71 @@ export const SETTING_KEYS = {
   // docs/domain/03-dividends.md — mệnh giá dùng để tính cổ tức tiền mặt theo %
   // (đ/CP), effective-dated theo ngày chia cổ tức.
   DIVIDEND_PAR_VALUE: "DIVIDEND_PAR_VALUE",
+  // docs/domain/07-tax.md mục "Quy tắc & bất biến" — thuế TNCN khi BÁN (%),
+  // theo AssetType, effective-dated theo ngày giao dịch. Không có key mua —
+  // VN không đánh thuế TNCN khi mua chứng khoán/CCQ.
+  SALE_TAX_STOCK: "SALE_TAX_STOCK",
+  SALE_TAX_FUND: "SALE_TAX_FUND",
+  SALE_TAX_BOND: "SALE_TAX_BOND",
+  SALE_TAX_GOLD: "SALE_TAX_GOLD",
+  // docs/domain/07-tax.md mục "Phí giao dịch (mua & bán)" — phí CTCK theo
+  // CHIỀU × AssetType (%), effective-dated theo ngày giao dịch.
+  TRANSACTION_FEE_BUY_STOCK: "TRANSACTION_FEE_BUY_STOCK",
+  TRANSACTION_FEE_BUY_FUND: "TRANSACTION_FEE_BUY_FUND",
+  TRANSACTION_FEE_BUY_BOND: "TRANSACTION_FEE_BUY_BOND",
+  TRANSACTION_FEE_BUY_GOLD: "TRANSACTION_FEE_BUY_GOLD",
+  TRANSACTION_FEE_SELL_STOCK: "TRANSACTION_FEE_SELL_STOCK",
+  TRANSACTION_FEE_SELL_FUND: "TRANSACTION_FEE_SELL_FUND",
+  TRANSACTION_FEE_SELL_BOND: "TRANSACTION_FEE_SELL_BOND",
+  TRANSACTION_FEE_SELL_GOLD: "TRANSACTION_FEE_SELL_GOLD",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
 
-export class AppError extends Error {
-  constructor(
-    public code: string,
-    message: string,
-  ) {
-    super(message);
+// Tra key SALE_TAX_<LOẠI> theo AssetType — tránh rải string ghép
+// `SALE_TAX_${type}` khắp queries/actions/form (docs/domain/07-tax.md).
+// switch tường minh thay vì template literal: an toàn hơn khi SettingKey là
+// union hẹp (không phụ thuộc TS suy luận template literal type từ union).
+export function saleTaxKey(assetType: AssetType): SettingKey {
+  switch (assetType) {
+    case "STOCK":
+      return SETTING_KEYS.SALE_TAX_STOCK;
+    case "FUND":
+      return SETTING_KEYS.SALE_TAX_FUND;
+    case "BOND":
+      return SETTING_KEYS.SALE_TAX_BOND;
+    case "GOLD":
+      return SETTING_KEYS.SALE_TAX_GOLD;
   }
 }
 
-type SettingRow = {
-  value: string;
-  valueType: SettingValueType;
-  effectiveFrom: Date;
-};
-
-// Given already-fetched rows for one key, pick the row effective at atDate:
-// the row with the latest effectiveFrom <= atDate. Pure — no DB access, unit-testable.
-export function pickEffectiveSetting(
-  rows: SettingRow[],
-  atDate: Date,
-): SettingRow | null {
-  const eligible = rows
-    .filter((row) => row.effectiveFrom <= atDate)
-    .sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime());
-  return eligible[0] ?? null;
-}
-
-export function parseSettingValue(
-  value: string,
-  valueType: SettingValueType,
-): Decimal | number | boolean | Date | string {
-  switch (valueType) {
-    case "DECIMAL": {
-      const decimal = new Decimal(value);
-      if (decimal.isNaN()) {
-        throw new AppError(
-          "INVALID_SETTING_VALUE",
-          `Giá trị DECIMAL không hợp lệ: "${value}"`,
-        );
-      }
-      return decimal;
+// Tra key TRANSACTION_FEE_<chiều>_<LOẠI> theo chiều (BUY/SELL) × AssetType —
+// cùng lý do với saleTaxKey (docs/domain/07-tax.md mục "Phí giao dịch").
+export function transactionFeeKey(
+  direction: "BUY" | "SELL",
+  assetType: AssetType,
+): SettingKey {
+  if (direction === "BUY") {
+    switch (assetType) {
+      case "STOCK":
+        return SETTING_KEYS.TRANSACTION_FEE_BUY_STOCK;
+      case "FUND":
+        return SETTING_KEYS.TRANSACTION_FEE_BUY_FUND;
+      case "BOND":
+        return SETTING_KEYS.TRANSACTION_FEE_BUY_BOND;
+      case "GOLD":
+        return SETTING_KEYS.TRANSACTION_FEE_BUY_GOLD;
     }
-    case "INT": {
-      const parsed = parseInt(value, 10);
-      if (Number.isNaN(parsed)) {
-        throw new AppError(
-          "INVALID_SETTING_VALUE",
-          `Giá trị INT không hợp lệ: "${value}"`,
-        );
-      }
-      return parsed;
-    }
-    case "BOOLEAN":
-      return value === "true";
-    case "DATE": {
-      const parsed = new Date(value);
-      if (Number.isNaN(parsed.getTime())) {
-        throw new AppError(
-          "INVALID_SETTING_VALUE",
-          `Giá trị DATE không hợp lệ: "${value}"`,
-        );
-      }
-      return parsed;
-    }
-    case "STRING":
-      return value;
+  }
+  switch (assetType) {
+    case "STOCK":
+      return SETTING_KEYS.TRANSACTION_FEE_SELL_STOCK;
+    case "FUND":
+      return SETTING_KEYS.TRANSACTION_FEE_SELL_FUND;
+    case "BOND":
+      return SETTING_KEYS.TRANSACTION_FEE_SELL_BOND;
+    case "GOLD":
+      return SETTING_KEYS.TRANSACTION_FEE_SELL_GOLD;
   }
 }
 

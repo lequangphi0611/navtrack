@@ -1,5 +1,6 @@
 import type { z } from "zod";
 
+import type { SettingValueType } from "@prisma/client";
 import type { CashflowTimelineRow } from "@/features/holdings/components/CashflowTimeline";
 import type { XirrResult as XirrResultUi } from "@/components/ReturnMetrics";
 import type { PriceSource } from "@/lib/valuation";
@@ -83,6 +84,24 @@ export type HoldingDetailValuation = {
   // còn mở và định giá được — xem buildXirrCashflows (lib/xirr-cashflow.ts).
   timeline: CashflowTimelineRow[];
   timelineFootnote?: string;
+};
+
+// Một dòng Setting hiệu lực đã serialize cho client (process/phase-5-plan-DRAFT.md
+// mục A3) — `effectiveFrom` là ISO string (không phải Date) qua ranh giới
+// Server -> Client Component; TransactionForm tự `new Date(...)` lại khi cần
+// gọi pickEffectiveSetting() (@/lib/settings-resolution, thuần, an toàn client).
+export type TransactionSettingRow = {
+  value: string;
+  valueType: SettingValueType;
+  effectiveFrom: string;
+};
+
+// Nhóm 3 key Setting cần cho form ghi giao dịch (thuế bán + phí mua/bán) của
+// một AssetType — xem getTransactionSettingRows() (queries.ts).
+export type TransactionSettingRows = {
+  saleTaxRows: TransactionSettingRow[];
+  feeBuyRows: TransactionSettingRow[];
+  feeSellRows: TransactionSettingRow[];
 };
 
 export type HoldingDetail = {

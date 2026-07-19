@@ -9,6 +9,13 @@ export type CashflowInput = {
   date: Date;
   quantity: Decimal;
   pricePerUnit: Decimal;
+  // Phí giao dịch (docs/domain/07-tax.md mục "Phí giao dịch (mua & bán)") —
+  // BẮT BUỘC (không optional): chỉ gộp vào avgCost khi type === "BUY" (đóng
+  // issue #66), nhưng field phải luôn có mặt ở input để caller không quên
+  // truyền cho cả BUY lẫn SELL — SELL không dùng field này ở derivePosition()
+  // (phí bán không đổi avgCost, chỉ trừ vào amount khi bán) nhưng vẫn cần khai
+  // để CashflowInput mô tả đúng 1-1 field thật của Cashflow.
+  feeAmount: Decimal;
 };
 
 // Quy ước dấu (docs/domain/02-transactions-and-cost-basis.md):
@@ -48,11 +55,16 @@ export function derivePosition(cashflows: CashflowInput[]): {
   for (const cf of sorted) {
     if (cf.type === "BUY") {
       const newQuantity = quantity.plus(cf.quantity);
+      // Gộp phí mua vào tử số (đóng issue #66, docs/domain/02-transactions-and-cost-basis.md
+      // mục "Cách tính"): giá vốn mới = (SL cũ × giá vốn cũ + (SL mua × giá mua
+      // + phí mua)) / (SL cũ + SL mua) — avgCost phản ánh đúng tổng tiền thực
+      // đã bỏ ra, khớp amount của BUY (-(quantity × pricePerUnit) - feeAmount).
       avgCost = newQuantity.isZero()
         ? new Decimal(0)
         : quantity
             .mul(avgCost)
             .plus(cf.quantity.mul(cf.pricePerUnit))
+            .plus(cf.feeAmount)
             .div(newQuantity);
       quantity = newQuantity;
     } else {

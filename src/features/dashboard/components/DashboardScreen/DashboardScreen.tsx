@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 
 import { BottomNav } from "@/components/BottomNav";
-import { ReturnMetrics, type XirrResult } from "@/components/ReturnMetrics";
+import type { XirrResult } from "@/components/ReturnMetrics";
 import { UserAvatar } from "@/components/UserAvatar";
 import {
   AllocationBar,
@@ -22,12 +22,15 @@ import {
   MissingPriceList,
   type MissingPriceHolding,
 } from "@/features/dashboard/components/MissingPriceList";
+import { PnlCostDragCard } from "@/features/dashboard/components/PnlCostDragCard";
+import { PortfolioStatsRow } from "@/features/dashboard/components/PortfolioStatsRow";
 import {
   SnapshotTodayCard,
   type SnapshotTodayCardProps,
 } from "@/features/dashboard/components/SnapshotTodayCard";
 import type { HoldingSummary } from "@/features/holdings/types";
 import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
+import type { CostDragBreakdownEntry } from "@/lib/portfolio-valuation";
 import { ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +53,15 @@ type DashboardScreenProps = {
   absolutePnl: string;
   // true khi lãi/lỗ chỉ tính trên phần đã có giá (mockup 2f "Lãi/lỗ (tạm)").
   absolutePnlIsPartial: boolean;
+  // Chi phí ăn mòn (Phase 5, docs/domain/07-tax.md mục "Chi phí ăn mòn") — khớp
+  // field mới trên PortfolioValuation (lib/portfolio-valuation.ts), page.tsx
+  // không cần sửa vì đã `{...valuation}`.
+  costDragAmount: string;
+  costDragPercent: number;
+  // Vốn GỘP đã triển khai (Σ|BUY.amount|) — KHÁC totalCostBasis (vốn ròng),
+  // hiển thị trực tiếp thành chỉ số "Vốn đã bỏ ra mua" (mockup 5d).
+  grossInvested: string;
+  costDragBreakdown: CostDragBreakdownEntry[];
   allocation: AllocationSlice[];
   // "Giá tự động cập nhật EOD hôm nay 15:05 · 2 mã dùng giá nhập tay".
   priceFreshnessNote: string;
@@ -82,6 +94,10 @@ function DashboardScreen({
   xirr,
   absolutePnl,
   absolutePnlIsPartial,
+  costDragAmount,
+  costDragPercent,
+  grossInvested,
+  costDragBreakdown,
   allocation,
   priceFreshnessNote,
   missingPriceHoldings,
@@ -89,7 +105,6 @@ function DashboardScreen({
   snapshotToday,
   tradeHoldings,
 }: DashboardScreenProps) {
-  const hasMissingPrices = missingPriceHoldings.length > 0;
   const navDeltaNumber = Number(navDeltaAmount);
   const NavDeltaIcon = navDeltaNumber < 0 ? ArrowDown : ArrowUp;
 
@@ -178,22 +193,23 @@ function DashboardScreen({
         <SnapshotTodayCard id="snapshot-today-card" {...snapshotToday} />
       ) : null}
 
-      <ReturnMetrics
-        xirr={xirr}
-        xirrNote={
-          xirr.status === "OK"
-            ? "Tỷ suất nội hoàn theo dòng tiền thực"
-            : hasMissingPrices
-              ? `Thiếu giá cho ${missingPriceHoldings.length} mã`
-              : undefined
-        }
+      <PnlCostDragCard
         pnlValue={absolutePnl}
-        pnlLabel={absolutePnlIsPartial ? "Lãi/lỗ (tạm)" : "Lãi/lỗ tuyệt đối"}
         pnlNote={
           absolutePnlIsPartial
-            ? "Chỉ trên phần có giá"
-            : "NAV − tổng vốn đã bỏ vào"
+            ? "Chỉ trên phần có giá — đã trừ thuế & phí."
+            : "Đã trừ cả thuế lẫn phí — số thực nhận, không phải trên giấy."
         }
+        costDragAmount={costDragAmount}
+        costDragPercent={costDragPercent}
+        grossInvested={grossInvested}
+        costDragBreakdown={costDragBreakdown}
+        hidden={hidden}
+      />
+
+      <PortfolioStatsRow
+        xirr={xirr}
+        grossInvested={grossInvested}
         hidden={hidden}
       />
 
