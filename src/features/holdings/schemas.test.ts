@@ -172,6 +172,20 @@ describe("newHoldingSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  // buyHasNoTax so sánh bằng giá trị Decimal, không phải string "=== 0" —
+  // các biểu diễn khác của 0 vẫn phải được chấp nhận cho BUY.
+  test('BUY với taxAmount = "0.00" (biểu diễn khác của 0) được chấp nhận', () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "FPT",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+      cashflowType: "BUY",
+      taxAmount: "0.00",
+    });
+    expect(result.success).toBe(true);
+  });
+
   test("SELL kèm taxAmount khác 0 được chấp nhận (thuế bán hợp lệ)", () => {
     const result = newHoldingSchema.safeParse({
       symbol: "FPT",

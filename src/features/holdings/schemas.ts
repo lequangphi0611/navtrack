@@ -54,15 +54,18 @@ const transactionFields = {
 
 // VN không đánh thuế TNCN khi mua chứng khoán/CCQ (docs/domain/07-tax.md mục
 // "Quy tắc & bất biến") — form ẩn hẳn field thuế khi BUY, nhưng đó chỉ là UI.
-// Chặn lại ở server: taxAmount khác "0" kèm cashflowType BUY là dữ liệu không
+// Chặn lại ở server: taxAmount khác 0 kèm cashflowType BUY là dữ liệu không
 // hợp lệ dù lọt qua bằng cách nào (request tay/devtools) — "không tin client"
 // (CLAUDE.md). Hàm thuần tách riêng để 3 schema dưới đây dùng chung, tránh
-// lặp lại cùng một điều kiện.
+// lặp lại cùng một điều kiện. So sánh bằng giá trị Decimal (không phải string
+// `=== "0"`) — taxAmount đã qua nonNegativeDecimal ở field-level nên luôn parse
+// được; tránh từ chối nhầm các biểu diễn khác của 0 ("0.0", "0.00") nếu sau
+// này có nguồn gửi request khác ngoài form (form hiện tại luôn gửi literal "0").
 function buyHasNoTax(data: {
   cashflowType: "BUY" | "SELL";
   taxAmount: string;
 }): boolean {
-  return data.cashflowType !== "BUY" || data.taxAmount === "0";
+  return data.cashflowType !== "BUY" || new Decimal(data.taxAmount).isZero();
 }
 
 const BUY_HAS_NO_TAX_ISSUE = {

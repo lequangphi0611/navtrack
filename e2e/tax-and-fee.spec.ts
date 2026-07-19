@@ -269,9 +269,26 @@ test("SELL tự tính thuế/phí theo Setting, sửa tay được, đổi ngày
     await expect(taxRecompute.getByLabel("Thuế bán · tính lại")).toHaveValue(
       "11111",
     );
-    // Khôi phục lại giá trị tính lại đúng trước khi submit, để số liệu
-    // Dashboard bên dưới khớp phép tính tay đã ghi ở đầu file.
-    await taxRecompute.getByLabel("Thuế bán · tính lại").fill("10400");
+
+    // Đổi ngày MỘT LẦN NỮA ngay sau khi đã gõ tay — SellRecomputeCompareCard
+    // phải bỏ hẳn giá trị gõ tay đó và hiện số tính lại theo ngày mới nhất,
+    // KHÔNG giữ "11111" (bất biến ghi ở SellRecomputeCompareCard.tsx: "không có
+    // cách phân biệt cũ do auto vs cũ do user sửa" -> ghi đè bằng key={date} ép
+    // remount mỗi khi ngày đổi). Chọn ngày thứ 3 vẫn SAU RATE_CHANGE_DATE (cùng
+    // suất 0,2%/0,5% với newSellDate) để số tính lại khác hẳn "11111" — assertion
+    // dưới chỉ pass nếu component thật sự reset, không phải tình cờ trùng số.
+    const thirdSellDate = daysAgo(3);
+    await selectDateOnCalendar(page, thirdSellDate);
+    await expect(taxRecompute.getByLabel("Thuế bán · tính lại")).toHaveValue(
+      "10400",
+    );
+    await expect(
+      feeRecompute.getByLabel("Phí giao dịch · tính lại"),
+    ).toHaveValue("26000");
+
+    // Quay lại newSellDate (cùng suất, cùng số tính lại) để phần còn lại của
+    // test (submit, Dashboard) khớp đúng phép tính tay đã ghi ở đầu file.
+    await selectDateOnCalendar(page, newSellDate);
 
     await page.getByRole("button", { name: "Cập nhật giao dịch" }).click();
     await page.waitForURL(afterTransactionUrl(holdingUrl));
