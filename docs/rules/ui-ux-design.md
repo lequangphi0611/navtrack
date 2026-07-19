@@ -75,6 +75,11 @@ Quy tắc giao diện cho Navtrack: theme màu, typography, icon, và kho atoms/
 | `function` | `Sigma` |
 | `swap_vert` | `ArrowLeftRight` (Phase 4 — FAB "Mua/Bán") |
 | `add_chart` | `ChartNoAxesCombined` (Phase 4 — FAB "Thêm vị thế") |
+| `percent` | `Percent` (Phase 5 — card "Phí giao dịch") |
+| `edit` | `Pencil` (Phase 5 — icon sửa tay trên `AutoFilledAmountCard`/`SellRecomputeCompareCard`) |
+| `tips_and_updates` | `Lightbulb` (Phase 5 — ghi chú "số tự tính chỉ là gợi ý" + nút "Đặt lại") |
+| `sync` | `RefreshCw` (Phase 5 — banner "thuế & phí được tính lại" khi sửa ngày SELL) |
+| `water_drop` | `Droplet` (Phase 5 — "Chi phí ăn mòn") |
 
 ## Primitives
 
@@ -117,6 +122,7 @@ Tái dùng trước khi tạo mới trùng lặp. Cấu trúc/pattern (thư mụ
 | `BottomNav` | Thanh điều hướng cố định đáy (Phase 2): Tổng quan/Danh mục/Cài đặt — nhận `active` tường minh (không tự suy pathname), chỉ gắn ở 3 màn gốc/tab |
 | `ReturnMetrics` | Cặp thẻ XIRR (theo năm) + Lãi/lỗ tuyệt đối song song (Phase 2) — thẻ XIRR tự chuyển "Chưa tính được" khi status khác `"OK"` (không bao giờ render số/NaN/-100%), dùng ở Dashboard và chi tiết vị thế |
 | `PriceSourceBadge` | Badge nguồn giá "Tự động"/"Nhập tay" (Phase 2) — dùng ở nhóm danh mục, NAV chi tiết vị thế |
+| `AutoFilledAmountCard` | Card "tự điền, sửa được" (Phase 5) — badge "TỰ ĐIỀN · SỬA ĐƯỢC", số lớn + icon edit, công thức mờ dưới, LUÔN có link "Đặt lại". Dùng cho card Thuế bán + Phí giao dịch trong `TransactionForm`; state `manualValue` nội bộ (`null` = theo giá trị tự tính, khác `null` = đã sửa tay) tự đóng vai "cờ dirty" của từng trường — mỗi instance độc lập, không cần cờ dirty ở component cha |
 
 ## Chuyển động (animation)
 

@@ -10,7 +10,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 2 | Lõi XIRR + giá tự động | ✅ | [phase-2.md](./phase-2.md) |
 | 3 | Snapshot tự động | ✅ | [phase-3.md](./phase-3.md) |
 | 4 | Cổ tức | ✅ | [phase-4.md](./phase-4.md) |
-| 5 | Thuế bán (áp dụng) | ⬜ | [phase-5.md](./phase-5.md) |
+| 5 | Thuế bán (áp dụng) | ✅ | [phase-5.md](./phase-5.md) |
 | 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
 | 7 | Trái tức (lãi trái phiếu) | ⬜ | [phase-7.md](./phase-7.md) |
 | 8 | Lịch dòng tiền sắp tới | ⬜ | [phase-8.md](./phase-8.md) |
@@ -55,3 +55,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-17: sửa A1 — "Chi phí ăn mòn" đổi mẫu số từ `totalInvested` (vốn ròng, vỡ khi bán nhiều) sang `grossInvested` (vốn gộp `Σ|BUY.amount|`); xem `DECISION.md` (6).
 - 2026-07-17: rà nghiệp vụ tài chính — sửa docs A2 (treo cảnh báo tập trung khi NAV danh mục khuyết giá); log #65 (C1 timing cổ tức), #66 (C2 phí mua vào avgCost), #67 (B1 realized/unrealized) để sửa sau; B2 benchmark giữ ở Backlog. Xem `DECISION.md` (7).
 - 2026-07-18: `design-fetcher` kéo mockup Phase 5 thật (`Phase 5 Screens.dc.html`, 6 màn 5a-5f), sinh digest `process/UI_phase_5.md`; đối chiếu với user — chốt tính lại thuế khi sửa ngày SELL đã ghi, giữ sheet chi tiết chi phí ăn mòn, ghi rõ cấu trúc lại `ReturnMetrics` theo mockup. Xem `DECISION.md` 2026-07-18 (2). Phát hiện + log riêng footgun hạ tầng: `DesignSync` (deferred tool) không lan xuống subagent — xem `DECISION.md` 2026-07-18 (1).
+- 2026-07-19: Phase 5 — verify: 12 key `Setting` (`SALE_TAX_*`/`TRANSACTION_FEE_*`) seed đúng, `avgCost` gộp phí mua (issue #66 đóng), sửa SELL đã ghi tính lại thuế/phí đúng effective dating, sheet "chi phí ăn mòn" breakdown 3 nguồn đúng %, e2e `tax-and-fee.spec.ts` đối chiếu tay khớp domain doc; bổ sung unit test thiếu (`schemas.test.ts` — guard server-side BUY không có `taxAmount`, trước đó chưa có test dù đã có refine). Log 1 gap nhỏ (client prefill không phân biệt "0 hợp lệ" vs "thiếu cấu hình" khi ngày < 2020-01-01 — hiếm, không chặn). **Phase 5 hoàn thành** ✅.
