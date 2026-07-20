@@ -1,7 +1,6 @@
 "use server";
 
 import Decimal from "decimal.js";
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { Prisma } from "@prisma/client";
@@ -21,6 +20,7 @@ import type {
 } from "@/lib/cost-basis";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { revalidateHoldingDependentRoutes } from "@/lib/revalidate-holding-routes";
 import { ROUTES } from "@/lib/routes";
 
 import {
@@ -245,9 +245,7 @@ export async function createHolding(
 
     await triggerManualSnapshot("createHolding", result.holdingId);
 
-    revalidatePath(ROUTES.holdingDetail(result.holdingId));
-    revalidatePath(ROUTES.holdings);
-    revalidatePath(ROUTES.holdingsClosed);
+    revalidateHoldingDependentRoutes(result.holdingId);
     return {
       ok: true,
       data: { holdingId: result.holdingId, cashflowId: result.cashflowId },
@@ -400,9 +398,7 @@ export async function addTransaction(
 
     await triggerManualSnapshot("addTransaction", holdingId);
 
-    revalidatePath(ROUTES.holdingDetail(holdingId));
-    revalidatePath(ROUTES.holdings);
-    revalidatePath(ROUTES.holdingsClosed);
+    revalidateHoldingDependentRoutes(holdingId);
     return { ok: true, data: { holdingId, cashflowId: result.cashflowId } };
   } catch (err) {
     if (
@@ -554,9 +550,7 @@ export async function updateTransaction(
 
     await triggerManualSnapshot("updateTransaction", result.holdingId);
 
-    revalidatePath(ROUTES.holdingDetail(result.holdingId));
-    revalidatePath(ROUTES.holdings);
-    revalidatePath(ROUTES.holdingsClosed);
+    revalidateHoldingDependentRoutes(result.holdingId);
     // cashflowId đã có sẵn từ input (parsed.data) — không cần query lại.
     return { ok: true, data: { holdingId: result.holdingId, cashflowId } };
   } catch (err) {
@@ -671,9 +665,7 @@ export async function deleteTransaction(
     // (không điều hướng đi đâu, không có cashflowId để gắn vào query string).
     await triggerManualSnapshot("deleteTransaction", result.holdingId);
 
-    revalidatePath(ROUTES.holdingDetail(result.holdingId));
-    revalidatePath(ROUTES.holdings);
-    revalidatePath(ROUTES.holdingsClosed);
+    revalidateHoldingDependentRoutes(result.holdingId);
     return { ok: true, data: { holdingId: result.holdingId } };
   } catch (err) {
     if (
@@ -741,6 +733,6 @@ export async function saveNavOverride(
     return { ok: false, error: "Không lưu được giá. Thử lại sau ít phút." };
   }
 
-  revalidatePath(ROUTES.holdingDetail(holdingId));
+  revalidateHoldingDependentRoutes(holdingId);
   redirect(ROUTES.holdingDetail(holdingId));
 }

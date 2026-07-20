@@ -36,6 +36,7 @@ resolveSetting(key, atDate):
   - Cấu hình mang tính "hiện hành" thì dùng `atDate = hôm nay`.
 - **Parse theo `valueType`:** `DECIMAL` → `Decimal` (không float), `INT` → integer, `BOOLEAN` → bool, `DATE` → Date, `STRING` → giữ nguyên.
 - **Resolve một lần cho một phép tính:** khi tính thuế cho một giao dịch, resolve đúng một lần rồi dùng, không resolve lại giữa chừng (đảm bảo nhất quán trong cùng thao tác).
+- **Resolve nhiều key cùng `atDate` trong 1 thao tác:** dùng `resolveSettings(keys, atDate)` (1 query duy nhất, `lib/settings.ts`) thay vì gọi `resolveSetting` nhiều lần — tránh N+1, đáng chú ý khi Phase 5 (thuế bán) cần nhiều key `SALE_TAX_*`/`TRANSACTION_FEE_*` cùng lúc sau này.
 
 ## Quy tắc & bất biến
 - **Effective dating:** giá trị áp dụng cho `atDate` = dòng cùng `key` có `effectiveFrom` **lớn nhất mà ≤ atDate**. **Không dùng `effectiveTo`** (khoảng suy ra ngầm từ dòng kế tiếp).

@@ -1,7 +1,13 @@
 import Decimal from "decimal.js";
 import { describe, expect, test } from "vitest";
 
-import { parseSettingValue, pickEffectiveSetting } from "./settings";
+import {
+  parseSettingValue,
+  pickEffectiveSetting,
+  requireDecimalSetting,
+  SETTING_KEYS,
+} from "./settings";
+import type { SettingKey } from "./settings";
 
 describe("pickEffectiveSetting", () => {
   test("chọn dòng có effectiveFrom lớn nhất mà <= atDate", () => {
@@ -77,5 +83,49 @@ describe("parseSettingValue", () => {
 
   test("STRING", () => {
     expect(parseSettingValue("hello", "STRING")).toBe("hello");
+  });
+});
+
+// requireDecimalSetting thu hẹp Map trả về của resolveSettings() (issue #77 —
+// gộp N key cùng atDate vào 1 query, dùng ở recordDividend/dividends "new"
+// pages thay 2 lệnh resolveDecimalSetting song song trước đây). Nếu phần thu
+// hẹp này bị revert về `as Decimal` ẩu, test "ném lỗi..." bên dưới sẽ không
+// còn phát hiện được giá trị sai kiểu (DB hỏng: cột valueType lệch so với dữ
+// liệu thật) — mất luôn tín hiệu "thiếu cấu hình là lỗi, không phải mặc định"
+// mà docs/domain/09-settings.md yêu cầu.
+describe("requireDecimalSetting", () => {
+  test("trả về đúng Decimal khi Map có giá trị kiểu Decimal cho key", () => {
+    const settings = new Map<SettingKey, ReturnType<typeof parseSettingValue>>([
+      [SETTING_KEYS.DIVIDEND_PAR_VALUE, new Decimal("10000")],
+    ]);
+
+    const result = requireDecimalSetting(
+      settings,
+      SETTING_KEYS.DIVIDEND_PAR_VALUE,
+    );
+
+    expect(result).toBeInstanceOf(Decimal);
+    expect(result.toString()).toBe("10000");
+  });
+
+  test("ném AppError khi giá trị trong Map không phải Decimal (vd STRING/số nguyên)", () => {
+    const settings = new Map<SettingKey, ReturnType<typeof parseSettingValue>>([
+      [SETTING_KEYS.DIVIDEND_TAX_RATE, 5],
+    ]);
+
+    expect(() =>
+      requireDecimalSetting(settings, SETTING_KEYS.DIVIDEND_TAX_RATE),
+    ).toThrow(/không phải kiểu DECIMAL/);
+  });
+
+  test("ném AppError khi key không tồn tại trong Map (thiếu resolve, không mặc định undefined)", () => {
+    const settings = new Map<
+      SettingKey,
+      ReturnType<typeof parseSettingValue>
+    >();
+
+    expect(() =>
+      requireDecimalSetting(settings, SETTING_KEYS.DIVIDEND_PAR_VALUE),
+    ).toThrow(/không phải kiểu DECIMAL/);
   });
 });

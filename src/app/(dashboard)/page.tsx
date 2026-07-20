@@ -1,33 +1,26 @@
-import { DashboardScreen } from "@/features/dashboard/components/DashboardScreen";
-import { getOpenHoldings } from "@/features/holdings/queries";
-import { createManualSnapshot } from "@/features/snapshots/actions";
-import { getManualSnapshotToday } from "@/features/snapshots/queries";
-import { getSession } from "@/lib/auth";
-import { getCutoffSelection } from "@/lib/cutoff-cookie";
-import { getPortfolioValuation } from "@/lib/portfolio-valuation";
+import { Suspense } from "react";
 
-// "/" — Dashboard tổng quan (mockup 2a/2f). Các query độc lập với query quyết định
-// layout (getPortfolioValuation) — Promise.all, không await tuần tự
-// (component-architecture.md checklist #2).
-export default async function DashboardHomePage() {
-  const selection = await getCutoffSelection();
-  const [session, valuation, snapshotToday, tradeHoldings] = await Promise.all([
-    getSession(),
-    getPortfolioValuation(selection),
-    getManualSnapshotToday(),
-    getOpenHoldings(),
-  ]);
+import { BottomNav } from "@/components/BottomNav";
+import { DashboardScreenSkeleton } from "@/features/dashboard/components/DashboardScreen";
+import { DashboardQuickMenuSkeleton } from "@/features/dashboard/components/DashboardQuickMenu";
+import { DashboardQuickMenuSection } from "@/features/dashboard/components/DashboardQuickMenuSection";
+import { PortfolioOverviewSection } from "@/features/dashboard/components/PortfolioOverviewSection";
 
+// "/" — Dashboard tổng quan (mockup 2a/2f). Không có nhánh trạng thái quyết định layout
+// (khác settings/members hay holdings/(overview)) — 2 vùng Suspense độc lập theo đúng
+// ranh giới 2 nguồn dữ liệu: PortfolioOverviewSection (nội dung chính) và
+// DashboardQuickMenuSection (FAB fixed-position, tách khỏi luồng DOM chính) —
+// component-architecture.md checklist #2.
+export default function DashboardHomePage() {
   return (
-    <DashboardScreen
-      displayName={session?.user?.name ?? ""}
-      {...valuation}
-      snapshotToday={{
-        alreadySnapshotToday: snapshotToday !== null,
-        snapshotTakenAt: snapshotToday?.takenAt,
-        action: createManualSnapshot,
-      }}
-      tradeHoldings={tradeHoldings}
-    />
+    <>
+      <Suspense fallback={<DashboardScreenSkeleton />}>
+        <PortfolioOverviewSection />
+      </Suspense>
+      <Suspense fallback={<DashboardQuickMenuSkeleton />}>
+        <DashboardQuickMenuSection />
+      </Suspense>
+      <BottomNav active="dashboard" />
+    </>
   );
 }

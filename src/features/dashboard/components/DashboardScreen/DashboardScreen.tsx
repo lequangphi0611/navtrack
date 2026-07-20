@@ -10,14 +10,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { BottomNav } from "@/components/BottomNav";
 import type { XirrResult } from "@/components/ReturnMetrics";
 import { UserAvatar } from "@/components/UserAvatar";
 import {
   AllocationBar,
   type AllocationSlice,
 } from "@/features/dashboard/components/AllocationBar";
-import { DashboardQuickMenu } from "@/features/dashboard/components/DashboardQuickMenu";
 import {
   MissingPriceList,
   type MissingPriceHolding,
@@ -28,7 +26,6 @@ import {
   SnapshotTodayCard,
   type SnapshotTodayCardProps,
 } from "@/features/dashboard/components/SnapshotTodayCard";
-import type { HoldingSummary } from "@/features/holdings/types";
 import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
 import type { CostDragBreakdownEntry } from "@/lib/portfolio-valuation";
 import { ROUTES } from "@/lib/routes";
@@ -71,9 +68,6 @@ type DashboardScreenProps = {
   // Vắng mặt = ẩn card CTA "Chốt số liệu hôm nay" (issue #35 — Container chưa
   // cấp, xem process/UI_phase_3.md).
   snapshotToday?: SnapshotTodayCardProps;
-  // Holding đang mở (quantity > 0), forward xuống DashboardQuickMenu cho
-  // TransactionHoldingPicker (issue #54, xem process/UI_phase_4.md mục 5).
-  tradeHoldings: HoldingSummary[];
 };
 
 // Organism Phase 2 cho "/" (Dashboard NAV + XIRR, mockup 2a) — cũng tái dùng cho
@@ -103,7 +97,6 @@ function DashboardScreen({
   missingPriceHoldings,
   hidden = false,
   snapshotToday,
-  tradeHoldings,
 }: DashboardScreenProps) {
   const navDeltaNumber = Number(navDeltaAmount);
   const NavDeltaIcon = navDeltaNumber < 0 ? ArrowDown : ArrowUp;
@@ -243,17 +236,6 @@ function DashboardScreen({
           </div>
         </div>
       ) : null}
-
-      {/* FAB menu nhanh (mockup "Phase 4 Screens" 4f, issue #51) — thay thế
-          pill "Cổ tức" đơn giản hoá trước đó, dựng đủ 4 hành động theo mockup
-          thật (xem process/UI_phase_4.md mục "Điểm lệch so với plan" #5). */}
-      <DashboardQuickMenu
-        showSnapshotAction={Boolean(snapshotToday)}
-        tradeHoldings={tradeHoldings}
-        hidden={hidden}
-      />
-
-      <BottomNav active="dashboard" />
     </div>
   );
 }

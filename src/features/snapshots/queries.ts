@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import type { AssetType } from "@/components/AssetTypeBadge";
 import { getOpenHoldings } from "@/features/holdings/queries";
@@ -37,26 +38,28 @@ const ASSET_TYPE_ORDER: AssetType[] = ["STOCK", "FUND", "BOND", "GOLD"];
 // justRecorded.snapshotNavValue ở /holdings/[id] (getJustRecordedBanner). `takenAt` đọc
 // từ `updatedAt` (không phải `createdAt`) — re-chốt trong ngày ghi đè, updatedAt phản
 // ánh đúng lần chốt GẦN NHẤT (docs/domain/06-snapshots.md mục "Ca biên").
-export async function getManualSnapshotToday(): Promise<{
-  value: string;
-  takenAt: string;
-} | null> {
-  const session = await getSession();
-  if (!session?.user?.id) throw new Error("Unauthorized");
+export const getManualSnapshotToday = cache(
+  async (): Promise<{
+    value: string;
+    takenAt: string;
+  } | null> => {
+    const session = await getSession();
+    if (!session?.user?.id) throw new Error("Unauthorized");
 
-  const row = await db.snapshot.findFirst({
-    where: {
-      userId: session.user.id,
-      holdingId: null,
-      date: todayIctDateOnly(),
-      period: "MANUAL",
-    },
-    select: { value: true, updatedAt: true },
-  });
+    const row = await db.snapshot.findFirst({
+      where: {
+        userId: session.user.id,
+        holdingId: null,
+        date: todayIctDateOnly(),
+        period: "MANUAL",
+      },
+      select: { value: true, updatedAt: true },
+    });
 
-  if (!row) return null;
-  return { value: row.value.toString(), takenAt: formatTime(row.updatedAt) };
-}
+    if (!row) return null;
+    return { value: row.value.toString(), takenAt: formatTime(row.updatedAt) };
+  },
+);
 
 function isValued(
   valuation: HoldingValuation,

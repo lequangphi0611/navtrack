@@ -123,3 +123,48 @@ export async function resolveDecimalSetting(
   }
   return value;
 }
+
+// Gộp N key cùng atDate vào MỘT query duy nhất (tránh N+1 khi resolve nhiều
+// key cùng lúc trong 1 thao tác, vd DIVIDEND_PAR_VALUE + DIVIDEND_TAX_RATE
+// — xem docs/domain/09-settings.md mục "Resolution"). Cùng bất biến với
+// resolveSetting(): thiếu bất kỳ key nào trong `keys` -> throw AppError ngay,
+// không trả partial map (thiếu cấu hình là lỗi, không phải giá trị mặc định).
+export async function resolveSettings(
+  keys: SettingKey[],
+  atDate: Date,
+): Promise<Map<SettingKey, ReturnType<typeof parseSettingValue>>> {
+  const rows = await db.setting.findMany({ where: { key: { in: keys } } });
+  const result = new Map<SettingKey, ReturnType<typeof parseSettingValue>>();
+  for (const key of keys) {
+    const rowsForKey = rows.filter((r) => r.key === key);
+    const row = pickEffectiveSetting(rowsForKey, atDate);
+    if (!row) {
+      throw new AppError(
+        "SETTING_NOT_FOUND",
+        `Thiếu cấu hình cho key "${key}"`,
+      );
+    }
+    result.set(key, parseSettingValue(row.value, row.valueType));
+  }
+  return result;
+}
+
+// Thu hẹp một giá trị lấy từ Map trả về của resolveSettings() về Decimal cho
+// MỘT key — cùng guard với resolveDecimalSetting (parseSettingValue đảm bảo
+// DECIMAL luôn parse ra instance Decimal, nhưng type trả về của
+// resolveSettings() là union nên caller cần thu hẹp tường minh thay vì ép
+// kiểu `as Decimal` ẩu). Dùng sau khi gọi resolveSettings() với nhiều key
+// DECIMAL cùng lúc (docs/domain/09-settings.md mục "Resolution").
+export function requireDecimalSetting(
+  settings: Map<SettingKey, ReturnType<typeof parseSettingValue>>,
+  key: SettingKey,
+): Decimal {
+  const value = settings.get(key);
+  if (!(value instanceof Decimal)) {
+    throw new AppError(
+      "INVALID_SETTING_VALUE",
+      `Setting "${key}" không phải kiểu DECIMAL`,
+    );
+  }
+  return value;
+}
