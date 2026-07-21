@@ -1,0 +1,3 @@
+# Thống nhất line ending LF cho toàn repo, bất kể core.autocrlf của máy dev
+# (tránh git báo "modified" giả do CRLF/LF lẫn lộn giữa Windows/Unix).
+* text=auto eol=lf

@@ -142,6 +142,116 @@ test("Ghi cổ tức tiền mặt: tự tính gộp/thuế/thực nhận, hiện
   }
 });
 
+// Issue #77 criterion 1 (src/lib/revalidate-holding-routes.ts::revalidateHoldingDependentRoutes):
+// khoá lại đúng câu chữ tiêu chí "ghi cổ tức -> soft-nav -> Dashboard/holdings thấy số
+// cập nhật" — spec PHẢI dùng toàn bộ Link click sau lần page.goto đầu tiên (tạo Holding),
+// không page.goto ở giữa (tương đương mở tab mới, tự xoá sạch Router Cache trong bộ nhớ,
+// không phản ánh đúng trải nghiệm soft-nav thật — cùng nguyên tắc cutoff.spec.ts).
+//
+// MINH BẠCH về giới hạn: đã thử tạm bỏ revalidateHoldingDependentRoutes(holdingId) khỏi
+// recordDividend để xem spec có FAIL đúng chỗ không (như cutoff.spec.ts tự verify được) —
+// KHÔNG tái hiện được staleness qua kịch bản Link-click tuần tự này (spec vẫn pass dù bỏ
+// dòng đó), nhiều khả năng vì Next.js 16 mặc định `staleTimes.dynamic = 0` (không cache
+// segment dynamic phía client) + Server Action tự trigger refresh client cache của chính
+// session đang thao tác, nên round-trip qua chính 1 tab/1 user không lộ được gap mà
+// revalidatePath xử lý (gap đó có thể chỉ lộ ở tab/session KHÁC, hoặc ở tầng cache khác
+// production mới có, vd CDN/edge — chưa verify được ở đây). Giữ lại vì spec vẫn khoá đúng
+// hành vi MONG MUỐN theo tiêu chí #77 (không phải giả — có chạy thật, có seed dữ liệu thật),
+// chỉ KHÔNG có bằng chứng nó sẽ đỏ nếu revalidateHoldingDependentRoutes() bị revert sau này.
+//
+// LƯU Ý khi chọn tín hiệu để assert "đã cập nhật": ghi cổ tức CỔ PHIẾU khi đã có
+// giá cũ tự tạo NavOverride bù pha loãng (giá mới = giá cũ × SL_trước/SL_sau,
+// xem dividend-math.ts + test "Ghi cổ tức cổ phiếu khi đã có giá cũ..." ở trên) —
+// GIỮ NGUYÊN tổng giá trị SL×giá, nên NAV KHÔNG đổi (100×150.000 = 110×136.364 ≈
+// 15.000.000 cả trước lẫn sau, đây là hành vi domain đúng, không phải cache cũ).
+// Tín hiệu đáng tin để phân biệt cũ/mới ở đây là NGUỒN GIÁ: trước cổ tức toàn bộ
+// AUTO (PriceQuote), sau cổ tức holding này chuyển MANUAL (NavOverride vừa tạo,
+// cùng ngày nên thắng theo resolvePrice()) — getPriceFreshnessNote() phản ánh qua
+// hậu tố "· N mã dùng giá nhập tay" (portfolio-valuation.ts).
+test("Ghi cổ tức cổ phiếu: soft-nav quay lại /holdings và Dashboard vẫn thấy số liệu mới, không dính Router Cache cũ (issue #77)", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dividend-revalidate-soft-nav");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const quoteDate = daysAgo(7);
+
+  try {
+    // Giá 150.000/CP (AUTO, PriceQuote), 100 CP -> NAV = 15.000.000.
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol, date: quoteDate } },
+      create: { symbol, date: quoteDate, price: "150000", source: "vnstock" },
+      update: { price: "150000", source: "vnstock" },
+    });
+
+    const holdingUrl = await createStockHolding(page, symbol, "100");
+
+    // Ghé /holdings rồi Dashboard TRƯỚC khi ghi cổ tức, toàn bộ qua Link click
+    // (PageHeader "Quay lại" -> BottomNav "Tổng quan") -> ghim Router Cache với
+    // trạng thái CŨ (100 cổ phần, toàn bộ giá AUTO — chưa có "mã dùng giá nhập tay").
+    // HoldingsGroupCard ghép SL + giá chung 1 dòng ("100 cổ phần · giá 150k")
+    // -> không dùng exact:true (khác holding detail, nơi SL đứng riêng 1 dòng).
+    await page.getByRole("link", { name: "Quay lại" }).click();
+    await page.waitForURL(/\/holdings$/);
+    await expect(page.getByText("100 cổ phần")).toBeVisible();
+
+    await page.getByRole("link", { name: "Tổng quan" }).click();
+    await page.waitForURL(/\/$/);
+    await expect(
+      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
+    ).toContainText("15.000.000");
+    await expect(page.getByText(/mã dùng giá nhập tay/)).toHaveCount(0);
+
+    // Quay lại holding qua toàn Link click (Danh mục -> chọn mã -> Ghi cổ tức),
+    // không page.goto — giữ nguyên Router Cache đã ghim ở trên.
+    await page.getByRole("link", { name: "Danh mục" }).click();
+    await page.waitForURL(/\/holdings$/);
+    await page.getByText(symbol, { exact: true }).click();
+    await page.waitForURL(holdingUrl);
+    await page.getByRole("link", { name: "Ghi cổ tức" }).click();
+    await page.waitForURL(`${holdingUrl}/dividends/new`);
+
+    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
+    await page.locator('input[name="percent"]').fill("10");
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    await expect(
+      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
+    ).toBeVisible();
+    await expect(
+      page.getByText("+10 cổ phần thưởng", { exact: true }),
+    ).toBeVisible();
+
+    // Soft-nav "Về chi tiết" -> holding detail: PHẢI thấy badge nguồn giá đổi
+    // "Tự động" -> "Nhập tay" (NavOverride bù pha loãng vừa tạo cùng ngày, thắng
+    // PriceQuote 7 ngày trước theo resolvePrice()) — không phải page.goto/reload.
+    await page
+      .getByRole("link", { name: new RegExp(`Về chi tiết ${symbol}`) })
+      .click();
+    await page.waitForURL(holdingUrl);
+    await expect(page.getByText("Nhập tay", { exact: true })).toBeVisible();
+
+    // "Quay lại" -> /holdings: PHẢI thấy 110 cổ phần (không phải 100 cũ đã ghim
+    // Router Cache ở trên) dù không hề page.goto/reload.
+    await page.getByRole("link", { name: "Quay lại" }).click();
+    await page.waitForURL(/\/holdings$/);
+    await expect(page.getByText("110 cổ phần")).toBeVisible();
+    await expect(page.getByText("100 cổ phần")).toHaveCount(0);
+
+    // Soft-nav sang Dashboard: PHẢI thấy ghi chú nguồn giá cập nhật "1 mã dùng
+    // giá nhập tay" (không còn 0 như đã ghim Router Cache ở trên).
+    await page.getByRole("link", { name: "Tổng quan" }).click();
+    await page.waitForURL(/\/$/);
+    await expect(page.getByText("1 mã dùng giá nhập tay")).toBeVisible();
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
+  }
+});
+
 // Issue #52 fix (process/DECISION.md 2026-07-16 (2)): stockQuantity làm tròn
 // XUỐNG (floor) khi lẻ, kèm label báo đã làm tròn — cổ phiếu không chia lẻ.
 test("Ghi cổ tức cổ phiếu: số lẻ tự làm tròn xuống, báo rõ + cộng đúng vào SL nắm giữ", async ({
