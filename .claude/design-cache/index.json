@@ -8,5 +8,10 @@
     "designFile": "Phase 5 Screens.dc.html",
     "section": "5a-5f (Ghi lệnh bán thuế tự tính, bán lỗ vẫn có thuế, bán vàng thuế 0%, dashboard lãi/lỗ thực nhận + chi phí ăn mòn, sheet chi tiết chi phí ăn mòn, sửa lệnh bán tính lại thuế & phí theo ngày mới) — bản refetch 2026-07-18 bổ sung phần \"phí giao dịch tự tính\": 5a/5b thêm card \"Phí giao dịch\" tự-điền-sửa-được (badge TỰ ĐIỀN · SỬA ĐƯỢC, công thức giá_trị_bán × 0,3% — biểu phí TPS · cổ phiếu) đứng cạnh card \"Thuế bán\"; dòng giá vốn thêm chú thích \"(gồm phí mua)\"; 5f thêm card \"Phí giao dịch · tính lại\" cùng cấu trúc so sánh cũ/mới với card thuế, banner đổi text thành \"thuế & phí được tính lại\". Digest tương ứng: process/UI_phase_5.md",
     "cachedAt": "2026-07-18 (refetch)"
+  },
+  "process/phase-6": {
+    "designFile": "Phase 6 Screens.dc.html",
+    "section": "6a-6j (Biểu đồ NAV mặc định/tooltip/rỗng/đang tải, Phân bổ tài sản donut, Ẩn số tiền toàn app, Cài đặt toggle riêng tư, Tab Đã đóng + rỗng/tải, Sheet vị thế đã đóng, Badge cảnh báo tập trung 4 biến thể) — bản fetch đầu tiên 2026-07-21.",
+    "cachedAt": "2026-07-21"
   }
 }
