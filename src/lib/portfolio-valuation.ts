@@ -290,6 +290,73 @@ type XirrAndPnlCore = {
   costDragPercent: number;
 };
 
+// Holding tối thiểu cần cho computeXirrCore — cả getOpenHoldings/
+// getClosedHoldings (HoldingSummary.quantity: string) lẫn
+// getAllHoldingIdsAndQuantities (quantity: Decimal) đều map được vào type
+// này, caller tự chịu convert Decimal trước khi gọi.
+type HoldingForXirr = { id: string; symbol: string; quantity: Decimal };
+
+// Phần TÍNH TOÁN dùng chung giữa computeXirrAndPnlCore() (Dashboard/Danh mục,
+// đọc holdings qua getOpenHoldings/getClosedHoldings đã cache() theo request)
+// và getCurrentPortfolioXirrPercent() (cần đọc THẲNG DB, không qua cache() —
+// xem comment getAllHoldingIdsAndQuantities bên dưới) — valuate + gom
+// cashflow/dividend + build điểm XIRR + computeXirr từng bị lặp lại giữa hai
+// hàm, tách ra đây để chỉ 1 nơi giữ đúng thứ tự các bước này (process/DECISION.md
+// mục dedupe XIRR core). KHÔNG tự gọi getSession()/getOpenHoldings()/
+// getClosedHoldings() bên trong — nhận holdings + cutoffDate trực tiếp để
+// caller tự quyết định nguồn đọc (cache() theo request hay DB tươi).
+async function computeXirrCore({
+  holdings,
+  cutoffDate,
+}: {
+  holdings: HoldingForXirr[];
+  cutoffDate: Date;
+}): Promise<{
+  valuations: Map<string, HoldingValuation>;
+  currentNav: Decimal | null;
+  isOpenPosition: boolean;
+  points: ReturnType<typeof buildXirrCashflows>;
+  xirr: ReturnType<typeof computeXirr>;
+  cashflows: Awaited<ReturnType<typeof getAllCashflowsForXirr>>;
+  dividends: Awaited<ReturnType<typeof getAllCashDividendsForXirr>>;
+}> {
+  const holdingIds = holdings.map((h) => h.id);
+  const [valuations, cashflows, dividends] = await Promise.all([
+    valuateHoldings(holdings, cutoffDate),
+    getAllCashflowsForXirr(holdingIds, cutoffDate),
+    getAllCashDividendsForXirr(holdingIds, cutoffDate),
+  ]);
+
+  const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
+  // NULL (KHÔNG Decimal(0)) khi chưa có mã nào định giá được — nếu để 0,
+  // buildXirrCashflows ghép 1 dòng tiền dương giả = 0, khiến XIRR/PnL trông
+  // như "mất trắng" thay vì đúng ca biên "không tính được" (docs/domain/05).
+  const currentNav =
+    validNavs.length > 0
+      ? validNavs.reduce((sum, nav) => sum.plus(nav), new Decimal(0))
+      : null;
+
+  const isOpenPosition = holdings.some((h) => !h.quantity.isZero());
+
+  const points = buildXirrCashflows({
+    cashflows,
+    dividends,
+    isOpenPosition,
+    cutoffDate,
+    currentNav,
+  });
+
+  return {
+    valuations,
+    currentNav,
+    isOpenPosition,
+    points,
+    xirr: computeXirr(points),
+    cashflows,
+    dividends,
+  };
+}
+
 async function computeXirrAndPnlCore(
   selection: CutoffSelection,
 ): Promise<XirrAndPnlCore> {
@@ -305,39 +372,22 @@ async function computeXirrAndPnlCore(
     getClosedHoldings(),
   ]);
   const allHoldings = [...open, ...closed];
-  const holdingIds = allHoldings.map((h) => h.id);
 
-  const [valuations, cashflows, dividends] = await Promise.all([
-    valuateHoldings(
-      allHoldings.map((h) => ({
+  const { valuations, currentNav, points, xirr, cashflows, dividends } =
+    await computeXirrCore({
+      holdings: allHoldings.map((h) => ({
         id: h.id,
         symbol: h.symbol,
         quantity: new Decimal(h.quantity),
       })),
       cutoffDate,
-    ),
-    getAllCashflowsForXirr(holdingIds, cutoffDate),
-    getAllCashDividendsForXirr(holdingIds, cutoffDate),
-  ]);
+    });
 
-  const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
-  const navSum = validNavs.reduce((sum, nav) => sum.plus(nav), new Decimal(0));
-  // NULL (KHÔNG Decimal(0)) khi chưa có mã nào định giá được — nếu để 0,
-  // buildXirrCashflows ghép 1 dòng tiền dương giả = 0, khiến XIRR/PnL trông
-  // như "mất trắng" thay vì đúng ca biên "không tính được" (docs/domain/05).
-  const currentNav = validNavs.length > 0 ? navSum : null;
+  // currentNav là null (không phải Decimal(0)) khi chưa mã nào định giá được
+  // (xem comment computeXirrCore) — navSum ở XirrAndPnlCore luôn là Decimal
+  // (không nullable) cho mục đích hiển thị, nên quy về 0 ở đây.
+  const navSum = currentNav ?? new Decimal(0);
 
-  const isOpenPosition = open.length > 0;
-
-  const points = buildXirrCashflows({
-    cashflows,
-    dividends,
-    isOpenPosition,
-    cutoffDate,
-    currentNav,
-  });
-
-  const xirr = computeXirr(points);
   // "NAV − tổng vốn ròng đã bỏ vào" tương đương đại số với tổng có dấu của
   // đúng tập điểm đã đưa vào XIRR (Cashflow.amount mang dấu chuẩn BUY âm/SELL
   // dương + Dividend dương + NAV giả định dương) — không cần công thức riêng.
@@ -538,31 +588,8 @@ export async function getCurrentPortfolioXirrPercent(
   const cutoffDate = resolveCutoffDate({ key: "TODAY" });
 
   const allHoldings = await getAllHoldingIdsAndQuantities(userId);
-  const holdingIds = allHoldings.map((h) => h.id);
 
-  const [valuations, cashflows, dividends] = await Promise.all([
-    valuateHoldings(allHoldings, cutoffDate),
-    getAllCashflowsForXirr(holdingIds, cutoffDate),
-    getAllCashDividendsForXirr(holdingIds, cutoffDate),
-  ]);
-
-  const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
-  const currentNav =
-    validNavs.length > 0
-      ? validNavs.reduce((sum, nav) => sum.plus(nav), new Decimal(0))
-      : null;
-
-  const isOpenPosition = allHoldings.some((h) => !h.quantity.isZero());
-
-  const xirr = computeXirr(
-    buildXirrCashflows({
-      cashflows,
-      dividends,
-      isOpenPosition,
-      cutoffDate,
-      currentNav,
-    }),
-  );
+  const { xirr } = await computeXirrCore({ holdings: allHoldings, cutoffDate });
 
   if (!xirr.ok) return null;
 

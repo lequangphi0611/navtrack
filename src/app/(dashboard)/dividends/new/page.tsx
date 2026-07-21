@@ -4,7 +4,11 @@ import { recordDividend } from "@/features/dividends/actions";
 import { DividendForm } from "@/features/dividends/components/DividendForm";
 import { getOpenHoldingsForDividendSwitcher } from "@/features/dividends/queries";
 import { ROUTES } from "@/lib/routes";
-import { resolveDecimalSetting, SETTING_KEYS } from "@/lib/settings";
+import {
+  requireDecimalSetting,
+  resolveSettings,
+  SETTING_KEYS,
+} from "@/lib/settings";
 
 // Entry độc lập từ Dashboard (pill "Cổ tức") — chưa có ngữ cảnh Holding, mặc
 // định chọn Holding đang mở đầu tiên trong danh sách; switcher cho đổi ngay.
@@ -16,10 +20,18 @@ export default async function NewDividendStandalonePage() {
 
   const current = holdings[0]!;
   const today = new Date();
-  const [parValue, taxRatePercent] = await Promise.all([
-    resolveDecimalSetting(SETTING_KEYS.DIVIDEND_PAR_VALUE, today),
-    resolveDecimalSetting(SETTING_KEYS.DIVIDEND_TAX_RATE, today),
-  ]);
+  const settings = await resolveSettings(
+    [SETTING_KEYS.DIVIDEND_PAR_VALUE, SETTING_KEYS.DIVIDEND_TAX_RATE],
+    today,
+  );
+  const parValue = requireDecimalSetting(
+    settings,
+    SETTING_KEYS.DIVIDEND_PAR_VALUE,
+  );
+  const taxRatePercent = requireDecimalSetting(
+    settings,
+    SETTING_KEYS.DIVIDEND_TAX_RATE,
+  );
 
   return (
     <DividendForm

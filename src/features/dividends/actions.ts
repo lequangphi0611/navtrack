@@ -22,8 +22,13 @@ import { logger } from "@/lib/logger";
 import { getCurrentPortfolioXirrPercent } from "@/lib/portfolio-valuation";
 import { buildQuantityTimeline } from "@/lib/position-trail";
 import type { PositionTrailEvent } from "@/lib/position-trail";
+import { revalidateHoldingDependentRoutes } from "@/lib/revalidate-holding-routes";
 import { ROUTES } from "@/lib/routes";
-import { resolveDecimalSetting, SETTING_KEYS } from "@/lib/settings";
+import {
+  requireDecimalSetting,
+  resolveSettings,
+  SETTING_KEYS,
+} from "@/lib/settings";
 import { resolvePrice } from "@/lib/valuation";
 
 // Id giữ chỗ cho "sự kiện" ghi cổ tức đang xử lý — KHÔNG phải id thật trong DB
@@ -126,10 +131,15 @@ export async function recordDividend(
   let parValue: Decimal | undefined;
   let taxRatePercent: Decimal | undefined;
   if (type === "CASH") {
-    [parValue, taxRatePercent] = await Promise.all([
-      resolveDecimalSetting(SETTING_KEYS.DIVIDEND_PAR_VALUE, date),
-      resolveDecimalSetting(SETTING_KEYS.DIVIDEND_TAX_RATE, date),
-    ]);
+    const settings = await resolveSettings(
+      [SETTING_KEYS.DIVIDEND_PAR_VALUE, SETTING_KEYS.DIVIDEND_TAX_RATE],
+      date,
+    );
+    parValue = requireDecimalSetting(settings, SETTING_KEYS.DIVIDEND_PAR_VALUE);
+    taxRatePercent = requireDecimalSetting(
+      settings,
+      SETTING_KEYS.DIVIDEND_TAX_RATE,
+    );
   }
 
   // XIRR danh mục TRƯỚC khi ghi — đọc NGOÀI transaction (cùng lý do parValue/
@@ -398,7 +408,7 @@ export async function recordDividend(
 
     if (!result.ok) return result;
 
-    revalidatePath(ROUTES.holdingDetail(holdingId));
+    revalidateHoldingDependentRoutes(holdingId);
     revalidatePath(ROUTES.dividendHistory(holdingId));
 
     const dateLabel = formatDate(date);

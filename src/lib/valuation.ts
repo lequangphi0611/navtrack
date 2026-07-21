@@ -160,7 +160,7 @@ const getCachedLatestPriceQuote = unstable_cache(
       : null;
   },
   ["price-quote-latest"],
-  { revalidate: PRICE_QUOTE_REVALIDATE_SECONDS },
+  { revalidate: PRICE_QUOTE_REVALIDATE_SECONDS, tags: ["price-quote"] },
 );
 
 export async function getLatestPriceQuotes(
