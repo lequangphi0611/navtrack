@@ -533,3 +533,46 @@ trùng trước khi thêm — vài icon Phase 5 có thể đã đủ):
 
 - `Phase 6 Screens.dc.html` (project `fe49dcd9-ecf0-40d0-8a62-10ca28ff572f`) →
   cache `.claude/design-cache/raw/Phase-6-Screens.dc.html`.
+
+## Props THỰC TẾ sau khi hiện thực (design-implementer chốt lại, HẬU triển khai)
+
+Đối chiếu với Props phác thảo ở trên — các điểm lệch chính, cần dùng bản này
+khi wiring/đọc code thay vì bản phác thảo phía trên:
+
+- **`NavTrendChart`** (`src/features/dashboard/components/NavTrendChart/`):
+  KHÔNG có `onPeriodChange`/`period` rời — Container tải sẵn CẢ 3 kỳ 1 lần
+  (`Promise.all(getNavTrend("MONTH"|"YEAR"|"ALL"))`), truyền xuống
+  `data: Record<NavTrendPeriod, { points: NavTrendPoint[]; changePercent: number }>`;
+  component tự giữ `period` state nội bộ (default "YEAR") và chọn lại từ `data`
+  khi đổi `SegmentedControl`. Lý do: `DashboardScreen` giờ nằm sau
+  `DashboardScreenClient` (client wrapper giữ `hidden`) — nếu tách Suspense
+  riêng cho vùng chart, subtree đó sẽ "đông cứng" tại `hidden` lúc stream,
+  không phản ứng khi bấm nút mắt (xem comment kiến trúc trong
+  `PortfolioOverviewSection.tsx`). Do đó `getNavTrend()` được gộp CHUNG 1
+  `Promise.all` với `getPortfolioValuation()` ở `PortfolioOverviewSection`,
+  KHÔNG có Suspense riêng như dự kiến ban đầu ở mục 9/14 — đây là đánh đổi có
+  chủ đích, ghi lại để lần sau không tự ý tách lại rồi phá privacy reactivity.
+- **`AllocationScreen`**: khớp gần đúng phác thảo — bỏ hẳn `ConcentrationCalloutProps`
+  riêng (không cần `topSymbol`/`topPercent`, digest tự xác nhận dùng câu chung
+  cho mọi N), inline logic ngay trong `AllocationScreen` theo `concentrationWarningCount`.
+- **`ConcentrationBadge`**: thêm `showNote?: boolean` (default `true`) so với
+  phác thảo — `HoldingsGroupCard`/`HoldingListItem` truyền `showNote={false}`
+  (chỉ pill, không hộp giải thích, vì dòng danh sách chật).
+- **`ClosedHoldingRow`/`ClosedPositionSheet`**: bỏ `detailHref` — dùng
+  `onSelect: () => void` (state `selectedId` giữ ở `ClosedHoldingsList`, client,
+  mirror `TransactionHoldingPicker`). `orders` dùng lại type
+  `CashflowTimelineRow` (từ `CashflowTimeline` đã có) thay vì tự định nghĩa
+  `ClosedPositionOrderEntry` — mất field `note` (phí/thuế %) riêng, gộp vào
+  `dateNote` như `CashflowTimeline` đã làm (không có số liệu % phí/thuế sẵn ở
+  tầng business cho từng dòng lệnh, ngoài scope). `isFinalSell` suy ra tại
+  Container (`ClosedHoldingsSection`, dòng cuối cùng + `type === "SELL"`), không
+  truyền tường minh.
+- **`PrivacyToggle`**: đổi `hidden`/`onToggle` phác thảo thành `initialHidden:
+  boolean` — component tự giữ state optimistic + gọi `setHideAmountsByDefault`
+  trong `startTransition`, KHÔNG nhận callback từ cha (giống `DashboardScreenClient`).
+- **`Switch`** (`components/ui/switch.tsx`): khớp phác thảo (`checked`/`onCheckedChange`),
+  bọc `@base-ui/react/switch` (`Root`+`Thumb`, trạng thái qua `data-checked`).
+- **`HoldingsSegmentedNav`**: thêm `openCount`/`closedCount: number` (không có
+  ở phác thảo ban đầu vì phác thảo không đề cập component này) — lấy từ
+  `layout.tsx` (route group `(overview)`, `Promise.all(getOpenHoldings(),
+  getClosedHoldings())`, đã `cache()` theo request).

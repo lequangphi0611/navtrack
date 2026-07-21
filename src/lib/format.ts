@@ -82,6 +82,21 @@ export function formatTime(value: string | Date): string {
   return TIME_FORMATTER.format(date);
 }
 
+// "05/2024" — MM/yyyy giờ Việt Nam, dùng cho khoảng thời gian nắm giữ vị thế
+// đã đóng (ClosedPositionSheet, mục 12 phase-6.md: "tháng mua đầu -> tháng bán
+// hết cuối"), nơi năm QUAN TRỌNG (khác formatDayMonth) nhưng ngày cụ thể trong
+// tháng không cần thiết.
+const MONTH_YEAR_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  month: "2-digit",
+  year: "numeric",
+});
+
+export function formatMonthYear(value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return MONTH_YEAR_FORMATTER.format(date);
+}
+
 // Ngắn gọn hơn formatDate (không năm) — dùng cho ghi chú kiểu "EOD 10/07" nơi
 // năm không quan trọng (vd priceFreshnessNote ở Dashboard, luôn nói về mốc gần
 // đây). Cắt từ formatDate thay vì Intl.DateTimeFormat riêng chỉ day/month: vi-VN

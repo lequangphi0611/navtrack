@@ -1,11 +1,11 @@
-import { Archive, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { ClosedHoldingsSection } from "@/features/holdings/components/ClosedHoldingsSection";
 import { HoldingsList } from "@/features/holdings/components/HoldingsList";
-import {
-  getClosedHoldings,
-  getOpenHoldingsWithValuation,
-} from "@/features/holdings/queries";
+import { getOpenHoldingsWithValuation } from "@/features/holdings/queries";
+import { getHideAmountsByDefault } from "@/features/settings/queries";
+import { getConcentrationBadges } from "@/lib/portfolio-valuation";
 
 type HoldingsPositionsSectionProps = {
   status: "open" | "closed";
@@ -13,14 +13,21 @@ type HoldingsPositionsSectionProps = {
 
 // Container async — vùng data riêng cho danh sách vị thế, stream độc lập với HoldingsSummaryCard.
 // Chỉ derive + serialize đúng status của route hiện tại (không tính cả 2 như trước).
-// status="open" cần thêm NAV/nguồn giá/XIRR (getOpenHoldingsWithValuation) —
-// status="closed" giữ nguyên getClosedHoldings() Phase 1 (vị thế đã bán hết
-// không có "market value" đáng hiển thị, xem comment trong queries.ts).
+// status="open": NAV/nguồn giá/XIRR (getOpenHoldingsWithValuation) + badge cảnh báo
+// tập trung (getConcentrationBadges — mục 13 phase-6.md, merge theo holding.id, KHÔNG
+// tính lại công thức riêng). status="closed": xem ClosedHoldingsSection (mục 12
+// phase-6.md, dùng getClosedHoldingsDetail() — realized PnL/XIRR chốt/thời gian giữ,
+// KHÔNG bao giờ có badge cảnh báo — vị thế đóng nằm ngoài phạm vi getConcentrationBadges).
 async function HoldingsPositionsSection({
   status,
 }: HoldingsPositionsSectionProps) {
   if (status === "open") {
-    const { holdings, groupValuations } = await getOpenHoldingsWithValuation();
+    const [{ holdings, groupValuations }, concentration, hidden] =
+      await Promise.all([
+        getOpenHoldingsWithValuation(),
+        getConcentrationBadges(),
+        getHideAmountsByDefault(),
+      ]);
 
     if (holdings.length === 0) {
       return (
@@ -32,24 +39,21 @@ async function HoldingsPositionsSection({
       );
     }
 
-    return (
-      <HoldingsList holdings={holdings} groupValuations={groupValuations} />
-    );
-  }
+    const withBadges = holdings.map((holding) => ({
+      ...holding,
+      concentrationBadge: concentration.badges.get(holding.id),
+    }));
 
-  const closed = await getClosedHoldings();
-
-  if (closed.length === 0) {
     return (
-      <EmptyState
-        icon={Archive}
-        title="Chưa có vị thế nào đã đóng"
-        description="Vị thế đóng khi bạn bán hết số lượng đang giữ."
+      <HoldingsList
+        holdings={withBadges}
+        groupValuations={groupValuations}
+        hidden={hidden}
       />
     );
   }
 
-  return <HoldingsList holdings={closed} />;
+  return <ClosedHoldingsSection />;
 }
 
 export { HoldingsPositionsSection };

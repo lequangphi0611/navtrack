@@ -1,7 +1,9 @@
 import { type AssetType, AssetTypeBadge } from "@/components/AssetTypeBadge";
+import { ConcentrationBadge } from "@/components/ConcentrationBadge";
 import { MoneyValue } from "@/components/MoneyValue";
 import { PercentChange } from "@/components/PercentChange";
 import { SymbolAvatar } from "@/components/SymbolAvatar";
+import type { ConcentrationBadgeState } from "@/lib/concentration";
 import { formatQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +18,9 @@ type HoldingListItemProps = {
   unit: string;
   marketValue: string;
   annualReturnPercent?: number;
+  // Vắng mặt = Holding dưới ngưỡng cảnh báo tập trung (mục 13 phase-6.md) —
+  // Container merge từ getConcentrationBadges(), component không tự tính.
+  concentrationBadge?: ConcentrationBadgeState;
   hidden?: boolean;
   className?: string;
 };
@@ -28,6 +33,7 @@ function HoldingListItem({
   unit,
   marketValue,
   annualReturnPercent,
+  concentrationBadge,
   hidden = false,
   className,
 }: HoldingListItemProps) {
@@ -62,6 +68,9 @@ function HoldingListItem({
             variant="xirr"
             className="bg-transparent px-0 py-0 text-xs"
           />
+        ) : null}
+        {concentrationBadge ? (
+          <ConcentrationBadge state={concentrationBadge} showNote={false} />
         ) : null}
       </div>
     </div>

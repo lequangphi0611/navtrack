@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { MoneyValueToggleButton } from "@/components/MoneyValue";
 import type { XirrResult } from "@/components/ReturnMetrics";
 import { UserAvatar } from "@/components/UserAvatar";
 import {
@@ -20,6 +21,11 @@ import {
   MissingPriceList,
   type MissingPriceHolding,
 } from "@/features/dashboard/components/MissingPriceList";
+import {
+  NavTrendChart,
+  type NavTrendPeriod,
+  type NavTrendPeriodData,
+} from "@/features/dashboard/components/NavTrendChart";
 import { PnlCostDragCard } from "@/features/dashboard/components/PnlCostDragCard";
 import { PortfolioStatsRow } from "@/features/dashboard/components/PortfolioStatsRow";
 import {
@@ -65,9 +71,16 @@ type DashboardScreenProps = {
   // Rỗng = happy path (2a); có phần tử = biến thể "không tính được XIRR" (2f).
   missingPriceHoldings: MissingPriceHolding[];
   hidden?: boolean;
+  // Có mặt = header hiện nút mắt bật/tắt (mockup 6e) — vắng mặt = ẩn nút (vd
+  // preview không cần tương tác). Do DashboardScreenClient truyền xuống.
+  onToggleHidden?: () => void;
   // Vắng mặt = ẩn card CTA "Chốt số liệu hôm nay" (issue #35 — Container chưa
   // cấp, xem process/UI_phase_3.md).
   snapshotToday?: SnapshotTodayCardProps;
+  // Chuỗi NAV theo thời gian (mục 9 phase-6.md, mockup 6a/6b/6c) — cả 3 kỳ đã
+  // tải sẵn (xem NavTrendChart). Vắng mặt = ẩn hẳn card biểu đồ (Container chưa
+  // cấp — không nên xảy ra ở route "/" thật, chỉ để backward-compat).
+  navTrend?: Record<NavTrendPeriod, NavTrendPeriodData>;
 };
 
 // Organism Phase 2 cho "/" (Dashboard NAV + XIRR, mockup 2a) — cũng tái dùng cho
@@ -96,7 +109,9 @@ function DashboardScreen({
   priceFreshnessNote,
   missingPriceHoldings,
   hidden = false,
+  onToggleHidden,
   snapshotToday,
+  navTrend,
 }: DashboardScreenProps) {
   const navDeltaNumber = Number(navDeltaAmount);
   const NavDeltaIcon = navDeltaNumber < 0 ? ArrowDown : ArrowUp;
@@ -112,9 +127,18 @@ function DashboardScreen({
             Tổng quan
           </div>
         </div>
-        <Link href={ROUTES.settings} aria-label="Cài đặt">
-          <UserAvatar name={displayName} />
-        </Link>
+        <div className="flex items-center gap-2">
+          {onToggleHidden ? (
+            <MoneyValueToggleButton
+              hidden={hidden}
+              onToggleHidden={onToggleHidden}
+              className="bg-card"
+            />
+          ) : null}
+          <Link href={ROUTES.settings} aria-label="Cài đặt">
+            <UserAvatar name={displayName} />
+          </Link>
+        </div>
       </div>
 
       <Link
@@ -186,6 +210,8 @@ function DashboardScreen({
         <SnapshotTodayCard id="snapshot-today-card" {...snapshotToday} />
       ) : null}
 
+      {navTrend ? <NavTrendChart data={navTrend} hidden={hidden} /> : null}
+
       <PnlCostDragCard
         pnlValue={absolutePnl}
         pnlNote={
@@ -206,7 +232,9 @@ function DashboardScreen({
         hidden={hidden}
       />
 
-      <AllocationBar slices={allocation} />
+      <Link href={ROUTES.allocation} aria-label="Xem phân bổ tài sản chi tiết">
+        <AllocationBar slices={allocation} />
+      </Link>
 
       {priceFreshnessNote ? (
         <div className="flex items-center gap-2.25 rounded-xl border border-border bg-card px-3.25 py-2.75">

@@ -1,6 +1,10 @@
 import { HoldingsEmptyState } from "@/features/holdings/components/HoldingsEmptyState";
 import { HoldingsOverviewScreen } from "@/features/holdings/components/HoldingsOverviewScreen";
-import { hasAnyHolding } from "@/features/holdings/queries";
+import {
+  getClosedHoldings,
+  getOpenHoldings,
+  hasAnyHolding,
+} from "@/features/holdings/queries";
 import { getSession } from "@/lib/auth";
 
 // Dùng chung cho /holdings (đang mở) + /holdings/closed (đã đóng) — route group
@@ -20,8 +24,21 @@ export default async function HoldingsOverviewLayout({
     return <HoldingsEmptyState displayName={displayName} />;
   }
 
+  // Cả 2 route con (/holdings, /holdings/closed) cần biết CẢ HAI số đếm cùng
+  // lúc để hiện đủ trên HoldingsSegmentedNav (mockup 6g/6h) — getOpenHoldings/
+  // getClosedHoldings đã cache() theo request (features/holdings/queries.ts),
+  // không round-trip DB thêm so với trước.
+  const [open, closed] = await Promise.all([
+    getOpenHoldings(),
+    getClosedHoldings(),
+  ]);
+
   return (
-    <HoldingsOverviewScreen displayName={displayName}>
+    <HoldingsOverviewScreen
+      displayName={displayName}
+      openCount={open.length}
+      closedCount={closed.length}
+    >
       {children}
     </HoldingsOverviewScreen>
   );
