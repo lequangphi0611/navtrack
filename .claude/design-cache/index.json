@@ -11,7 +11,7 @@
   },
   "process/phase-6": {
     "designFile": "Phase 6 Screens.dc.html",
-    "section": "6a-6j (Biểu đồ NAV mặc định/tooltip/rỗng/đang tải, Phân bổ tài sản donut, Ẩn số tiền toàn app, Cài đặt toggle riêng tư, Tab Đã đóng + rỗng/tải, Sheet vị thế đã đóng, Badge cảnh báo tập trung 4 biến thể) — bản fetch đầu tiên 2026-07-21.",
+    "section": "6a NAV chart mặc định+tooltip (card \"Giá trị tài sản\" trong Dashboard, segmented Tháng/Năm/Tất cả — Năm active mặc định) · 6b NAV chart rỗng (<2 snapshot, layout đơn giản hoá khác 6a/6e — xem UI_phase_6.md điểm cần xác nhận) · 6c NAV chart skeleton riêng vùng chart · 6d Phân bổ tài sản donut (route riêng, center label ẩn % theo privacy = KHÔNG áp dụng, callout liên kết cảnh báo tập trung) · 6e Ẩn số tiền toàn app (nút mắt header, cùng cấu trúc 6a — dùng CSS filter blur trong mockup, KHÁC pattern MoneyValue hiện tại dùng bullet \"••••••\") · 6f Cài đặt nhóm \"Riêng tư\" (toggle switch — atom Switch CHƯA có trong kho, cần dựng mới) · 6g Tab Đã đóng (segmented Đang mở/Đã đóng kèm đếm số lượng, summary strip Lãi/lỗ đã chốt + XIRR bình quân, dòng vị thế đã bán hết) · 6h Tab Đã đóng rỗng + đang tải · 6i Sheet chi tiết vị thế đã đóng (thời gian giữ, vốn mua/tiền bán, dòng lệnh timeline, nút Mở lại vị thế) · 6j Badge cảnh báo tập trung 4 biến thể (bình thường/tập trung tự nhiên/NAV thiếu ≤5%/treo >5% — đối chiếu A2 phase-6.md) — bản fetch đầu tiên 2026-07-21. Digest: process/UI_phase_6.md",
     "cachedAt": "2026-07-21"
   }
 }
