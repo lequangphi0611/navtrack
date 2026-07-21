@@ -373,7 +373,7 @@ async function computeXirrAndPnlCore(
   ]);
   const allHoldings = [...open, ...closed];
 
-  const { valuations, points, xirr, cashflows, dividends } =
+  const { valuations, currentNav, points, xirr, cashflows, dividends } =
     await computeXirrCore({
       holdings: allHoldings.map((h) => ({
         id: h.id,
@@ -383,8 +383,10 @@ async function computeXirrAndPnlCore(
       cutoffDate,
     });
 
-  const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
-  const navSum = validNavs.reduce((sum, nav) => sum.plus(nav), new Decimal(0));
+  // currentNav là null (không phải Decimal(0)) khi chưa mã nào định giá được
+  // (xem comment computeXirrCore) — navSum ở XirrAndPnlCore luôn là Decimal
+  // (không nullable) cho mục đích hiển thị, nên quy về 0 ở đây.
+  const navSum = currentNav ?? new Decimal(0);
 
   // "NAV − tổng vốn ròng đã bỏ vào" tương đương đại số với tổng có dấu của
   // đúng tập điểm đã đưa vào XIRR (Cashflow.amount mang dấu chuẩn BUY âm/SELL
