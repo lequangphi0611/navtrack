@@ -41,6 +41,10 @@ export const ROUTES = {
   // Holding mặc định (Holding đang mở đầu tiên) rồi render DividendForm như trên.
   newDividendStandalone: "/dividends/new",
   dividendHistory: (holdingId: string) => `/holdings/${holdingId}/dividends`,
+  // Phase 6 (mục 10 phase-6.md) — màn phân bổ tài sản chi tiết (donut), route
+  // riêng full-screen (process/DECISION.md 2026-07-21: mockup vẽ full-screen
+  // với back button, không phải Sheet).
+  allocation: "/allocation",
 } as const;
 
 // Khai NGOÀI object ROUTES (tham chiếu ROUTES.holdingDetail — object literal không tự

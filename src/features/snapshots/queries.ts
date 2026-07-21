@@ -12,6 +12,7 @@ import { getSession } from "@/lib/auth";
 import { resolveCutoffDate, todayIctDateOnly } from "@/lib/cutoff";
 import { db } from "@/lib/db";
 import { formatDate, formatDayMonth, formatTime } from "@/lib/format";
+import { getPortfolioValuation } from "@/lib/portfolio-valuation";
 import { ROUTES } from "@/lib/routes";
 import {
   buildSnapshotHistoryView,
@@ -274,4 +275,94 @@ export async function getSnapshotDetail(
     holdings,
     recomputedComparison: recomputedComparison ?? undefined,
   };
+}
+
+// --- Biểu đồ NAV theo thời gian (mục 9 phase-6.md / 6a-6c UI_phase_6.md) ---
+
+export type NavTrendPeriod = "MONTH" | "YEAR" | "ALL";
+
+export type NavTrendPoint = {
+  date: string; // ISO
+  value: string; // NAV Decimal đã serialize
+  changePercentFromStart: number; // % so với điểm đầu danh sách đã lọc (kỳ đang chọn)
+};
+
+const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
+const NAV_TREND_PERIOD_DAYS: Record<Exclude<NavTrendPeriod, "ALL">, number> = {
+  MONTH: 30,
+  YEAR: 365,
+};
+
+// Chuỗi NAV toàn danh mục theo thời gian, đọc THUẦN từ Snapshot{holdingId:
+// null, frozen: true} đã đóng băng (Phase 3, docs/domain/06-snapshots.md) —
+// KHÔNG tạo snapshot mới, KHÔNG tính lại giá lịch sử ngoài những gì đã chốt.
+// Nối thêm 1 điểm "hôm nay" ĐỘNG = NAV hiện tại (tái dùng getPortfolioValuation()
+// để nhất quán tuyệt đối với NAV hero card trên cùng Dashboard) — điểm này
+// KHÔNG lưu DB. Nếu đã có snapshot đóng băng đúng NGÀY hôm nay (vd vừa bấm
+// "Chốt số liệu hôm nay"), KHÔNG nối thêm điểm động trùng ngày (tránh 2 điểm
+// cùng ngày gây nhiễu chart).
+//
+// `changePercentFromStart` so với điểm ĐẦU danh sách ĐÃ LỌC theo kỳ (KHÁC
+// `navDeltaPercent` ở NAV hero — đó là so với tổng vốn đã bỏ vào, không phải
+// theo kỳ). `< 2 điểm` -> trả mảng rỗng/1 phần tử NGUYÊN VẸN, không tự xử lý
+// nhánh rỗng ở đây (UI tự vẽ biến thể "chưa vẽ được đường NAV", 6b).
+export async function getNavTrend(
+  period: NavTrendPeriod,
+): Promise<{ points: NavTrendPoint[]; changePercent: number }> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const now = new Date();
+  const today = todayIctDateOnly(now);
+
+  const frozen = await db.snapshot.findMany({
+    where: {
+      userId: session.user.id,
+      holdingId: null,
+      frozen: true,
+      ...(period === "ALL"
+        ? {}
+        : {
+            date: {
+              gte: new Date(
+                today.getTime() -
+                  NAV_TREND_PERIOD_DAYS[period] * MILLIS_PER_DAY,
+              ),
+            },
+          }),
+    },
+    orderBy: { date: "asc" },
+    select: { date: true, value: true },
+  });
+
+  const lastFrozen = frozen[frozen.length - 1];
+  const hasFrozenToday =
+    lastFrozen !== undefined && lastFrozen.date.getTime() === today.getTime();
+
+  const rawPoints: { date: Date; value: Decimal }[] = frozen.map((row) => ({
+    date: row.date,
+    value: new Decimal(row.value.toString()),
+  }));
+
+  if (!hasFrozenToday) {
+    const { navValue } = await getPortfolioValuation({ key: "TODAY" });
+    rawPoints.push({ date: today, value: new Decimal(navValue) });
+  }
+
+  const startValue = rawPoints[0]?.value;
+  const points: NavTrendPoint[] = rawPoints.map((p) => ({
+    date: p.date.toISOString(),
+    value: p.value.toString(),
+    changePercentFromStart:
+      !startValue || startValue.isZero()
+        ? 0
+        : p.value.minus(startValue).div(startValue).mul(100).toNumber(),
+  }));
+
+  const changePercent =
+    points.length > 0
+      ? (points[points.length - 1]?.changePercentFromStart ?? 0)
+      : 0;
+
+  return { points, changePercent };
 }

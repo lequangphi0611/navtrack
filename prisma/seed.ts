@@ -38,6 +38,24 @@ async function main() {
   await db.setting.upsert({
     where: {
       key_effectiveFrom: {
+        key: SETTING_KEYS.CONCENTRATION_WARNING_THRESHOLD,
+        effectiveFrom: BASELINE_DATE,
+      },
+    },
+    update: {},
+    create: {
+      key: SETTING_KEYS.CONCENTRATION_WARNING_THRESHOLD,
+      value: "30",
+      valueType: "DECIMAL",
+      label: "Ngưỡng cảnh báo tập trung (%)",
+      group: "DISPLAY",
+      effectiveFrom: BASELINE_DATE,
+    },
+  });
+
+  await db.setting.upsert({
+    where: {
+      key_effectiveFrom: {
         key: SETTING_KEYS.DIVIDEND_TAX_RATE,
         effectiveFrom: BASELINE_DATE,
       },
