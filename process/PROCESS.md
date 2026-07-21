@@ -11,7 +11,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 3 | Snapshot tự động | ✅ | [phase-3.md](./phase-3.md) |
 | 4 | Cổ tức | ✅ | [phase-4.md](./phase-4.md) |
 | 5 | Thuế bán (áp dụng) | ✅ | [phase-5.md](./phase-5.md) |
-| 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
+| 6 | Biểu đồ + hoàn thiện dashboard | ✅ | [phase-6.md](./phase-6.md) |
 | 7 | Trái tức (lãi trái phiếu) | ⬜ | [phase-7.md](./phase-7.md) |
 | 8 | Lịch dòng tiền sắp tới | ⬜ | [phase-8.md](./phase-8.md) |
 
@@ -57,3 +57,5 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-18: `design-fetcher` kéo mockup Phase 5 thật (`Phase 5 Screens.dc.html`, 6 màn 5a-5f), sinh digest `process/UI_phase_5.md`; đối chiếu với user — chốt tính lại thuế khi sửa ngày SELL đã ghi, giữ sheet chi tiết chi phí ăn mòn, ghi rõ cấu trúc lại `ReturnMetrics` theo mockup. Xem `DECISION.md` 2026-07-18 (2). Phát hiện + log riêng footgun hạ tầng: `DesignSync` (deferred tool) không lan xuống subagent — xem `DECISION.md` 2026-07-18 (1).
 - 2026-07-19: Phase 5 — verify: 12 key `Setting` (`SALE_TAX_*`/`TRANSACTION_FEE_*`) seed đúng, `avgCost` gộp phí mua (issue #66 đóng), sửa SELL đã ghi tính lại thuế/phí đúng effective dating, sheet "chi phí ăn mòn" breakdown 3 nguồn đúng %, e2e `tax-and-fee.spec.ts` đối chiếu tay khớp domain doc; bổ sung unit test thiếu (`schemas.test.ts` — guard server-side BUY không có `taxAmount`, trước đó chưa có test dù đã có refine). Log 1 gap nhỏ (client prefill không phân biệt "0 hợp lệ" vs "thiếu cấu hình" khi ngày < 2020-01-01 — hiếm, không chặn). **Phase 5 hoàn thành** ✅.
 - 2026-07-21: rà spec Phase 6 dưới góc nhìn chuyên gia tài chính (chưa code) — thu hẹp A2 với materiality `MISSING_PRICE` (chỉ treo cảnh báo toàn danh mục khi thiếu giá chiếm >5% ước lượng), thêm ghi chú "tập trung tự nhiên do ít mã" (tự tính, không hard-code số mã), hysteresis buffer 3 điểm % chống nhấp nháy badge, chú thích liên kết biểu đồ phân bổ ↔ badge cảnh báo; làm rõ tường minh cách gộp XIRR toàn danh mục vào domain doc (đã đúng trong code, chỉ thiếu ghi rõ). Xem `DECISION.md` 2026-07-21.
+- 2026-07-21: Phase 6 — verify vòng 1: 8/8 tiêu chí phase-6.md có bằng chứng đạt (2 biểu đồ, ẩn số tiền, cảnh báo tập trung + A2 + hysteresis + chú thích liên kết, skeleton/Suspense); chặn bởi bug `formatMonthYear` (lib/format.ts) sai định dạng, phát hiện qua 3 unit test mới viết (format.test.ts).
+- 2026-07-21: Phase 6 — verify vòng 2: `design-implementer` sửa `formatMonthYear` (cắt chuỗi từ `formatDate()` thay vì `Intl.DateTimeFormat` riêng, giống kỹ thuật `formatDayMonth`), 3 test pass (241/241 tổng); không phát sinh gì mới. **Phase 6 hoàn thành** ✅ — còn 2 việc hạ tầng chưa verify thật trên Claude Cloud (e2e Playwright cần Docker; `prisma migrate dev` thật cho migration `20260721090159_add_holding_concentration_warning_active`), cần chạy lại trên Claude Local trước khi hoàn toàn yên tâm.
