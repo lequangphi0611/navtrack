@@ -7,6 +7,7 @@ import {
   CutoffPicker,
   type CutoffPickerProps,
 } from "@/features/settings/components/CutoffPicker";
+import { PrivacyToggle } from "@/features/settings/components/PrivacyToggle";
 import { ROUTES } from "@/lib/routes";
 
 type SettingsScreenProps = {
@@ -14,14 +15,24 @@ type SettingsScreenProps = {
   // process/UI_phase_2.md) — vắng mặt thì ẩn hẳn khối "Mốc chốt định giá",
   // giữ nguyên hành vi Phase 1 (chỉ Thành viên + Đăng xuất) + BottomNav mới.
   cutoff?: CutoffPickerProps;
+  // Chế độ ẩn số tiền (mục 6/11 phase-6.md) — nhóm mới "Riêng tư". KHÔNG thêm
+  // mục "Biểu thuế & phí" (ngoài scope Phase 6, xem process/UI_phase_6.md
+  // "Điểm lệch/cần xác nhận" #4).
+  hideAmountsByDefault: boolean;
   // Form action đăng xuất — giữ nguyên cách wiring của page.tsx gốc
   // (`"use server"` inline gọi signOut()), chỉ đổi chỗ render.
   onSignOut: () => Promise<void>;
 };
 
 // Organism cho /settings — extract từ page.tsx (Phase 1 inline JSX) + thêm mục
-// "Mốc chốt định giá" (mockup 2e). Giữ nguyên logic đăng xuất/link thành viên.
-function SettingsScreen({ cutoff, onSignOut }: SettingsScreenProps) {
+// "Mốc chốt định giá" (mockup 2e) + nhóm "Riêng tư" (mockup 6f). Giữ nguyên
+// logic đăng xuất/link thành viên/"Lịch chốt tự động" (không đổi tên chỉ vì
+// mockup dùng chữ khác — process/UI_phase_6.md mục 3).
+function SettingsScreen({
+  cutoff,
+  hideAmountsByDefault,
+  onSignOut,
+}: SettingsScreenProps) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4.5 p-5 pb-28 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
       <PageHeader title="Cài đặt" backHref={ROUTES.holdings} />
@@ -37,6 +48,13 @@ function SettingsScreen({ cutoff, onSignOut }: SettingsScreenProps) {
           icon={History}
           label="Lịch chốt tự động"
         />
+
+        <div className="mt-1">
+          <div className="mb-2 px-1 text-[11px] font-semibold tracking-wide text-muted-faint uppercase">
+            Riêng tư
+          </div>
+          <PrivacyToggle initialHidden={hideAmountsByDefault} />
+        </div>
 
         {cutoff ? (
           <div className="rounded-2xl border border-primary/30 bg-card p-4">

@@ -1,5 +1,8 @@
 import { SettingsScreen } from "@/features/settings/components/SettingsScreen";
-import { getCutoffOptions } from "@/features/settings/queries";
+import {
+  getCutoffOptions,
+  getHideAmountsByDefault,
+} from "@/features/settings/queries";
 import { signOut } from "@/lib/auth";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { ROUTES } from "@/lib/routes";
@@ -7,9 +10,10 @@ import { ROUTES } from "@/lib/routes";
 import { CutoffHardNavGuard } from "./CutoffHardNavGuard";
 
 export default async function SettingsPage() {
-  const [selection, cutoffOptions] = await Promise.all([
+  const [selection, cutoffOptions, hideAmountsByDefault] = await Promise.all([
     getCutoffSelection(),
     getCutoffOptions(),
+    getHideAmountsByDefault(),
   ]);
 
   return (
@@ -23,6 +27,7 @@ export default async function SettingsPage() {
           // trỏ tạm về /settings, xem process/DECISION.md.
           customHref: ROUTES.settings,
         }}
+        hideAmountsByDefault={hideAmountsByDefault}
         onSignOut={async () => {
           "use server";
           await signOut({ redirectTo: ROUTES.signIn });

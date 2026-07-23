@@ -124,24 +124,31 @@ model AllowedUser {
 }
 
 model Holding {
-  id           String        @id @default(cuid())
-  userId       String // mỗi danh mục thuộc về đúng một người dùng
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type         AssetType
-  symbol       String // mã CP/quỹ, loại vàng, mã trái phiếu
-  name         String?
-  unit         String // đơn vị số lượng theo loại tài sản — "cổ phần", "chỉ", "lượng", "trái phiếu"...; app phải set tường minh khi tạo Holding, không có default chung cho mọi loại
+  id                         String        @id @default(cuid())
+  userId                     String // mỗi danh mục thuộc về đúng một người dùng
+  user                       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                       AssetType
+  symbol                     String // mã CP/quỹ, loại vàng, mã trái phiếu
+  name                       String?
+  unit                       String // đơn vị số lượng theo loại tài sản — "cổ phần", "chỉ", "lượng", "trái phiếu"...; app phải set tường minh khi tạo Holding, không có default chung cho mọi loại
   // Materialized cache của vị thế hiện tại — nguồn sự thật vẫn là Cashflow. BẤT BIẾN:
   // chỉ được ghi bằng derivePosition(toàn bộ cashflow của holding) trong CÙNG transaction
   // với mọi thay đổi cashflow, không bao giờ cộng/trừ tay (xem docs/domain/02).
-  quantity     Decimal       @default(0) @db.Decimal(20, 4) // số lượng đang giữ hiện tại
-  avgCost      Decimal       @default(0) @db.Decimal(20, 4) // giá vốn bình quân di động hiện tại
-  cashflows    Cashflow[]
-  dividends    Dividend[]
-  snapshots    Snapshot[]
-  navOverrides NavOverride[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  quantity                   Decimal       @default(0) @db.Decimal(20, 4) // số lượng đang giữ hiện tại
+  avgCost                    Decimal       @default(0) @db.Decimal(20, 4) // giá vốn bình quân di động hiện tại
+  cashflows                  Cashflow[]
+  dividends                  Dividend[]
+  snapshots                  Snapshot[]
+  navOverrides               NavOverride[]
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+  // Phase 6: trạng thái badge cảnh báo tập trung ở LẦN TÍNH GẦN NHẤT — cần cho
+  // hysteresis buffer 3 điểm % (docs/domain/04-pricing-and-valuation.md mục
+  // "Hysteresis"). KHÔNG phải nguồn sự thật (concentrationPercent luôn tính lại
+  // từ NAV/costBasis mỗi lần render) — chỉ để so sánh rồi ghi đè (update-on-read)
+  // mỗi lần lib/concentration.ts::computeConcentration() chạy lại lúc render
+  // Dashboard/Holdings, không phải lúc mua/bán.
+  concentrationWarningActive Boolean       @default(false)
 
   @@unique([userId, symbol, type]) // một vị thế/user cho mỗi (mã, loại) — mua trùng mã tự gộp; cũng phục vụ lookup theo userId (leftmost prefix)
 }
@@ -208,9 +215,6 @@ model Snapshot {
   // create/update, hiếm khi thật sự rơi vào nhánh dùng default này. jobs/snapshot-cron/main.py
   // ghi trực tiếp qua raw SQL nên PHẢI set cột này thủ công (now()) ở cả INSERT lẫn DO UPDATE SET.
   updatedAt DateTime       @default(now()) @updatedAt
-
-  @@index([userId, date])
-  @@index([holdingId, date])
   // NOTE: dedup cho snapshot đã đóng băng — tối đa 1 dòng frozen cho mỗi
   // (userId, date, period) khi holdingId null, và mỗi (holdingId, date, period)
   // khi holdingId not null. KHÔNG khai báo bằng @@unique ở đây vì Prisma DSL
@@ -218,6 +222,9 @@ model Snapshot {
   // trong unique index thường) — 2 partial unique index này chỉ tồn tại dưới
   // dạng raw SQL trong migration `add_snapshot_unique_constraint`. Xem
   // docs/02-data-model.md (mục "Ghi chú thiết kế").
+
+  @@index([userId, date])
+  @@index([holdingId, date])
 }
 
 model NavOverride {

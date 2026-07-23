@@ -80,6 +80,12 @@ Quy tắc giao diện cho Navtrack: theme màu, typography, icon, và kho atoms/
 | `tips_and_updates` | `Lightbulb` (Phase 5 — ghi chú "số tự tính chỉ là gợi ý" + nút "Đặt lại") |
 | `sync` | `RefreshCw` (Phase 5 — banner "thuế & phí được tính lại" khi sửa ngày SELL) |
 | `water_drop` | `Droplet` (Phase 5 — "Chi phí ăn mòn") |
+| `show_chart` | `LineChart` (Phase 6 — `NavTrendChart` biến thể rỗng 6b) |
+| `donut_large` | `PieChart` (Phase 6 — donut `AllocationScreen` + badge `ConcentrationBadge`) |
+| `history_toggle_off` | `Undo2` (Phase 6 — empty state tab "Đã đóng") |
+| `add_shopping_cart` | `ShoppingCart` (Phase 6 — nút "Mở lại vị thế" `ClosedPositionSheet`) |
+| `touch_app` | `Pointer` (Phase 6 — ghi chú tương tác chạm/giữ `NavTrendChart`) |
+| `help` | `HelpCircle` (Phase 6 — ghi chú "NAV thiếu một phần" `ConcentrationBadge`) |
 
 ## Primitives
 
@@ -101,13 +107,15 @@ Tái dùng trước khi tạo mới trùng lặp. Cấu trúc/pattern (thư mụ
 | `avatar.tsx` | bọc `@base-ui/react/avatar`; **vuông bo góc** (`rounded-md`), không tròn |
 | `sheet.tsx` | Bottom sheet — bọc `@base-ui/react/dialog` (`Root/Trigger/Portal/Backdrop/Popup/Close`, Portal+Backdrop lồng sẵn trong `SheetPopup`); `rounded-t-3xl`, backdrop mờ đen; animation qua `data-open`/`data-closed` (Base UI tự gắn, đúng cặp key cho keyframe animation của tw-animate-css — khác `data-starting-style`/`data-ending-style` vốn dành cho CSS transition thuần) |
 | `skeleton.tsx` | `animate-pulse bg-muted`, dùng cho `Suspense`/`loading.tsx` fallback — quy tắc bắt buộc về loading/skeleton (checklist page, naming `ComponentNameSkeleton`, colocation) xem [`component-architecture.md`](./component-architecture.md#quy-tắc-bắt-buộc-khi-thêmsửa-page-checklist) |
+| `switch.tsx` | Phase 6 (mục 11) — bọc `@base-ui/react/switch` (`Root`/`Thumb`, trạng thái qua `data-checked`); dùng cho `PrivacyToggle` (chế độ ẩn số tiền, Cài đặt) |
 
 **Molecules** (`src/components/<Name>/`, dùng chung nhiều feature):
 
 | Molecule | Mô tả |
 |---|---|
 | `Logo` (`LogoMark` + `Logo`) | Mark thương hiệu (gradient hardcode, không qua token — brand cố định không đổi theo theme) + lockup ngang/dọc. Icon PWA (`public/icons/*.png`, xem [`04-tech-stack.md`](../04-tech-stack.md#pwa-cài-lên-màn-hình-chính)) vẽ lại đúng mark này — đổi màu/hình ở `LogoMark.tsx` thì chạy lại `pnpm icons:generate` để đồng bộ |
-| `MoneyValue` | Hiển thị tiền VND, có cờ `hidden` (ẩn số tuyệt đối, xem quy tắc ẩn tiền ở `component-architecture.md`), toggle icon con mắt tách client leaf riêng (`MoneyValueToggleButton`, không export ra ngoài) |
+| `MoneyValue` | Hiển thị tiền VND, có cờ `hidden` (ẩn số tuyệt đối, xem quy tắc ẩn tiền ở `component-architecture.md`), toggle icon con mắt tách client leaf riêng (`MoneyValueToggleButton`, export từ Phase 6 để tái dùng cho nút mắt header Dashboard/`PrivacyToggle` Cài đặt) |
+| `ConcentrationBadge` | Phase 6 (mục 13) — 4 biến thể cảnh báo tập trung (`NORMAL`/`NATURAL_CONCENTRATION`/`PARTIAL_NAV`/`SUPPRESSED`, type từ `lib/concentration.ts`), `showNote` ẩn/hiện hộp giải thích phụ (tắt khi nhúng vào dòng danh sách chật, vd `HoldingsGroupCard`) — ngôn ngữ trung tính, tông đỏ chỉ dùng cho `SUPPRESSED` |
 | `PercentChange` | Pill %, `variant: "gain-loss"` (xanh/đỏ theo dấu) hoặc `"xirr"` (luôn `primary`, hậu tố "/năm") |
 | `AssetTypeBadge` | Pill tint theo màu asset (nền `asset-*` mờ + chữ màu asset, mockup 2d) + chấm màu; nguồn tạm cho union `AssetType` (thay bằng enum Prisma khi Phase 1 có schema thật) |
 | `SymbolAvatar` | Avatar chữ viết tắt mã, màu suy ra từ hash(mã) — khớp quyết định ở [`04-tech-stack.md`](../04-tech-stack.md) (không dùng logo ảnh) |

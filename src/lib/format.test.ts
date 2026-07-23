@@ -4,6 +4,7 @@ import {
   formatDate,
   formatDayMonth,
   formatMoney,
+  formatMonthYear,
   formatPercent,
   formatQuantity,
   formatSignedPercent,
@@ -106,6 +107,26 @@ describe("formatDate", () => {
 describe("formatDayMonth", () => {
   test("format dd/MM theo giờ Asia/Ho_Chi_Minh, không kèm năm", () => {
     expect(formatDayMonth(new Date("2026-07-09T00:00:00.000Z"))).toBe("09/07");
+  });
+});
+
+describe("formatMonthYear", () => {
+  // Mục 12 phase-6.md (ClosedPositionSheet: "tháng mua đầu -> tháng bán hết
+  // cuối") — năm QUAN TRỌNG ở đây (khác formatDayMonth), phải phân biệt được
+  // 2 mốc cách nhau đúng 12 tháng dù cùng "tháng dương lịch".
+  test("format MM/yyyy theo giờ Asia/Ho_Chi_Minh", () => {
+    expect(formatMonthYear(new Date("2024-05-19T00:00:00.000Z"))).toBe(
+      "05/2024",
+    );
+  });
+
+  test("nhận string ISO", () => {
+    expect(formatMonthYear("2025-12-25T00:00:00.000Z")).toBe("12/2025");
+  });
+
+  test("biên qua nửa đêm ICT có thể lật sang tháng/năm sau — không phụ thuộc timezone máy chạy test", () => {
+    // 31/12/2024 17:30 UTC = 01/01/2025 00:30 ICT — lật cả tháng lẫn năm.
+    expect(formatMonthYear(new Date("2024-12-31T17:30:00Z"))).toBe("01/2025");
   });
 });
 

@@ -11,6 +11,8 @@ import { ROUTES } from "@/lib/routes";
 
 type HoldingsOverviewScreenProps = {
   displayName: string;
+  openCount: number;
+  closedCount: number;
   children: React.ReactNode;
 };
 
@@ -22,6 +24,8 @@ type HoldingsOverviewScreenProps = {
 // truyền vào qua children, tự lo Suspense/skeleton riêng của nó.
 function HoldingsOverviewScreen({
   displayName,
+  openCount,
+  closedCount,
   children,
 }: HoldingsOverviewScreenProps) {
   return (
@@ -39,7 +43,7 @@ function HoldingsOverviewScreen({
         <HoldingsSummarySection />
       </Suspense>
 
-      <HoldingsSegmentedNav />
+      <HoldingsSegmentedNav openCount={openCount} closedCount={closedCount} />
 
       {children}
 

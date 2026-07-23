@@ -8,6 +8,7 @@ import type {
   HoldingValuationExtras,
   HoldingWithValuation,
 } from "@/features/holdings/components/HoldingsGroupCard";
+import type { XirrResult as XirrResultUi } from "@/components/ReturnMetrics";
 import type { TransactionSnapshotBannerProps } from "@/features/holdings/components/TransactionSnapshotBanner";
 // Cross-feature import (holdings -> snapshots). Cùng lý do đã chấp nhận cho toUiXirr
 // ngay dưới đây: getJustRecordedBanner() (thân hàm) gọi getManualSnapshotToday(), trong
@@ -16,6 +17,7 @@ import type { TransactionSnapshotBannerProps } from "@/features/holdings/compone
 // module xử lý an toàn (live binding), không phải "true" circular init dependency.
 import { getManualSnapshotToday } from "@/features/snapshots/queries";
 import { getSession } from "@/lib/auth";
+import { computeCostDrag } from "@/lib/cost-drag";
 import { derivePositionIncludingStockDividends } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
@@ -26,19 +28,22 @@ import {
   formatMoney,
   formatQuantity,
 } from "@/lib/format";
-// toUiXirr được export từ lib/portfolio-valuation.ts (adapter dùng chung
-// business XirrResult -> UI XirrResult). Import ngược chiều với
-// getOpenHoldings/getClosedHoldings mà portfolio-valuation.ts import từ file
-// này — CHẤP NHẬN ĐƯỢC vì cả hai đều chỉ dùng nhau bên trong THÂN hàm
-// (gọi lúc request, không phải lúc module khởi tạo), không có usage nào ở
-// top-level module — ES module xử lý tham chiếu vòng kiểu này an toàn
-// (live binding), không phải "true" circular init dependency.
-import { toUiXirr } from "@/lib/portfolio-valuation";
+import { computeHoldingPeriodLabel } from "@/lib/holding-period";
+// toUiXirr/computeXirrCore được export từ lib/portfolio-valuation.ts (adapter
+// dùng chung business XirrResult -> UI XirrResult + phần tính XIRR/PnL lõi).
+// Import ngược chiều với getOpenHoldings/getClosedHoldings mà
+// portfolio-valuation.ts import từ file này — CHẤP NHẬN ĐƯỢC vì cả hai đều chỉ
+// dùng nhau bên trong THÂN hàm (gọi lúc request, không phải lúc module khởi
+// tạo), không có usage nào ở top-level module — ES module xử lý tham chiếu
+// vòng kiểu này an toàn (live binding), không phải "true" circular init
+// dependency.
+import { computeXirrCore, toUiXirr } from "@/lib/portfolio-valuation";
 import { ROUTES } from "@/lib/routes";
 import type { SettingKey } from "@/lib/settings";
 import { saleTaxKey, transactionFeeKey } from "@/lib/settings";
 import type { PriceSource } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
+import { computeWeightedAverageXirr } from "@/lib/weighted-average-xirr";
 import { computeXirr } from "@/lib/xirr";
 import { buildXirrCashflows } from "@/lib/xirr-cashflow";
 
@@ -664,5 +669,136 @@ export async function getJustRecordedBanner(
     transactionKind: cashflow.type,
     snapshotNavValue: snapshot.value,
     navHistoryHref: ROUTES.snapshots,
+  };
+}
+
+// --- Tab "Đã đóng" — chi tiết realized PnL/XIRR chốt/thời gian giữ (mục 7
+// phase-6.md). Hàm MỚI, KHÔNG sửa getClosedHoldings() hiện có (dùng ở chỗ
+// khác, chỉ trả HoldingSummary thuần) ---
+
+export type ClosedHoldingRow = {
+  id: string;
+  symbol: string;
+  name: string | null;
+  type: HoldingSummary["type"];
+  // "{N} tháng {M} ngày" — tính từ ngày mua ĐẦU TIÊN -> ngày bán HẾT cuối
+  // cùng (min/max Cashflow.date theo holdingId). KHÔNG kèm tiền tố "nắm" — UI
+  // tự ghép câu (xem lib/holding-period.ts).
+  holdingPeriodLabel: string;
+  realizedPnl: string; // Decimal serialize, có dấu
+  realizedPnlPercent: number; // realizedPnl / vốn mua vào (gồm phí mua) * 100
+  xirrRealized: XirrResultUi; // XIRR "chốt" (docs/domain/05 — SL=0, KHÔNG ghép NAV giả định)
+};
+
+export type ClosedHoldingsSummary = {
+  totalRealizedPnl: string; // Σ realizedPnl mọi vị thế đã đóng
+  // Weighted average theo vốn mua vào (lib/weighted-average-xirr.ts), CHỈ
+  // trên holding xirr.status === "OK" — null khi không holding nào tính được.
+  averageXirrRealized: XirrResultUi | null;
+};
+
+export type ClosedHoldingsDetail = {
+  rows: ClosedHoldingRow[];
+  summary: ClosedHoldingsSummary;
+};
+
+// Chi tiết vị thế ĐÃ ĐÓNG cho /holdings/closed (mockup 6g/6h/6i,
+// process/UI_phase_6.md mục 4) — mở rộng getClosedHoldings() (Phase 1, chỉ
+// trả quantity/avgCost/totalCostBasis thuần) với realized PnL/XIRR chốt/thời
+// gian giữ. cutoffDate luôn "hôm nay" (KHÔNG đọc cookie mốc chốt user đang
+// chọn) — vị thế đã đóng không phụ thuộc mốc chốt: dòng bán cuối là dòng tiền
+// dương THẬT đã đủ cho công thức XIRR, không có NAV tại-mốc-chốt nào cần chọn
+// (docs/domain/05 "Vị thế đã đóng").
+export async function getClosedHoldingsDetail(): Promise<ClosedHoldingsDetail> {
+  const closed = await getClosedHoldings();
+  const cutoffDate = resolveCutoffDate({ key: "TODAY" });
+
+  if (closed.length === 0) {
+    return {
+      rows: [],
+      summary: { totalRealizedPnl: "0", averageXirrRealized: null },
+    };
+  }
+
+  const closedIds = closed.map((h) => h.id);
+  const cashflowPeriods = await db.cashflow.groupBy({
+    by: ["holdingId"],
+    where: { holdingId: { in: closedIds } },
+    _min: { date: true },
+    _max: { date: true },
+  });
+  const periodByHoldingId = new Map(
+    cashflowPeriods.map((row) => [row.holdingId, row]),
+  );
+
+  const computed = await Promise.all(
+    closed.map(async (holding) => {
+      // Nhận DUY NHẤT 1 Holding/lần — computeXirrCore trả về XIRR "chốt"
+      // (isOpenPosition=false vì quantity=0, KHÔNG ghép NAV giả định, đúng
+      // docs/domain/05 "Vị thế đã đóng: XIRR chốt").
+      const { xirr, points, cashflows } = await computeXirrCore({
+        holdings: [
+          {
+            id: holding.id,
+            symbol: holding.symbol,
+            quantity: new Decimal(holding.quantity),
+          },
+        ],
+        cutoffDate,
+      });
+
+      // "NAV cuối kỳ (=0, đã đóng) − vốn ròng đã bỏ vào" tương đương đại số
+      // với tổng có dấu của các điểm đã đưa vào XIRR — cùng kỹ thuật
+      // computeXirrAndPnlCore (lib/portfolio-valuation.ts).
+      const realizedPnl = points.reduce(
+        (sum, p) => sum.plus(p.amount),
+        new Decimal(0),
+      );
+
+      // Vốn mua vào (gồm phí mua) = Σ|BUY.amount| — dùng LUÔN làm trọng số
+      // cho weighted average XIRR bên dưới (process/DECISION.md 2026-07-21).
+      const { grossInvested } = computeCostDrag(cashflows, []);
+
+      const realizedPnlPercent = grossInvested.isZero()
+        ? 0
+        : realizedPnl.div(grossInvested).mul(100).toNumber();
+
+      const period = periodByHoldingId.get(holding.id);
+      const holdingPeriodLabel =
+        period?._min.date && period._max.date
+          ? computeHoldingPeriodLabel(period._min.date, period._max.date)
+          : "";
+
+      const row: ClosedHoldingRow = {
+        id: holding.id,
+        symbol: holding.symbol,
+        name: holding.name,
+        type: holding.type,
+        holdingPeriodLabel,
+        realizedPnl: realizedPnl.toString(),
+        realizedPnlPercent,
+        xirrRealized: toUiXirr(xirr),
+      };
+
+      return { row, xirr, grossInvested, realizedPnl };
+    }),
+  );
+
+  const totalRealizedPnl = computed
+    .reduce((sum, c) => sum.plus(c.realizedPnl), new Decimal(0))
+    .toString();
+
+  const weightedRate = computeWeightedAverageXirr(
+    computed.map((c) => ({ xirr: c.xirr, capital: c.grossInvested })),
+  );
+
+  return {
+    rows: computed.map((c) => c.row),
+    summary: {
+      totalRealizedPnl,
+      averageXirrRealized: weightedRate
+        ? { status: "OK", percentPerYear: weightedRate.mul(100).toNumber() }
+        : null,
+    },
   };
 }

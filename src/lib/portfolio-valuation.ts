@@ -12,6 +12,10 @@ import {
 import type { HoldingSummary } from "@/features/holdings/types";
 import { getSession } from "@/lib/auth";
 import {
+  type ConcentrationBadgeState,
+  computeConcentration,
+} from "@/lib/concentration";
+import {
   computeCostDrag,
   computeCostDragContributionPercent,
 } from "@/lib/cost-drag";
@@ -20,13 +24,16 @@ import {
   type CutoffSelection,
   resolveCutoffDate,
 } from "@/lib/cutoff";
+import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
 import {
   formatDate,
   formatDayMonth,
   formatXirrBarePercent,
 } from "@/lib/format";
+import { logger } from "@/lib/logger";
 import { ROUTES } from "@/lib/routes";
+import { resolveDecimalSetting, SETTING_KEYS } from "@/lib/settings";
 import type { HoldingValuation } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
@@ -180,7 +187,9 @@ async function getAllCashDividendsForXirr(
   }));
 }
 
-function buildAllocation(
+// Exported thêm cho getAllocationDetail() bên dưới (mục 6 phase-6.md — tái
+// dùng đúng công thức, không viết lại lần 2).
+export function buildAllocation(
   holdings: HoldingSummary[],
   valuations: Map<string, HoldingValuation>,
   navSum: Decimal,
@@ -294,18 +303,21 @@ type XirrAndPnlCore = {
 // getClosedHoldings (HoldingSummary.quantity: string) lẫn
 // getAllHoldingIdsAndQuantities (quantity: Decimal) đều map được vào type
 // này, caller tự chịu convert Decimal trước khi gọi.
-type HoldingForXirr = { id: string; symbol: string; quantity: Decimal };
+export type HoldingForXirr = { id: string; symbol: string; quantity: Decimal };
 
 // Phần TÍNH TOÁN dùng chung giữa computeXirrAndPnlCore() (Dashboard/Danh mục,
-// đọc holdings qua getOpenHoldings/getClosedHoldings đã cache() theo request)
-// và getCurrentPortfolioXirrPercent() (cần đọc THẲNG DB, không qua cache() —
-// xem comment getAllHoldingIdsAndQuantities bên dưới) — valuate + gom
-// cashflow/dividend + build điểm XIRR + computeXirr từng bị lặp lại giữa hai
-// hàm, tách ra đây để chỉ 1 nơi giữ đúng thứ tự các bước này (process/DECISION.md
-// mục dedupe XIRR core). KHÔNG tự gọi getSession()/getOpenHoldings()/
-// getClosedHoldings() bên trong — nhận holdings + cutoffDate trực tiếp để
-// caller tự quyết định nguồn đọc (cache() theo request hay DB tươi).
-async function computeXirrCore({
+// đọc holdings qua getOpenHoldings/getClosedHoldings đã cache() theo request),
+// getCurrentPortfolioXirrPercent() (cần đọc THẲNG DB, không qua cache() —
+// xem comment getAllHoldingIdsAndQuantities bên dưới), và
+// getClosedHoldingsDetail() (features/holdings/queries.ts — gọi với DUY NHẤT
+// 1 Holding/lần để lấy XIRR "chốt" + realizedPnl riêng từng vị thế đã đóng,
+// mục 7 phase-6.md) — valuate + gom cashflow/dividend + build điểm XIRR +
+// computeXirr từng bị lặp lại giữa hai hàm, tách ra đây để chỉ 1 nơi giữ đúng
+// thứ tự các bước này (process/DECISION.md mục dedupe XIRR core). KHÔNG tự gọi
+// getSession()/getOpenHoldings()/getClosedHoldings() bên trong — nhận holdings
+// + cutoffDate trực tiếp để caller tự quyết định nguồn đọc (cache() theo
+// request hay DB tươi).
+export async function computeXirrCore({
   holdings,
   cutoffDate,
 }: {
@@ -594,4 +606,196 @@ export async function getCurrentPortfolioXirrPercent(
   if (!xirr.ok) return null;
 
   return formatXirrBarePercent(xirr.annualizedRate.mul(100).toNumber());
+}
+
+// --- Cảnh báo tập trung (docs/domain/04-pricing-and-valuation.md mục "Cảnh
+// báo tập trung") — wiring cho lib/concentration.ts::computeConcentration() ---
+
+export type ConcentrationBadgesResult = {
+  thresholdPercent: number;
+  missingPriceSharePercent: number;
+  suppressed: boolean;
+  naturalConcentrationNote: boolean;
+  // Số Holding đang có badge THẬT (loại trừ SUPPRESSED — biến thể đó không
+  // xác định được mã nào cụ thể đang vượt ngưỡng, nên không đếm vào "N mã").
+  warningCount: number;
+  // Theo Holding.id — CHỈ chứa entry cho Holding đang có badge (đã lọc null).
+  badges: Map<string, ConcentrationBadgeState>;
+};
+
+// Đọc Holding ĐANG MỞ (getOpenHoldings — vị thế đóng KHÔNG BAO GIỜ được đưa
+// vào, docs/domain/04 "Vị thế đóng") + valuate bằng valuateHoldings() đã có,
+// gọi computeConcentration() (lib/concentration.ts, pure), rồi ĐỒNG BỘ LẠI
+// Holding.concentrationWarningActive cho các Holding đổi trạng thái
+// (update-on-read — chỉ ghi khi giá trị thực sự đổi, không ghi lại mỗi lần
+// render nếu không đổi). Dùng chung cho HoldingListItem/HoldingsGroupCard
+// (features/holdings) và callout AllocationScreen — KHÔNG tính 2 lần khác
+// công thức (mục 4 phase-6.md).
+//
+// cutoffDate mặc định đọc cookie mốc chốt user đang chọn (cùng pattern
+// getOpenHoldingsWithValuation) — badge cảnh báo phải nhất quán với NAV đang
+// hiển thị trên cùng màn, không luôn luôn là "hôm nay".
+export async function getConcentrationBadges(
+  cutoffDate?: Date,
+): Promise<ConcentrationBadgesResult> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+  const userId = session.user.id;
+
+  const resolvedCutoffDate =
+    cutoffDate ?? resolveCutoffDate(await getCutoffSelection());
+
+  const open = await getOpenHoldings();
+  const openIds = open.map((h) => h.id);
+
+  const [valuations, stateRows, thresholdPercentDecimal] = await Promise.all([
+    valuateHoldings(
+      open.map((h) => ({
+        id: h.id,
+        symbol: h.symbol,
+        quantity: new Decimal(h.quantity),
+      })),
+      resolvedCutoffDate,
+    ),
+    openIds.length > 0
+      ? db.holding.findMany({
+          where: { id: { in: openIds } },
+          select: { id: true, concentrationWarningActive: true },
+        })
+      : Promise.resolve([]),
+    resolveDecimalSetting(
+      SETTING_KEYS.CONCENTRATION_WARNING_THRESHOLD,
+      new Date(),
+    ),
+  ]);
+
+  const previouslyWarnedById = new Map(
+    stateRows.map((row) => [row.id, row.concentrationWarningActive]),
+  );
+
+  const inputs = open.map((holding) => {
+    const valuation = valuations.get(holding.id);
+    return {
+      id: holding.id,
+      type: holding.type,
+      nav: valuation?.status === "VALUED" ? valuation.nav : null,
+      totalCostBasis: new Decimal(holding.totalCostBasis),
+      previouslyWarned: previouslyWarnedById.get(holding.id) ?? false,
+    };
+  });
+
+  const result = computeConcentration(
+    inputs,
+    thresholdPercentDecimal.toNumber(),
+  );
+
+  // Update-on-read — chỉ ghi Holding có trạng thái THỰC SỰ đổi so với DB, chia
+  // 2 nhóm bật/tắt để dùng updateMany (không N+1 update từng dòng).
+  const toActivate: string[] = [];
+  const toDeactivate: string[] = [];
+  for (const holding of open) {
+    const previouslyWarned = previouslyWarnedById.get(holding.id) ?? false;
+    const warnedNow = result.warnedNow.get(holding.id) ?? false;
+    if (warnedNow === previouslyWarned) continue;
+    (warnedNow ? toActivate : toDeactivate).push(holding.id);
+  }
+
+  if (toActivate.length > 0 || toDeactivate.length > 0) {
+    try {
+      await Promise.all([
+        toActivate.length > 0
+          ? db.holding.updateMany({
+              where: { id: { in: toActivate } },
+              data: { concentrationWarningActive: true },
+            })
+          : Promise.resolve(),
+        toDeactivate.length > 0
+          ? db.holding.updateMany({
+              where: { id: { in: toDeactivate } },
+              data: { concentrationWarningActive: false },
+            })
+          : Promise.resolve(),
+      ]);
+    } catch (err) {
+      // Hiệu ứng phụ update-on-read KHÔNG được làm gãy render Dashboard/Holdings
+      // — badge hiển thị vẫn đúng (tính từ `result`, không phụ thuộc DB write
+      // có thành công hay không), chỉ hysteresis lần tính SAU có thể lệch nếu
+      // ghi thất bại nhiều lần liên tiếp. Log để theo dõi, không throw.
+      logger.error(
+        { err, userId },
+        "getConcentrationBadges: failed to sync concentrationWarningActive",
+      );
+    }
+  }
+
+  const badges = new Map<string, ConcentrationBadgeState>();
+  let warningCount = 0;
+  for (const [id, state] of result.results) {
+    if (!state) continue;
+    badges.set(id, state);
+    if (state.kind !== "SUPPRESSED") warningCount++;
+  }
+
+  return {
+    thresholdPercent: thresholdPercentDecimal.toNumber(),
+    missingPriceSharePercent: result.missingPriceSharePercent,
+    suppressed: result.suppressed,
+    naturalConcentrationNote: result.naturalConcentrationNote,
+    warningCount,
+    badges,
+  };
+}
+
+// --- Phân bổ chi tiết (donut, mục 6 phase-6.md / 6d UI_phase_6.md) ---
+
+export type AllocationDetailSlice = {
+  type: AssetType;
+  percent: number; // 0-100, KHÔNG bị ẩn bởi `hidden` (chỉ ẩn VND tuyệt đối)
+  note?: string; // "· gồm CCQ" cho FUND
+};
+
+export type AllocationDetail = {
+  slices: AllocationDetailSlice[];
+  // N mã đang có badge cảnh báo tập trung (KHÔNG kèm tên mã cụ thể — callout
+  // dùng câu chung "N mã đang vượt ngưỡng tập trung", process/DECISION.md
+  // 2026-07-21 mục (4)).
+  concentrationWarningCount: number;
+};
+
+// Tái dùng buildAllocation() (đã có, không viết lại) + getConcentrationBadges()
+// (đếm N mã cảnh báo) — dùng cho /allocation (route riêng, design-implementer
+// dựng ở mục 10 phase-6.md).
+export async function getAllocationDetail(): Promise<AllocationDetail> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const cutoffDate = resolveCutoffDate(await getCutoffSelection());
+  const open = await getOpenHoldings();
+
+  const [valuations, concentration] = await Promise.all([
+    valuateHoldings(
+      open.map((h) => ({
+        id: h.id,
+        symbol: h.symbol,
+        quantity: new Decimal(h.quantity),
+      })),
+      cutoffDate,
+    ),
+    getConcentrationBadges(cutoffDate),
+  ]);
+
+  const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
+  const navSum = validNavs.reduce((sum, nav) => sum.plus(nav), new Decimal(0));
+
+  const allocation = buildAllocation(open, valuations, navSum);
+  const slices: AllocationDetailSlice[] = allocation.map((slice) => ({
+    type: slice.type,
+    percent: slice.percent,
+    note: slice.type === "FUND" ? "· gồm CCQ" : undefined,
+  }));
+
+  return {
+    slices,
+    concentrationWarningCount: concentration.warningCount,
+  };
 }
