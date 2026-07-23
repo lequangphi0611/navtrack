@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, Flag } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Coins, Flag } from "lucide-react";
 
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 // tô khác màu, không tính toán gì thêm.
 type CashflowTimelineRow = {
   id: string;
-  kind: "BUY" | "SELL" | "CUTOFF_NAV";
+  kind: "BUY" | "SELL" | "DIVIDEND" | "CUTOFF_NAV";
   // "Mua 3.000 CP" / "NAV tại mốc chốt".
   label: string;
   // "09/07/2024 · giá 158.000" / "11/07/2026 · dòng tiền giả định".
@@ -29,6 +29,7 @@ type CashflowTimelineProps = {
 const ICON_CLASS: Record<CashflowTimelineRow["kind"], string> = {
   BUY: "bg-destructive/12 text-destructive",
   SELL: "bg-gain/12 text-gain",
+  DIVIDEND: "bg-accent/14 text-accent",
   CUTOFF_NAV: "bg-primary/18 text-primary",
 };
 
@@ -52,9 +53,11 @@ function CashflowTimeline({
           const Icon =
             row.kind === "CUTOFF_NAV"
               ? Flag
-              : row.kind === "SELL"
-                ? ArrowUpRight
-                : ArrowDownLeft;
+              : row.kind === "DIVIDEND"
+                ? Coins
+                : row.kind === "SELL"
+                  ? ArrowUpRight
+                  : ArrowDownLeft;
 
           return (
             <div
