@@ -952,3 +952,144 @@ test("Cổ tức tiền mặt có paymentDate trễ hơn ngày chia làm thay đ
     });
   }
 });
+
+// Issue #84 (PR #85): cổ tức tiền mặt (Dividend.type CASH) giờ xuất hiện như
+// một dòng riêng trong timeline dòng tiền của /holdings/[id]
+// (CashflowTimeline.tsx, buildCashflowTimeline() ghép cashflows BUY/SELL +
+// dividends CASH, sort theo `paymentDate ?? date` — build-cashflow-timeline.ts).
+// build-cashflow-timeline.test.ts đã khoá chặt hàm THUẦN đó bằng input tay,
+// nhưng KHÔNG bắt được lỗi NỐI DÂY thật: nếu queries.ts::getHoldingDetail lỡ
+// quên select `paymentDate` từ DB, quên truyền dividends xuống
+// buildCashflowTimeline, hay lỡ dùng `dividend.date` thay vì `paymentDate`, unit
+// test (tự tạo input, không qua DB) vẫn xanh trong khi người dùng thật KHÔNG
+// BAO GIỜ thấy đúng thứ tự trên UI. Test này khoá đúng đường dây thật: tạo
+// Holding qua UI thật -> ghi 1 giao dịch BUY (ngày xa nhất) + 1 giao dịch SELL
+// (ngày giữa) + 1 cổ tức tiền mặt qua form thật (ngày chia NẰM GIỮA buy/sell,
+// nhưng paymentDate nằm SAU sell, gần "hôm nay" nhất) -> tải trang chi tiết vị
+// thế -> đọc timeline thật từ DOM.
+//
+// Thiết kế ngày cố ý để 2 khả năng "đúng"/"sai" cho ra THỨ TỰ KHÁC NHAU, không
+// chỉ khác nội dung: nếu sort đúng theo paymentDate, thứ tự phải là
+// BUY -> SELL -> DIVIDEND. Nếu code bị revert về dùng `date` (ngày chia) làm
+// mốc sort cho dòng DIVIDEND (bug cũ trước issue #65/#84), thứ tự sẽ đổi thành
+// BUY -> DIVIDEND -> SELL (vì ngày chia nằm giữa buy và sell) — test PHẢI ĐỎ
+// rõ ràng trong trường hợp đó, không mập mờ.
+test("Cổ tức tiền mặt hiện đúng vị trí trong timeline dòng tiền của chi tiết vị thế, sort theo paymentDate chứ không phải ngày chia (issue #84)", async ({
+  browser,
+}) => {
+  const session = await createTestSession("dividend-cashflow-timeline");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const buyDate = isoDate(daysAgo(60));
+  const dividendDate = isoDate(daysAgo(50)); // ngày chia — NẰM GIỮA buy và sell
+  const sellDate = isoDate(daysAgo(20));
+  const paymentDate = isoDate(daysAgo(5)); // tiền về TRỄ hơn sell, gần "hôm nay" nhất
+  const quoteDate = daysAgo(7);
+
+  try {
+    // Cần PriceQuote để `valuation` (getHoldingDetail) khác undefined — thiếu
+    // giá, khối "Dòng tiền"/CashflowTimeline KHÔNG render (HoldingDetailScreen
+    // rơi về nhánh Phase 1 chỉ hiện "Tổng vốn đã bỏ vào"), không có gì để
+    // verify thứ tự timeline.
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol, date: quoteDate } },
+      create: { symbol, date: quoteDate, price: "70000", source: "vnstock" },
+      update: { price: "70000", source: "vnstock" },
+    });
+
+    // 1) Mua 100 CP, ngày mua xa nhất (-60 ngày).
+    await page.goto("/holdings/new");
+    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
+    await page.locator('input[name="quantity"]').fill("100");
+    await page.locator('input[name="pricePerUnit"]').fill("50000");
+    await fillDatePicker(page, "date", buyDate);
+    await page.getByRole("button", { name: "Xong", exact: true }).click();
+    await page.waitForURL(
+      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
+    );
+    const holdingUrl = stripQuery(page.url());
+
+    // 2) Bán 30 CP, ngày -20 (giữa ngày chia -50 và hôm nay).
+    await page.goto(`${holdingUrl}/transactions/new`);
+    await page.getByRole("button", { name: "Bán" }).click();
+    await page.locator('input[name="quantity"]').fill("30");
+    await page.locator('input[name="pricePerUnit"]').fill("60000");
+    await fillDatePicker(page, "date", sellDate);
+    await page.getByRole("button", { name: "Ghi nhận giao dịch bán" }).click();
+    await page.waitForURL(afterTransactionUrl(holdingUrl));
+
+    // 3) Ghi cổ tức tiền mặt: 10% × 10.000đ mệnh giá × 100 CP (quantityAtDate
+    // tính TẠI ngày chia -50, TRƯỚC lệnh bán -20 -> vẫn 100 CP, không phải 70)
+    // = gộp 100.000, thuế 5% = 5.000, net = 95.000 (docs/domain/03-dividends.md,
+    // seedDividendSettings ở beforeAll). paymentDate = -5, TRỄ hơn cả sell.
+    await page.goto(`${holdingUrl}/dividends/new`);
+    // "Tiền mặt" là mặc định của SegmentedControl — không cần bấm.
+    await page.locator('input[name="percent"]').fill("10");
+    // fillDatePicker phải là bước CUỐI trước submit (ghi thẳng DOM, bỏ qua
+    // React state — xem comment trong support/date-picker.ts).
+    await fillDatePicker(page, "date", dividendDate);
+    await fillDatePicker(page, "paymentDate", paymentDate);
+    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    await expect(
+      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
+    ).toBeVisible();
+
+    // 4) Hard nav tới trang chi tiết vị thế — loại trừ mọi nghi ngờ cache
+    // client-side, chỉ còn lại đúng dữ liệu server-side thật.
+    await page.goto(holdingUrl);
+
+    // Scope đúng khối "Dòng tiền" (CashflowTimeline), KHÔNG lẫn với
+    // "Lịch sử giao dịch" (TransactionHistoryList) bên dưới — 2 khối này dùng
+    // Badge/label "Mua"/"Bán" trùng chữ nên phải scope chặt bằng DOM, không
+    // thể chỉ getByText toàn trang (xem HoldingDetailScreen.tsx: h2 "Dòng
+    // tiền" -> cha 2 cấp là <div> bọc trực tiếp CashflowTimeline).
+    const timelineSection = page
+      .getByText("Dòng tiền", { exact: true })
+      .locator("..")
+      .locator("..");
+    const timelineRows = timelineSection.locator(
+      ".rounded-2xl.border.border-border.bg-card > div",
+    );
+
+    const rowTexts = await timelineRows.allTextContents();
+    const buyIndex = rowTexts.findIndex((t) => t.includes("Mua"));
+    const sellIndex = rowTexts.findIndex((t) => t.includes("Bán"));
+    const dividendIndex = rowTexts.findIndex((t) =>
+      t.includes("Cổ tức tiền mặt"),
+    );
+
+    expect(buyIndex).toBeGreaterThanOrEqual(0);
+    expect(sellIndex).toBeGreaterThan(buyIndex);
+    // Khẳng định cốt lõi: DIVIDEND phải đứng SAU SELL (vì paymentDate -5 trễ
+    // hơn sellDate -20) — nếu sort quay lại dùng `date` (-50, giữa buy/sell),
+    // dividendIndex sẽ nằm GIỮA buyIndex và sellIndex thay vì sau cùng.
+    expect(dividendIndex).toBeGreaterThan(sellIndex);
+
+    // Nội dung dòng DIVIDEND: đúng ngày hiển thị = paymentDate (không phải
+    // ngày chia) và đúng netAmount đã tính (95.000 -> compact "95k").
+    const dividendRowText = rowTexts[dividendIndex]!;
+    const expectedPaymentDateLabel = new Intl.DateTimeFormat("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(new Date(paymentDate));
+    expect(dividendRowText).toContain(expectedPaymentDateLabel);
+    expect(dividendRowText).not.toContain(
+      new Intl.DateTimeFormat("vi-VN", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(new Date(dividendDate)),
+    );
+    expect(dividendRowText).toContain("95k");
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({ where: { symbol, date: quoteDate } });
+  }
+});
