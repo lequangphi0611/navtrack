@@ -262,7 +262,50 @@ test("nhập vị thế, mua thêm, tính giá vốn bình quân", async ({ page
 
 ---
 
-## 9. Anti-pattern (đừng làm)
+## 9. Best practices (gom lại — tra nhanh)
+
+Các nguyên tắc rải trong file trên, cộng vài điều chưa nói ở đâu. Đọc như checklist tư duy
+trước khi viết:
+
+**Về page object**
+1. **Một page object = một màn hình / một widget dùng lại.** Không "god object" ôm nhiều màn
+   (mục 2).
+2. **Chỉ expose action cấp cao + locator có nghĩa; giấu DOM/selector.** Spec đọc như kịch bản
+   người dùng, không thấy CSS (mục 4).
+3. **Không nhồi logic điều khiển của test vào page object.** Page object = *thao tác* +
+   *locator*. `if/else`/`for` rẽ nhánh **theo trạng thái nghiệp vụ** (vd "nếu đang lãi thì...")
+   là mùi — quyết định đó thuộc **spec**. Page object chỉ được rẽ nhánh cho **cơ chế UI**
+   thuần (vd DatePicker bấm next/prev bao nhiêu lần — xem `support/date-picker.ts`).
+4. **Constructor nhẹ, không `goto`.** Tạo object không được có side-effect điều hướng (mục 4).
+5. **Đừng trừu tượng hoá non.** Chỉ tạo page object / helper khi thao tác **dùng lại** hoặc
+   selector **lặp**. Thứ dùng đúng một lần trong một spec cứ để thẳng — POM để bớt trùng lặp,
+   không phải để có class cho đẹp.
+
+**Về selector & chờ**
+6. **Locator khả truy cập trước** (role → label/placeholder → `name` form → text); **cấm class
+   CSS/nth cứng** (mục 5).
+7. **Auto-wait, không `waitForTimeout`.** Chờ bằng `expect(...).toBeVisible()` / `waitForURL`
+   (mục 5, 10).
+
+**Về assertion**
+8. **Kỳ vọng nằm ở spec**, locator là API; helper `expectXxx` chỉ khi lặp ≥3 lần (mục 7).
+9. **e2e phủ luồng nối dây, không test lại logic thuần** — XIRR/cost basis/thuế thuộc unit
+   (`testing.md`).
+
+**Về tính độc lập của test (BẮT BUỘC — `playwright.config.ts` bật `fullyParallel: true`)**
+10. **Mỗi test tự dựng data của nó, tự dọn** — không dựa vào data test khác để lại, không
+    dựa vào **thứ tự chạy**. Mẫu chuẩn đã có: `createTestSession()` (user + session random)
+    ở đầu, dọn trong `finally` — `closeContext()` **trước** rồi `cleanupTestUser()` (thứ tự
+    này quan trọng, xem [`GOTCHAS.md`](../../e2e/GOTCHAS.md) #5).
+11. **Không chia sẻ state đổi được giữa các test.** Với data **không** cascade theo User
+    (`PriceQuote`, `Setting` toàn cục), dùng **mã/khoá random mỗi lần chạy** và tự xoá — nếu
+    không, hai worker song song đạp lên nhau (GOTCHAS #6, #8).
+12. **Không hardcode ngày/năm tuyệt đối** — ngày tương đối qua `daysAgo()` (`support/dates.ts`)
+    để test không vỡ khi chạy ở thời điểm khác; khớp ô lịch dùng `localIsoDate` (GOTCHAS #3).
+
+---
+
+## 10. Anti-pattern (đừng làm)
 
 - ❌ **Selector inline trùng lặp** giữa các spec — lý do POM tồn tại; đưa vào page object.
 - ❌ **Bám class Tailwind / cấu trúc DOM** — dùng role/text/name; cần thì đề xuất testid.
@@ -276,7 +319,7 @@ test("nhập vị thế, mua thêm, tính giá vốn bình quân", async ({ page
 
 ---
 
-## 10. Checklist trước khi commit một spec/page object
+## 11. Checklist trước khi commit một spec/page object
 
 - [ ] Spec **không** chứa selector thô (`locator("div...")`, `getByRole` rải rác) — đã đẩy
       vào page object.
