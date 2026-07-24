@@ -1,18 +1,18 @@
 import Decimal from "decimal.js";
 
-// Tổng quát hoá derivePosition() (lib/cost-basis.ts) để phát lại lịch sử số
-// lượng nắm giữ gồm CẢ cổ tức cổ phiếu, không chỉ Cashflow BUY/SELL
-// (docs/domain/01-assets-and-holdings.md "Số lượng hiện tại" = Σ BUY − Σ SELL
-// + Σ dividend STOCK.stockQuantity). Khác derivePosition: trả về before/after
-// TẠI TỪNG event (Map theo id), không chỉ giá trị cuối cùng — cần cho:
+// Phát lại lịch sử số lượng nắm giữ gồm CẢ cổ tức cổ phiếu, không chỉ Cashflow
+// BUY/SELL (docs/domain/01-assets-and-holdings.md "Số lượng hiện tại" = Σ BUY
+// − Σ SELL + Σ dividend STOCK.stockQuantity). Trả về before/after TẠI TỪNG
+// event (Map theo id), không chỉ giá trị cuối cùng — cần cho:
 // (1) recordDividend: biết SL đang giữ TẠI NGÀY GHI (không phải hôm nay);
 // (2) getDividendHistory: suy ngược quantityBefore/After cho từng dòng lịch sử;
-// (3) cost-basis.ts::derivePositionIncludingStockDividends: SL + validate bán
-// vượt cho 4 action mua/bán (createHolding/addTransaction/updateTransaction/
-// deleteTransaction) và getHoldingDetail — di chuyển ra lib/ (issue #59) vì
-// giờ dùng chung ở CẢ features/dividends/ lẫn features/holdings/, không còn
-// riêng một feature (docs/rules/project-structure.md "chỉ đẩy lên lib/ chung
-// khi thực sự tái dùng ở nhiều feature").
+// (3) cost-basis.ts::derivePosition(): dùng lại (không tính lại) để tính SL +
+// validate bán vượt cho 4 action mua/bán (createHolding/addTransaction/
+// updateTransaction/deleteTransaction) và getHoldingDetail — di chuyển ra
+// lib/ (issue #59) vì giờ dùng chung ở CẢ features/dividends/ lẫn
+// features/holdings/, không còn riêng một feature
+// (docs/rules/project-structure.md "chỉ đẩy lên lib/ chung khi thực sự tái
+// dùng ở nhiều feature").
 export type PositionTrailEvent = {
   id: string;
   date: Date;

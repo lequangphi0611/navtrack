@@ -16,7 +16,7 @@ import type { TransactionSnapshotBannerProps } from "@/features/holdings/compone
 // module xử lý an toàn (live binding), không phải "true" circular init dependency.
 import { getManualSnapshotToday } from "@/features/snapshots/queries";
 import { getSession } from "@/lib/auth";
-import { derivePositionIncludingStockDividends } from "@/lib/cost-basis";
+import { derivePosition } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
@@ -187,8 +187,8 @@ export async function getHoldingDetail(
     where: { id: holdingId },
     include: {
       // Khớp thứ tự tie-break dùng ở actions.ts/migration backfill (date, createdAt, id) —
-      // derivePositionIncludingStockDividends() sort theo (date, createdAt, id), cần thứ tự
-      // DB nhất quán khi trùng ngày để không lệch với Holding.quantity/avgCost đã materialize
+      // derivePosition() sort theo (date, createdAt, id), cần thứ tự DB nhất quán khi
+      // trùng ngày để không lệch với Holding.quantity/avgCost đã materialize
       // (docs/domain/02).
       cashflows: {
         orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
@@ -242,7 +242,7 @@ export async function getHoldingDetail(
   // getOpenHoldings/getOpenHoldingsWithValuation). Dùng để valuate/xác định
   // isOpenPosition đúng thời điểm đang xem, nhất quán với cashflowsForXirr/
   // dividends bên dưới.
-  const position = derivePositionIncludingStockDividends(
+  const position = derivePosition(
     cashflowsUpToCutoff.map((cf) => ({
       id: cf.id,
       type: cf.type,

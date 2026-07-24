@@ -63,9 +63,9 @@ export type RealizedGainStockDividendInput = {
 // bình quân: newAvgCost = (realQuantityTrước*avgCostCũ + tiềnMua) / (realQuantityTrước+SLMua).
 // Khi vị thế đóng hết thật (realQuantityTrước=0), số hạng 0*avgCostCũ=0 tự
 // "quên" avgCost cũ — không cần bước reset tường minh nào nữa, đúng cho CẢ ca
-// đóng hết LẪN ca bán một phần. Mirror đúng cách
-// derivePositionIncludingStockDividends() (lib/cost-basis.ts, issue #59, sửa
-// lần 2 cùng đợt) đã fix bug write-path cùng họ.
+// đóng hết LẪN ca bán một phần. Mirror đúng cách derivePosition()
+// (lib/cost-basis.ts, issue #59, sửa lần 2 cùng đợt) đã fix bug write-path
+// cùng họ.
 //
 // Ca lý thuyết "cổ tức cổ phiếu xen giữa lúc realQuantity=0 và BUY kế tiếp"
 // (holding không giữ cổ phần nào mà vẫn nhận cổ tức) là trạng thái dữ liệu

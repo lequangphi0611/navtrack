@@ -289,9 +289,9 @@ test("Ghi cổ tức cổ phiếu: số lẻ tự làm tròn xuống, báo rõ +
     // Xác nhận cache Holding.quantity đã cộng đúng số ĐÃ LÀM TRÒN (12, không
     // phải 12,6) qua CẢ 2 kênh: trang chi tiết vị thế (hard nav, loại trừ
     // cache client-side) và lịch sử cổ tức — trước fix #59, getHoldingDetail()
-    // dùng derivePosition(cashflows) (chỉ biết Cashflow) nên hiện SAI SL sau
-    // khi nhận cổ tức cổ phiếu; giờ dùng derivePositionIncludingStockDividends()
-    // nên phải khớp đúng cache.
+    // dùng một cài đặt chỉ biết Cashflow nên hiện SAI SL sau khi nhận cổ tức
+    // cổ phiếu; giờ dùng derivePosition() (đã gộp xử lý cổ tức cổ phiếu) nên
+    // phải khớp đúng cache.
     await page.goto(holdingUrl);
     await expect(page.getByText("117 cổ phần", { exact: true })).toBeVisible();
 
