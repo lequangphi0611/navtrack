@@ -4,6 +4,7 @@ import { formatDate } from "./format";
 import { ROUTES } from "./routes";
 import {
   buildSnapshotHistoryView,
+  paginateWithCursor,
   toFrozenSnapshotListRow,
   type FrozenSnapshotRow,
 } from "./snapshot-history";
@@ -174,6 +175,38 @@ describe("buildSnapshotHistoryView", () => {
     expect(chart.changePercent).toBeCloseTo(
       ((3200000 - 3000000) / 3000000) * 100,
     );
+  });
+});
+
+describe("paginateWithCursor", () => {
+  test("rows nhiều hơn limit (peek +1): hasMore=true, page cắt đúng limit, nextCursor = id dòng cuối của page", () => {
+    const rows = [{ id: "a" }, { id: "b" }, { id: "c" }]; // limit=2, peek dư 1
+
+    const { page, hasMore, nextCursor } = paginateWithCursor(rows, 2);
+
+    expect(hasMore).toBe(true);
+    expect(page).toEqual([{ id: "a" }, { id: "b" }]);
+    expect(nextCursor).toBe("b");
+  });
+
+  test("rows đúng bằng limit: hasMore=false, nextCursor=null, page giữ nguyên toàn bộ rows", () => {
+    const rows = [{ id: "a" }, { id: "b" }];
+
+    const { page, hasMore, nextCursor } = paginateWithCursor(rows, 2);
+
+    expect(hasMore).toBe(false);
+    expect(page).toEqual(rows);
+    expect(nextCursor).toBeNull();
+  });
+
+  test("rows ít hơn limit: hasMore=false, nextCursor=null", () => {
+    const rows = [{ id: "a" }];
+
+    const { page, hasMore, nextCursor } = paginateWithCursor(rows, 5);
+
+    expect(hasMore).toBe(false);
+    expect(page).toEqual(rows);
+    expect(nextCursor).toBeNull();
   });
 });
 

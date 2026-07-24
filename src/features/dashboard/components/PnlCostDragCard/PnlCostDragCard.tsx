@@ -18,6 +18,11 @@ type PnlCostDragCardProps = {
   // unrealizedPnl: lãi/lỗ trên giấy (vị thế đang mở, chưa bán).
   realizedPnl: string;
   unrealizedPnl: string;
+  // Ghi chú phụ (issue #2 code review PR #87) — hiện khi mốc chốt đang chọn
+  // khác "hôm nay" (PortfolioValuation.pnlSplitIsApproximate), vì phần tách
+  // realized/unrealized dựa trên avgCost/quantity hiện tại có thể lệch nhẹ so
+  // với đúng-tại-mốc-chốt (docs/domain/ giới hạn cutoff-accuracy đã chốt).
+  splitNote?: string;
   costDragAmount: string;
   costDragPercent: number;
   // grossInvested + costDragBreakdown: cần để render CostDragSheet (mở từ
@@ -37,6 +42,7 @@ function PnlCostDragCard({
   pnlNote,
   realizedPnl,
   unrealizedPnl,
+  splitNote,
   costDragAmount,
   costDragPercent,
   grossInvested,
@@ -89,6 +95,9 @@ function PnlCostDragCard({
             </span>
           </div>
         </div>
+        {splitNote ? (
+          <div className="mt-1 text-[10px] text-muted-faint">{splitNote}</div>
+        ) : null}
       </div>
 
       <button

@@ -24,12 +24,14 @@ export default function PnlCostDragCardPreview() {
         costDragBreakdown={BREAKDOWN}
       />
 
-      {/* Đã thực hiện lãi nhưng vị thế đang mở đang lỗ — test màu khác dấu. */}
+      {/* Đã thực hiện lãi nhưng vị thế đang mở đang lỗ — test màu khác dấu.
+          Kèm splitNote — mốc chốt đang chọn khác hôm nay (pnlSplitIsApproximate). */}
       <PnlCostDragCard
         pnlValue="-14630000"
         pnlNote="Chỉ trên phần có giá — đã trừ thuế & phí."
         realizedPnl="20000000"
         unrealizedPnl="-34630000"
+        splitNote="*Ước tính — có thể lệch khi xem theo mốc chốt khác hôm nay."
         costDragAmount="0"
         costDragPercent={0}
         grossInvested="0"

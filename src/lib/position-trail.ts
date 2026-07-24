@@ -30,17 +30,25 @@ export type PositionTrailEntry = {
 // Sort theo (date, createdAt, id) — khớp tie-break convention đã dùng ở
 // features/holdings/actions.ts/queries.ts (orderBy [date asc, createdAt asc, id asc])
 // khi trùng ngày, để before/after nhất quán với cách Holding.quantity cache được
-// materialize.
-export function buildQuantityTimeline(
-  events: PositionTrailEvent[],
-): Map<string, PositionTrailEntry> {
-  const sorted = [...events].sort((a, b) => {
+// materialize. Tách riêng (không inline trong buildQuantityTimeline) vì
+// lib/realized-pnl.ts cũng cần đúng quy ước tiebreak này khi trộn Cashflow +
+// cổ tức cổ phiếu thành 1 dòng thời gian.
+export function sortByPositionTrailOrder<
+  T extends { date: Date; createdAt: Date; id: string },
+>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
     const dateDiff = a.date.getTime() - b.date.getTime();
     if (dateDiff !== 0) return dateDiff;
     const createdDiff = a.createdAt.getTime() - b.createdAt.getTime();
     if (createdDiff !== 0) return createdDiff;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
+}
+
+export function buildQuantityTimeline(
+  events: PositionTrailEvent[],
+): Map<string, PositionTrailEntry> {
+  const sorted = sortByPositionTrailOrder(events);
 
   const result = new Map<string, PositionTrailEntry>();
   let quantity = new Decimal(0);

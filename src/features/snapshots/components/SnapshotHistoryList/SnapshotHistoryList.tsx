@@ -34,7 +34,6 @@ type SnapshotHistoryListProps = {
   className?: string;
   // Load-more "Các mốc đã chốt" (cursor-based, issue #83) — trang đầu đã fetch
   // sẵn ở page.tsx (Container), component tự quản lý các trang tiếp theo.
-  initialHasMore: boolean;
   initialNextCursor: string | null;
   loadMoreAction: (
     cursor: string,
@@ -57,16 +56,34 @@ function SnapshotHistoryList({
   rows,
   hidden = false,
   className,
-  initialHasMore,
   initialNextCursor,
   loadMoreAction,
 }: SnapshotHistoryListProps) {
   const [moreRows, setMoreRows] = useState<SnapshotListRow[]>([]);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
-  const [hasMore, setHasMore] = useState(initialHasMore);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // `rows` là prop do Server Component cha (page.tsx) tính lại mỗi lần render
+  // — chỉ đổi reference khi có fetch/revalidate mới từ server (vd sau khi chốt
+  // snapshot mới qua SnapshotFreezeSheet gọi revalidatePath), KHÔNG BAO GIỜ đổi
+  // do hành động nội bộ của chính component này (handleLoadMore() chỉ set
+  // state cục bộ moreRows/nextCursor, không đụng props). Nếu không reset,
+  // trang 1 (rows) được fetch lại nhưng state moreRows/nextCursor cũ (đang giữ
+  // trang 2 đã tải qua "Xem thêm") không tự đồng bộ, gây trùng/thiếu dòng khi
+  // ghép allRows — nên reset về trạng thái "chưa xem thêm" mỗi khi server trả
+  // dữ liệu mới. Set state trong lúc render (thay vì effect) là pattern chính
+  // thức của React cho "reset state khi prop đổi": so sánh reference rows với
+  // giá trị rows đã thấy lần render trước (prevRows), không kích hoạt sai lúc
+  // user đang bấm "Xem thêm" vì lúc đó rows không đổi reference.
+  const [prevRows, setPrevRows] = useState(rows);
+  if (rows !== prevRows) {
+    setPrevRows(rows);
+    setMoreRows([]);
+    setNextCursor(initialNextCursor);
+  }
+
+  const hasMore = nextCursor !== null;
   const allRows = [...rows, ...moreRows];
 
   function handleLoadMore() {
@@ -77,7 +94,6 @@ function SnapshotHistoryList({
       if (result.ok) {
         setMoreRows((prev) => [...prev, ...result.data.rows]);
         setNextCursor(result.data.nextCursor);
-        setHasMore(result.data.nextCursor !== null);
       } else {
         setError(result.error);
       }
@@ -91,7 +107,7 @@ function SnapshotHistoryList({
           Các mốc đã chốt
         </div>
         <div className="font-mono text-[11px] text-muted-faint">
-          {allRows.length} snapshot
+          {allRows.filter((r) => r.kind === "frozen").length} snapshot
         </div>
       </div>
 

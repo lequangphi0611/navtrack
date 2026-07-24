@@ -28,7 +28,6 @@ export default async function SnapshotHistoryPage() {
         action: createManualSnapshot,
       }}
       rows={history.rows}
-      initialHasMore={history.hasMore}
       initialNextCursor={history.nextCursor}
       loadMoreAction={loadMoreSnapshotHistory}
     />

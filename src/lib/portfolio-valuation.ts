@@ -76,6 +76,11 @@ export type PortfolioValuation = {
   // unrealizedPnl bị ảnh hưởng khi thiếu giá.
   realizedPnl: string;
   unrealizedPnl: string;
+  // true khi mốc chốt (cutoff) KHÁC "hôm nay" — realizedPnl/unrealizedPnl khi
+  // đó có thể không cộng khớp tuyệt đối absolutePnl (unrealizedPnl luôn dùng
+  // quantity/avgCost HIỆN TẠI, không phải tại cutoffDate — giới hạn có sẵn
+  // của cơ chế cutoff, xem lib/portfolio-valuation.ts::computeXirrAndPnlCore).
+  pnlSplitIsApproximate: boolean;
   allocation: AllocationSlice[];
   priceFreshnessNote: string;
   missingPriceHoldings: MissingPriceHolding[];
@@ -125,13 +130,15 @@ async function getAllCashflowsForXirr(
   cutoffDate: Date,
 ): Promise<
   {
+    id: string;
     date: Date;
+    createdAt: Date;
     amount: Decimal;
     type: CashflowType;
     taxAmount: Decimal;
     feeAmount: Decimal;
     // holdingId/quantity thêm cho realized/unrealized PnL (issue #67, lib/
-    // realized-pnl.ts) — buildXirrCashflows() chỉ đọc {date, amount} nên 2
+    // realized-pnl.ts) — buildXirrCashflows() chỉ đọc {date, amount} nên các
     // field thừa an toàn về type (structural typing), không cần sửa hàm đó.
     holdingId: string;
     quantity: Decimal;
@@ -141,8 +148,11 @@ async function getAllCashflowsForXirr(
 
   const rows = await db.cashflow.findMany({
     where: { holdingId: { in: holdingIds }, date: { lte: cutoffDate } },
+    orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
     select: {
+      id: true,
       date: true,
+      createdAt: true,
       amount: true,
       type: true,
       taxAmount: true,
@@ -153,13 +163,60 @@ async function getAllCashflowsForXirr(
   });
 
   return rows.map((row) => ({
+    id: row.id,
     date: row.date,
+    createdAt: row.createdAt,
     amount: new Decimal(row.amount.toString()),
     type: row.type,
     taxAmount: new Decimal(row.taxAmount.toString()),
     feeAmount: new Decimal(row.feeAmount.toString()),
     holdingId: row.holdingId,
     quantity: new Decimal(row.quantity.toString()),
+  }));
+}
+
+// Cổ tức cổ phiếu <= cutoffDate cho toàn danh mục — cùng pattern batch với
+// getAllCashDividendsForXirr() (gộp nhiều holdingId một lượt, không N+1).
+// Dùng cho computeRealizedGainForHolding() (lib/realized-pnl.ts) track
+// realQuantity — quantity luôn dương, không ảnh hưởng avgCost.
+async function getAllStockDividendsForXirr(
+  holdingIds: string[],
+  cutoffDate: Date,
+): Promise<
+  {
+    id: string;
+    holdingId: string;
+    date: Date;
+    createdAt: Date;
+    quantity: Decimal;
+  }[]
+> {
+  if (holdingIds.length === 0) return [];
+
+  const rows = await db.dividend.findMany({
+    where: {
+      holdingId: { in: holdingIds },
+      type: "STOCK",
+      date: { lte: cutoffDate },
+    },
+    select: {
+      id: true,
+      holdingId: true,
+      date: true,
+      createdAt: true,
+      stockQuantity: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    holdingId: row.holdingId,
+    date: row.date,
+    createdAt: row.createdAt,
+    // stockQuantity luôn có mặt khi type === "STOCK" (schema chỉ nullable vì
+    // field dùng chung cho cả CASH) — non-null assertion an toàn ở đây, cùng
+    // pattern netAmount! ở getAllCashDividendsForXirr().
+    quantity: new Decimal(row.stockQuantity!.toString()),
   }));
 }
 
@@ -316,6 +373,9 @@ type XirrAndPnlCore = {
   dividendTaxTotal: Decimal;
   costDragAmount: Decimal;
   costDragPercent: number;
+  // true khi mốc chốt KHÁC "hôm nay" — xem comment tại nơi tính giá trị này
+  // trong computeXirrAndPnlCore() (issue #83 code review #2).
+  pnlSplitIsApproximate: boolean;
 };
 
 // Holding tối thiểu cần cho computeXirrCore — cả getOpenHoldings/
@@ -400,16 +460,24 @@ async function computeXirrAndPnlCore(
     getClosedHoldings(),
   ]);
   const allHoldings = [...open, ...closed];
+  const allHoldingIds = allHoldings.map((h) => h.id);
 
-  const { valuations, currentNav, points, xirr, cashflows, dividends } =
-    await computeXirrCore({
+  // getAllStockDividendsForXirr() chạy song song với computeXirrCore() (không
+  // phụ thuộc kết quả của nhau) — tránh thêm round-trip tuần tự thừa.
+  const [
+    { valuations, currentNav, points, xirr, cashflows, dividends },
+    stockDividends,
+  ] = await Promise.all([
+    computeXirrCore({
       holdings: allHoldings.map((h) => ({
         id: h.id,
         symbol: h.symbol,
         quantity: new Decimal(h.quantity),
       })),
       cutoffDate,
-    });
+    }),
+    getAllStockDividendsForXirr(allHoldingIds, cutoffDate),
+  ]);
 
   // currentNav là null (không phải Decimal(0)) khi chưa mã nào định giá được
   // (xem comment computeXirrCore) — navSum ở XirrAndPnlCore luôn là Decimal
@@ -452,16 +520,31 @@ async function computeXirrAndPnlCore(
 
   // Realized/unrealized PnL (issue #67, lib/realized-pnl.ts) — tách
   // absolutePnl thành phần ĐÃ CHỐT (bán thật + cổ tức) và TRÊN GIẤY (vị thế
-  // đang mở). Nhóm cashflows theo holdingId bằng Map (cùng pattern navByType
-  // ở buildAllocation) rồi tính lãi/lỗ chốt riêng từng holding.
+  // đang mở). Nhóm cashflows VÀ cổ tức cổ phiếu theo holdingId bằng Map (cùng
+  // pattern navByType ở buildAllocation) rồi tính lãi/lỗ chốt riêng từng
+  // holding — cổ tức cổ phiếu (issue #83 code review #1) không tạo Cashflow
+  // nên phải truyền riêng để computeRealizedGainForHolding() track đúng lúc
+  // vị thế thực sự đóng hết (xem comment lib/realized-pnl.ts).
   const cashflowsByHolding = new Map<string, typeof cashflows>();
   for (const cf of cashflows) {
     const group = cashflowsByHolding.get(cf.holdingId) ?? [];
     group.push(cf);
     cashflowsByHolding.set(cf.holdingId, group);
   }
-  const realizedGainFromSales = [...cashflowsByHolding.values()].reduce(
-    (sum, group) => sum.plus(computeRealizedGainForHolding(group)),
+  const stockDividendsByHolding = new Map<string, typeof stockDividends>();
+  for (const dividend of stockDividends) {
+    const group = stockDividendsByHolding.get(dividend.holdingId) ?? [];
+    group.push(dividend);
+    stockDividendsByHolding.set(dividend.holdingId, group);
+  }
+  const realizedGainFromSales = [...cashflowsByHolding.entries()].reduce(
+    (sum, [holdingId, group]) =>
+      sum.plus(
+        computeRealizedGainForHolding(
+          group,
+          stockDividendsByHolding.get(holdingId) ?? [],
+        ),
+      ),
     new Decimal(0),
   );
   const realizedPnl = realizedGainFromSales.plus(dividendSum);
@@ -480,6 +563,14 @@ async function computeXirrAndPnlCore(
   });
   const unrealizedPnl = computeUnrealizedGain(unrealizedPositions);
 
+  // Cờ cảnh báo (issue #83 code review #2): unrealizedPnl LUÔN dùng
+  // quantity/avgCost HIỆN TẠI (không phải tại cutoffDate — giới hạn có sẵn,
+  // xem comment unrealizedPositions trên) nên khi mốc chốt KHÁC hôm nay, tổng
+  // realizedPnl + unrealizedPnl có thể không khớp tuyệt đối với absolutePnl
+  // tại đúng mốc đó — chỉ đúng tuyệt đối khi cutoff = TODAY. Thêm cờ để UI
+  // cảnh báo thay vì sửa cơ chế cutoff tổng thể (process/DECISION.md).
+  const pnlSplitIsApproximate = selection.key !== "TODAY";
+
   return {
     cutoffDate,
     open,
@@ -497,6 +588,7 @@ async function computeXirrAndPnlCore(
     dividendTaxTotal,
     costDragAmount,
     costDragPercent,
+    pnlSplitIsApproximate,
   };
 }
 
@@ -525,6 +617,7 @@ export async function getPortfolioValuation(
     dividendTaxTotal,
     costDragAmount,
     costDragPercent,
+    pnlSplitIsApproximate,
   } = await computeXirrAndPnlCore(selection);
 
   const missingPriceHoldings: MissingPriceHolding[] = open
@@ -592,6 +685,7 @@ export async function getPortfolioValuation(
     absolutePnlIsPartial: navValueIsPartial,
     realizedPnl: realizedPnl.toString(),
     unrealizedPnl: unrealizedPnl.toString(),
+    pnlSplitIsApproximate,
     allocation,
     priceFreshnessNote,
     missingPriceHoldings,

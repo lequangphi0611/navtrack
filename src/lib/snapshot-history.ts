@@ -78,6 +78,21 @@ function describePeriod(
   }
 }
 
+// Phân trang kiểu "peek LIMIT+1" dùng chung cho getSnapshotHistory()/
+// getMoreSnapshotHistory() (features/snapshots/queries.ts, issue #83) — nhận
+// `rows` đã query với `take: limit + 1` (caller tự peek), tính hasMore/page/
+// nextCursor. Pure, generic theo T có id để cả FrozenSnapshotRow lẫn row thô
+// từ Prisma dùng chung được.
+export function paginateWithCursor<T extends { id: string }>(
+  rows: T[],
+  limit: number,
+): { page: T[]; hasMore: boolean; nextCursor: string | null } {
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? (page[page.length - 1]?.id ?? null) : null;
+  return { page, hasMore, nextCursor };
+}
+
 function heightPercentOf(value: Decimal, max: Decimal): number {
   if (max.isZero()) return 0;
   return value.div(max).mul(100).toNumber();

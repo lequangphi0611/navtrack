@@ -15,6 +15,7 @@ import { formatDate, formatDayMonth, formatTime } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
 import {
   buildSnapshotHistoryView,
+  paginateWithCursor,
   type FrozenSnapshotRow,
 } from "@/lib/snapshot-history";
 import {
@@ -130,7 +131,6 @@ export async function getSnapshotHistory(
   now: Date = new Date(),
 ): Promise<
   ReturnType<typeof buildSnapshotHistoryView> & {
-    hasMore: boolean;
     nextCursor: string | null;
   }
 > {
@@ -145,9 +145,10 @@ export async function getSnapshotHistory(
     select: { id: true, date: true, value: true, period: true },
   });
 
-  const hasMore = frozen.length > SNAPSHOT_HISTORY_LIMIT;
-  const page = hasMore ? frozen.slice(0, SNAPSHOT_HISTORY_LIMIT) : frozen;
-  const nextCursor = hasMore ? (page[page.length - 1]?.id ?? null) : null;
+  const { page, nextCursor } = paginateWithCursor(
+    frozen,
+    SNAPSHOT_HISTORY_LIMIT,
+  );
 
   const frozenRows: FrozenSnapshotRow[] = page.map((s) => ({
     id: s.id,
@@ -158,7 +159,6 @@ export async function getSnapshotHistory(
 
   return {
     ...buildSnapshotHistoryView(frozenRows, navToday, now),
-    hasMore,
     nextCursor,
   };
 }
@@ -199,9 +199,10 @@ export async function getMoreSnapshotHistory(
     select: { id: true, date: true, value: true, period: true },
   });
 
-  const hasMore = frozen.length > SNAPSHOT_HISTORY_LIMIT;
-  const page = hasMore ? frozen.slice(0, SNAPSHOT_HISTORY_LIMIT) : frozen;
-  const nextCursor = hasMore ? (page[page.length - 1]?.id ?? null) : null;
+  const { page, nextCursor } = paginateWithCursor(
+    frozen,
+    SNAPSHOT_HISTORY_LIMIT,
+  );
 
   const rows: FrozenSnapshotRow[] = page.map((s) => ({
     id: s.id,

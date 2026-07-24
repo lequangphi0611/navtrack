@@ -20,9 +20,8 @@ type SnapshotHistoryScreenProps = {
   freezeSheet: SnapshotFreezeSheetProps;
   rows: SnapshotListRow[];
   // Load-more "Các mốc đã chốt" (cursor-based, issue #83) — SnapshotHistoryList
-  // tự quản lý state phân trang, nhận sẵn trang đầu (initialHasMore/initialNextCursor,
-  // đã fetch ở page.tsx) + action server để tự gọi tiếp khi cần xem thêm.
-  initialHasMore: boolean;
+  // tự quản lý state phân trang, nhận sẵn trang đầu (initialNextCursor, đã fetch
+  // ở page.tsx) + action server để tự gọi tiếp khi cần xem thêm.
   initialNextCursor: string | null;
   loadMoreAction: (
     cursor: string,
@@ -36,7 +35,6 @@ function SnapshotHistoryScreen({
   chart,
   freezeSheet,
   rows,
-  initialHasMore,
   initialNextCursor,
   loadMoreAction,
 }: SnapshotHistoryScreenProps) {
@@ -48,7 +46,6 @@ function SnapshotHistoryScreen({
       <SnapshotFreezeSheet {...freezeSheet} />
       <SnapshotHistoryList
         rows={rows}
-        initialHasMore={initialHasMore}
         initialNextCursor={initialNextCursor}
         loadMoreAction={loadMoreAction}
       />
