@@ -26,6 +26,10 @@ import {
   formatDayMonth,
   formatXirrBarePercent,
 } from "@/lib/format";
+import {
+  computeRealizedGainForHolding,
+  computeUnrealizedGain,
+} from "@/lib/realized-pnl";
 import { ROUTES } from "@/lib/routes";
 import type { HoldingValuation } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
@@ -62,6 +66,16 @@ export type PortfolioValuation = {
   xirr: XirrResultUi;
   absolutePnl: string;
   absolutePnlIsPartial: boolean;
+  // Tách absolutePnl thành phần ĐÃ CHỐT (đã bán thật + cổ tức tiền mặt) và
+  // TRÊN GIẤY (vị thế đang mở, NAV - vốn còn lại) — issue #67. Bất biến toán
+  // học: realizedPnl + unrealizedPnl == absolutePnl TUYỆT ĐỐI (không xấp xỉ)
+  // khi cutoff = hôm nay và không thiếu giá — phương pháp avgCost bình quân
+  // di động đảm bảo Σ(vốn gốc trừ ra ở mỗi lần bán) + Σ(vốn gốc còn lại
+  // trong vị thế đang giữ) = Σ|BUY.amount| (xem lib/realized-pnl.ts).
+  // Dùng chung absolutePnlIsPartial (không có cờ isPartial riêng) — chỉ
+  // unrealizedPnl bị ảnh hưởng khi thiếu giá.
+  realizedPnl: string;
+  unrealizedPnl: string;
   allocation: AllocationSlice[];
   priceFreshnessNote: string;
   missingPriceHoldings: MissingPriceHolding[];
@@ -116,6 +130,11 @@ async function getAllCashflowsForXirr(
     type: CashflowType;
     taxAmount: Decimal;
     feeAmount: Decimal;
+    // holdingId/quantity thêm cho realized/unrealized PnL (issue #67, lib/
+    // realized-pnl.ts) — buildXirrCashflows() chỉ đọc {date, amount} nên 2
+    // field thừa an toàn về type (structural typing), không cần sửa hàm đó.
+    holdingId: string;
+    quantity: Decimal;
   }[]
 > {
   if (holdingIds.length === 0) return [];
@@ -128,6 +147,8 @@ async function getAllCashflowsForXirr(
       type: true,
       taxAmount: true,
       feeAmount: true,
+      holdingId: true,
+      quantity: true,
     },
   });
 
@@ -137,6 +158,8 @@ async function getAllCashflowsForXirr(
     type: row.type,
     taxAmount: new Decimal(row.taxAmount.toString()),
     feeAmount: new Decimal(row.feeAmount.toString()),
+    holdingId: row.holdingId,
+    quantity: new Decimal(row.quantity.toString()),
   }));
 }
 
@@ -271,6 +294,11 @@ type XirrAndPnlCore = {
   navSum: Decimal;
   xirr: ReturnType<typeof computeXirr>;
   absolutePnl: Decimal;
+  // Tách absolutePnl thành đã chốt/trên giấy (issue #67) — xem comment đầy đủ
+  // ở PortfolioValuation.realizedPnl/unrealizedPnl (bất biến toán học +
+  // tham chiếu công thức, lib/realized-pnl.ts).
+  realizedPnl: Decimal;
+  unrealizedPnl: Decimal;
   // Tổng vốn ròng đã bỏ vào TÍNH TỚI cutoffDate, cho TẤT CẢ holding (mở lẫn
   // đóng) — docs/domain/05 "Cách tính": Σ tiền ra (mua) − Σ tiền vào đã rút
   // (bán + cổ tức) trước mốc. CỐ Ý không dùng getTotalInvested() (chỉ tính
@@ -422,6 +450,36 @@ async function computeXirrAndPnlCore(
     costDragPercent,
   } = computeCostDrag(cashflows, dividends);
 
+  // Realized/unrealized PnL (issue #67, lib/realized-pnl.ts) — tách
+  // absolutePnl thành phần ĐÃ CHỐT (bán thật + cổ tức) và TRÊN GIẤY (vị thế
+  // đang mở). Nhóm cashflows theo holdingId bằng Map (cùng pattern navByType
+  // ở buildAllocation) rồi tính lãi/lỗ chốt riêng từng holding.
+  const cashflowsByHolding = new Map<string, typeof cashflows>();
+  for (const cf of cashflows) {
+    const group = cashflowsByHolding.get(cf.holdingId) ?? [];
+    group.push(cf);
+    cashflowsByHolding.set(cf.holdingId, group);
+  }
+  const realizedGainFromSales = [...cashflowsByHolding.values()].reduce(
+    (sum, group) => sum.plus(computeRealizedGainForHolding(group)),
+    new Decimal(0),
+  );
+  const realizedPnl = realizedGainFromSales.plus(dividendSum);
+
+  // unrealizedPnl chỉ tính trên vị thế đang mở ĐỊNH GIÁ ĐƯỢC (isValued) —
+  // CHÚ Ý: dùng quantity/avgCost HIỆN TẠI (cache materialize trên Holding,
+  // HoldingSummary.totalCostBasis), KHÔNG phải tại cutoffDate — giới hạn CÓ
+  // SẴN của toàn cơ chế cutoff trong file này (NAV cũng dùng cùng cách),
+  // không phải lỗi mới phát sinh từ issue #67.
+  const unrealizedPositions = open.flatMap((h) => {
+    const valuation = valuations.get(h.id);
+    if (!valuation || !isValued(valuation)) return [];
+    return [
+      { navValue: valuation.nav, costBasis: new Decimal(h.totalCostBasis) },
+    ];
+  });
+  const unrealizedPnl = computeUnrealizedGain(unrealizedPositions);
+
   return {
     cutoffDate,
     open,
@@ -430,6 +488,8 @@ async function computeXirrAndPnlCore(
     navSum,
     xirr,
     absolutePnl,
+    realizedPnl,
+    unrealizedPnl,
     totalInvested,
     grossInvested,
     feeTotal,
@@ -456,6 +516,8 @@ export async function getPortfolioValuation(
     navSum,
     xirr,
     absolutePnl,
+    realizedPnl,
+    unrealizedPnl,
     totalInvested,
     grossInvested,
     feeTotal,
@@ -528,6 +590,8 @@ export async function getPortfolioValuation(
     xirr: toUiXirr(xirr),
     absolutePnl: absolutePnl.toString(),
     absolutePnlIsPartial: navValueIsPartial,
+    realizedPnl: realizedPnl.toString(),
+    unrealizedPnl: unrealizedPnl.toString(),
     allocation,
     priceFreshnessNote,
     missingPriceHoldings,

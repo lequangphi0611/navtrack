@@ -35,7 +35,7 @@ Dữ liệu cũ trong Sheet của tôi không tách chi tiết từng mã, nên 
 ### 5. Xử lý đúng những thứ Sheet làm ẩu
 
 - **Cổ tức** được ghi nhận riêng: cổ tức tiền mặt được tính như một khoản sinh lời thật, cổ tức bằng cổ phiếu thì tự cộng thêm số lượng tôi đang giữ.
-- **Thuế** được tự động trừ khi tôi bán, để con số lãi/lỗ là số tôi *thực nhận*, không phải số trên giấy.
+- **Thuế** được tự động trừ khi tôi bán, để con số lãi/lỗ là số tôi *thực nhận*, không phải số trên giấy. Con số lãi/lỗ cũng được tách rõ phần **đã chốt** (đã bán thật + cổ tức nhận về) khỏi phần **chưa chốt** (lãi/lỗ trên giấy của những gì đang giữ) — để tôi biết mình đã thực sự "bỏ túi" bao nhiêu, khác với phần còn phụ thuộc giá thị trường.
 - **Chi phí ăn mòn** — thuế và phí giao dịch cộng dồn từ đầu, hiển thị rõ số tiền và % trên vốn tôi đã bỏ ra, thay vì chìm lẫn từng dòng như trong Sheet.
 - **Vàng và trái phiếu** — những thứ không có giá tự động đáng tin — tôi được phép nhập tay giá, và app ghi rõ số nào là tự động, số nào tôi tự nhập.
 

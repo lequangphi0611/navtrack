@@ -13,6 +13,11 @@ type PnlCostDragCardProps = {
   // Decimal đã serialize — lãi/lỗ thực nhận (đã trừ thuế + phí), có thể âm.
   pnlValue: string;
   pnlNote?: string;
+  // Bất biến (issue #67): realizedPnl + unrealizedPnl ≈ pnlValue (absolutePnl).
+  // realizedPnl: lãi/lỗ đã chốt thật (đã bán + cổ tức tiền mặt).
+  // unrealizedPnl: lãi/lỗ trên giấy (vị thế đang mở, chưa bán).
+  realizedPnl: string;
+  unrealizedPnl: string;
   costDragAmount: string;
   costDragPercent: number;
   // grossInvested + costDragBreakdown: cần để render CostDragSheet (mở từ
@@ -30,6 +35,8 @@ type PnlCostDragCardProps = {
 function PnlCostDragCard({
   pnlValue,
   pnlNote,
+  realizedPnl,
+  unrealizedPnl,
   costDragAmount,
   costDragPercent,
   grossInvested,
@@ -38,6 +45,8 @@ function PnlCostDragCard({
 }: PnlCostDragCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const pnlNumber = Number(pnlValue);
+  const realizedPnlNumber = Number(realizedPnl);
+  const unrealizedPnlNumber = Number(unrealizedPnl);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -56,6 +65,30 @@ function PnlCostDragCard({
         {pnlNote ? (
           <div className="mt-1.5 text-[10.5px] text-muted-faint">{pnlNote}</div>
         ) : null}
+        <div className="mt-2 grid grid-cols-2 gap-2 text-[10.5px]">
+          <div>
+            <span className="text-muted-faint">Đã thực hiện: </span>
+            <span
+              className={cn(
+                "font-mono font-semibold tabular-nums",
+                signColorClass(realizedPnlNumber),
+              )}
+            >
+              {formatMoney(realizedPnl, { hidden })}
+            </span>
+          </div>
+          <div>
+            <span className="text-muted-faint">Chưa thực hiện: </span>
+            <span
+              className={cn(
+                "font-mono font-semibold tabular-nums",
+                signColorClass(unrealizedPnlNumber),
+              )}
+            >
+              {formatMoney(unrealizedPnl, { hidden })}
+            </span>
+          </div>
+        </div>
       </div>
 
       <button
