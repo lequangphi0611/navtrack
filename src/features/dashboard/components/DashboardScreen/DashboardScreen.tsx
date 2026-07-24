@@ -50,6 +50,15 @@ type DashboardScreenProps = {
   absolutePnl: string;
   // true khi lãi/lỗ chỉ tính trên phần đã có giá (mockup 2f "Lãi/lỗ (tạm)").
   absolutePnlIsPartial: boolean;
+  // Bất biến (issue #67): realizedPnl + unrealizedPnl ≈ absolutePnl. Khớp field
+  // mới trên PortfolioValuation (lib/portfolio-valuation.ts), page.tsx không cần
+  // sửa vì đã `{...valuation}`.
+  realizedPnl: string;
+  unrealizedPnl: string;
+  // true khi mốc chốt đang chọn khác "hôm nay" — phần tách realized/unrealized
+  // ở trên chỉ là ước tính (docs/domain giới hạn cutoff-accuracy đã chốt), hiện
+  // ghi chú phụ dưới PnlCostDragCard khi true (finding #2, PR #87 review).
+  pnlSplitIsApproximate: boolean;
   // Chi phí ăn mòn (Phase 5, docs/domain/07-tax.md mục "Chi phí ăn mòn") — khớp
   // field mới trên PortfolioValuation (lib/portfolio-valuation.ts), page.tsx
   // không cần sửa vì đã `{...valuation}`.
@@ -88,6 +97,9 @@ function DashboardScreen({
   xirr,
   absolutePnl,
   absolutePnlIsPartial,
+  realizedPnl,
+  unrealizedPnl,
+  pnlSplitIsApproximate,
   costDragAmount,
   costDragPercent,
   grossInvested,
@@ -192,6 +204,13 @@ function DashboardScreen({
           absolutePnlIsPartial
             ? "Chỉ trên phần có giá — đã trừ thuế & phí."
             : "Đã trừ cả thuế lẫn phí — số thực nhận, không phải trên giấy."
+        }
+        realizedPnl={realizedPnl}
+        unrealizedPnl={unrealizedPnl}
+        splitNote={
+          pnlSplitIsApproximate
+            ? "*Ước tính — có thể lệch khi xem theo mốc chốt khác hôm nay."
+            : undefined
         }
         costDragAmount={costDragAmount}
         costDragPercent={costDragPercent}

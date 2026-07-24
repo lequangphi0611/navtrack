@@ -19,7 +19,9 @@ function DashboardScreenSkeleton() {
         <Skeleton className="h-24 rounded-2xl" />
         <Skeleton className="h-24 rounded-2xl" />
       </div>
-      <Skeleton className="h-24 w-full rounded-2xl" />
+      {/* PnlCostDragCard — hơi cao hơn h-24 mặc định vì có thêm hàng
+          "Đã thực hiện/Chưa thực hiện" (issue #67) so với thẻ 2 cột phía trên. */}
+      <Skeleton className="h-28 w-full rounded-2xl" />
       <Skeleton className="h-12 w-full rounded-xl" />
     </div>
   );

@@ -1,4 +1,7 @@
-import { createManualSnapshot } from "@/features/snapshots/actions";
+import {
+  createManualSnapshot,
+  loadMoreSnapshotHistory,
+} from "@/features/snapshots/actions";
 import { SnapshotHistoryScreen } from "@/features/snapshots/components/SnapshotHistoryScreen";
 import {
   getSnapshotFreezePreview,
@@ -25,6 +28,8 @@ export default async function SnapshotHistoryPage() {
         action: createManualSnapshot,
       }}
       rows={history.rows}
+      initialNextCursor={history.nextCursor}
+      loadMoreAction={loadMoreSnapshotHistory}
     />
   );
 }

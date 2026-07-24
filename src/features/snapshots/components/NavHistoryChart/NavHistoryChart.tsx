@@ -2,7 +2,7 @@ import { formatMoney, formatSignedPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type NavHistoryChartPoint = {
-  label: string; // "T12" .. "T6" | "nay"
+  label: string; // "T12/25" .. "T6/26" | "nay"
   heightPercent: number; // 0-100, Container tự tính từ value/max(values)
   isLive?: boolean; // true = cột cuối, pattern sọc "trực tiếp chưa lưu"
 };

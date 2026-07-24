@@ -301,7 +301,8 @@ test("SELL tự tính thuế/phí theo Setting, sửa tay được, đổi ngày
     //   = (-10.000.000 [BUY] + (5.200.000 - 26.000 - 10.400) [SELL sau sửa]) + 9.000.000
     //   = -4.836.400 + 9.000.000 = 4.163.600.
     // Chi phí ăn mòn = taxAmount(10.400) + feeAmount(26.000) + 0 (không cổ tức) = 36.400,
-    //   trên grossInvested = |BUY.amount| = 10.000.000 -> 0,364% (làm tròn "0,4%").
+    //   trên grossInvested = |BUY.amount| = 10.000.000 -> 0,364% (làm tròn "0,36%",
+    //   formatCostDragPercent giữ 2 chữ số thập phân — xem src/lib/format.ts).
     await page.goto("/");
 
     await expect(
@@ -315,8 +316,31 @@ test("SELL tự tính thuế/phí theo Setting, sửa tay được, đổi ngày
     await expect(pnlCard).toContainText(
       "Đã trừ cả thuế lẫn phí — số thực nhận, không phải trên giấy.",
     );
-    await expect(pnlCard).toContainText("0,4%"); // costDragPercent trên dòng "Chi phí ăn mòn"
+    await expect(pnlCard).toContainText("0,36%"); // costDragPercent trên dòng "Chi phí ăn mòn"
     await expect(pnlCard).toContainText("36,4k"); // costDragAmount rút gọn
+
+    // --- Tách realized/unrealized PnL (issue #67) trên CHÍNH scenario BUY/SELL
+    // đã kiểm chứng tax/fee ở trên — không dựng lại setup riêng, tận dụng số
+    // liệu đã audit kỹ để đối chiếu công thức domain (docs/domain/05, mục
+    // "Cách tính"):
+    // realizedPnl = SELL.amount (net, sau thuế/phí) − quantity_bán × avgCost
+    //   = 5.163.600 (= 5.200.000 − 26.000 − 10.400, đã tính ở SELL.amount trên)
+    //     − 40 × 100.000 [avgCost = |BUY.amount|/quantity = 10.000.000/100]
+    //   = 5.163.600 − 4.000.000 = 1.163.600.
+    // unrealizedPnl = NAV hiện tại − vốn còn lại trong vị thế
+    //   = 9.000.000 − 60 × 100.000 = 9.000.000 − 6.000.000 = 3.000.000.
+    // Bất biến: realizedPnl + unrealizedPnl = 1.163.600 + 3.000.000 = 4.163.600
+    //   = đúng absolutePnl đã assert ở trên ("Lãi/lỗ (thực nhận)") — nếu logic
+    //   tách bị revert/sai (vd quên trừ thuế/phí khỏi SELL.amount, hoặc dùng
+    //   nhầm avgCost hiện tại thay vì tại-thời-điểm-bán), một trong hai số
+    //   dưới đây sẽ lệch khỏi giá trị tay này.
+    await expect(pnlCard).toContainText("Đã thực hiện:");
+    await expect(pnlCard).toContainText("1.163.600");
+    await expect(pnlCard).toContainText("Chưa thực hiện:");
+    await expect(pnlCard).toContainText("3.000.000");
+    // Mốc chốt đang xem = "hôm nay" (không đổi cutoff trong test này) ->
+    // pnlSplitIsApproximate phải là false -> KHÔNG hiện ghi chú "*Ước tính".
+    await expect(pnlCard).not.toContainText("Ước tính");
 
     await expect(
       page.getByText("Vốn đã bỏ ra mua", { exact: true }).locator(".."),
@@ -326,7 +350,7 @@ test("SELL tự tính thuế/phí theo Setting, sửa tay được, đổi ngày
     await page.getByText("Chi phí ăn mòn", { exact: true }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByText("36.400")).toBeVisible(); // tổng đầy đủ, không rút gọn
-    await expect(sheet).toContainText("0,4%");
+    await expect(sheet).toContainText("0,36%");
     await expect(sheet).toContainText("10tr"); // grossInvested nhắc lại trong ghi chú số
 
     // "../.." (không phải ".."): amount ("26k") là SIBLING của div bọc

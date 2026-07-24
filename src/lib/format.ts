@@ -26,6 +26,11 @@ const PERCENT_FORMATTER = new Intl.NumberFormat("vi-VN", {
   maximumFractionDigits: 1,
 });
 
+const PERCENT_FORMATTER_PRECISE = new Intl.NumberFormat("vi-VN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 const COMPACT_MONEY_FORMATTER = new Intl.NumberFormat("vi-VN", {
   maximumFractionDigits: 2,
 });
@@ -111,6 +116,17 @@ export function formatSignedPercent(
 // nên không cần +/−, format thẳng value thay vì Math.abs(value).
 export function formatPercent(value: number): string {
   return `${PERCENT_FORMATTER.format(value)}%`;
+}
+
+// Phần trăm KHÔNG dấu, 2 chữ số thập phân — dùng riêng cho costDragPercent
+// ("Chi phí ăn mòn", PnlCostDragCard/CostDragSheet). Khác formatPercent (1 chữ
+// số): mẫu số ở đây là grossInvested nên giá trị thường < 1% (vd ví dụ
+// docs/domain/07-tax.md: 0.46%) — làm tròn 1 chữ số biến 0.46% thành "0.5%",
+// lệch ~9% trên một con số vốn đã bé. KHÔNG dùng cho contributionPercent
+// (breakdown trong CostDragSheet) — đó là % đóng góp tương đối trên tổng
+// costDragAmount (cùng thang với AllocationBar), 1 chữ số vẫn đủ.
+export function formatCostDragPercent(value: number): string {
+  return `${PERCENT_FORMATTER_PRECISE.format(value)}%`;
 }
 
 // Phần trăm THUẦN 1 chữ số thập phân, KHÔNG kèm dấu "%" và KHÔNG ép dấu +

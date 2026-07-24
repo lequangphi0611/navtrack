@@ -11,7 +11,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 3 | Snapshot tự động | ✅ | [phase-3.md](./phase-3.md) |
 | 4 | Cổ tức | ✅ | [phase-4.md](./phase-4.md) |
 | 5 | Thuế bán (áp dụng) | ✅ | [phase-5.md](./phase-5.md) |
-| 6 | Biểu đồ + hoàn thiện dashboard | ⬜ | [phase-6.md](./phase-6.md) |
+| 6 | Biểu đồ + hoàn thiện dashboard | 🟨 | [phase-6.md](./phase-6.md) |
 | 7 | Trái tức (lãi trái phiếu) | ⬜ | [phase-7.md](./phase-7.md) |
 | 8 | Lịch dòng tiền sắp tới | ⬜ | [phase-8.md](./phase-8.md) |
 
@@ -44,7 +44,7 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-16: Phase 4 — issue #52 verify: công thức/cache/wiring khớp + test sạch. **Phase 4 hoàn thành** ✅.
 - 2026-07-16: fix(dividends) issue #52: floor stockQuantity + override tolerance 2.
 - 2026-07-16: Thêm **Phase 7 — Trái tức** vào roadmap + chia 3 issue.
-- 2026-07-16: fix issue #59: `derivePositionIncludingStockDividends()` (lib/cost-basis.ts) thay `derivePosition()` ở 4 action mua/bán + `getHoldingDetail()` — cổ tức cổ phiếu không còn bị ghi đè mất khi có giao dịch sau đó, bán vượt cashflow-only nhưng hợp lệ nhờ cổ tức không còn bị chặn nhầm. `buildQuantityTimeline()` chuyển từ `features/dividends/` ra `lib/position-trail.ts` (dùng chung).
+- 2026-07-16: fix issue #59: hàm mới xử lý cả cổ tức cổ phiếu (`derivePositionIncludingStockDividends()`, `lib/cost-basis.ts`, sau đổi tên thành `derivePosition()`) thay `derivePosition()` cũ ở 4 action mua/bán + `getHoldingDetail()` — cổ tức cổ phiếu không còn bị ghi đè mất khi có giao dịch sau đó, bán vượt cashflow-only nhưng hợp lệ nhờ cổ tức không còn bị chặn nhầm. `buildQuantityTimeline()` chuyển từ `features/dividends/` ra `lib/position-trail.ts` (dùng chung).
 - 2026-07-16: fix(dashboard) issue #54: FAB "Mua/Bán" mở TransactionHoldingPicker thay vì trỏ /holdings.
 - 2026-07-17: verify issue #61 (follow-up Phase 4): `recordDividend` tự bù pha loãng NAV qua `NavOverride` + `Dividend.paymentDate` — khớp spec, unit/lint/typecheck sạch; bổ sung e2e case STOCK-không-tick + chuyển case tick sang tương tác checkbox thật; `pnpm e2e` không tự chạy được trong sandbox này (không có Docker, tải Playwright browser bị egress policy chặn).
 - 2026-07-17: review PR #62 (issue #61) — fix finding #2 (note trên NavOverride tự tạo), #3 (validate `paymentDate >= date`), #4 (e2e ghi cổ tức 2 lần cùng ngày), sửa mô tả PR khớp diff thật (finding #1).
@@ -56,3 +56,7 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-17: rà nghiệp vụ tài chính — sửa docs A2 (treo cảnh báo tập trung khi NAV danh mục khuyết giá); log #65 (C1 timing cổ tức), #66 (C2 phí mua vào avgCost), #67 (B1 realized/unrealized) để sửa sau; B2 benchmark giữ ở Backlog. Xem `DECISION.md` (7).
 - 2026-07-18: `design-fetcher` kéo mockup Phase 5 thật (`Phase 5 Screens.dc.html`, 6 màn 5a-5f), sinh digest `process/UI_phase_5.md`; đối chiếu với user — chốt tính lại thuế khi sửa ngày SELL đã ghi, giữ sheet chi tiết chi phí ăn mòn, ghi rõ cấu trúc lại `ReturnMetrics` theo mockup. Xem `DECISION.md` 2026-07-18 (2). Phát hiện + log riêng footgun hạ tầng: `DesignSync` (deferred tool) không lan xuống subagent — xem `DECISION.md` 2026-07-18 (1).
 - 2026-07-19: Phase 5 — verify: 12 key `Setting` (`SALE_TAX_*`/`TRANSACTION_FEE_*`) seed đúng, `avgCost` gộp phí mua (issue #66 đóng), sửa SELL đã ghi tính lại thuế/phí đúng effective dating, sheet "chi phí ăn mòn" breakdown 3 nguồn đúng %, e2e `tax-and-fee.spec.ts` đối chiếu tay khớp domain doc; bổ sung unit test thiếu (`schemas.test.ts` — guard server-side BUY không có `taxAmount`, trước đó chưa có test dù đã có refine). Log 1 gap nhỏ (client prefill không phân biệt "0 hợp lệ" vs "thiếu cấu hình" khi ngày < 2020-01-01 — hiếm, không chặn). **Phase 5 hoàn thành** ✅.
+- 2026-07-24: Phase 6 — issue #67: tách realized/unrealized PnL trên card Dashboard.
+- 2026-07-24: fix code review PR #87 (issue #83/#82/#67): sửa `realizedPnl` sai khi holding có cổ tức cổ phiếu (2 bộ đếm song song, `lib/realized-pnl.ts`), thêm cờ `pnlSplitIsApproximate` cảnh báo cutoff-approximate, dọn trùng lặp `sortByPositionTrailOrder`/`paginateWithCursor`. Xem `DECISION.md` 2026-07-24 (2).
+- 2026-07-24: sửa lần 2 PR #87 — retrofit thiết kế "2 bộ đếm song song" thành "1 bộ đếm `realQuantity`" cho `computeRealizedGainForHolding` (ca bán một phần rồi mua tiếp trước đó tính sai) VÀ fix cùng họ bug ở write-path `derivePositionIncludingStockDividends` (`lib/cost-basis.ts`, chưa từng fix). Xem `DECISION.md` 2026-07-24 (3).
+- 2026-07-24: sửa lần 3 PR #87 — xoá `derivePosition()` cũ (chỉ-Cashflow, không còn production caller sau sửa lần 2), đổi tên `derivePositionIncludingStockDividends()` thành `derivePosition()` (chiếm lại tên, giờ là cài đặt DUY NHẤT), gộp 10 test case cũ vào test suite hàm mới với `stockDividends=[]`. Gộp test lộ ra bug thật (sửa lần 4): `avgCost` không reset về 0 khi đóng hết vị thế bằng SELL không có BUY sau đó — thêm reset tường minh dựa trên `quantity` thật. Xem `DECISION.md` 2026-07-24 (4).

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  formatCostDragPercent,
   formatDate,
   formatDayMonth,
   formatMoney,
@@ -156,6 +157,20 @@ describe("formatPercent", () => {
 
   test("số nguyên vẫn giữ đúng 1 chữ số thập phân", () => {
     expect(formatPercent(60)).toBe("60,0%");
+  });
+});
+
+describe("formatCostDragPercent", () => {
+  test("giữ 2 chữ số thập phân, không có dấu +/−", () => {
+    expect(formatCostDragPercent(0.46)).toBe("0,46%");
+  });
+
+  test("số nguyên vẫn giữ đúng 2 chữ số thập phân", () => {
+    expect(formatCostDragPercent(2)).toBe("2,00%");
+  });
+
+  test("làm tròn đúng 2 chữ số thập phân", () => {
+    expect(formatCostDragPercent(0.4649)).toBe("0,46%");
   });
 });
 

@@ -4,7 +4,11 @@ import { Droplet, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetPopup } from "@/components/ui/sheet";
-import { formatMoney, formatPercent } from "@/lib/format";
+import {
+  formatCostDragPercent,
+  formatMoney,
+  formatPercent,
+} from "@/lib/format";
 import type { CostDragBreakdownEntry } from "@/lib/portfolio-valuation";
 import { cn } from "@/lib/utils";
 
@@ -84,7 +88,7 @@ function CostDragSheet({
           <div className="mt-1 font-mono text-xs text-muted-foreground">
             ={" "}
             <span className="font-semibold text-warning">
-              {formatPercent(costDragPercent)}
+              {formatCostDragPercent(costDragPercent)}
             </span>{" "}
             vốn đã bỏ ra mua (
             {formatMoney(grossInvested, { hidden, compact: true })})
