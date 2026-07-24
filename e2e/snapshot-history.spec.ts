@@ -357,3 +357,133 @@ test("giá lịch sử khác giá hiện tại đủ ngưỡng -> hiện đúng 
     });
   }
 });
+
+// Issue #83 — load-more cursor-based cho "Các mốc đã chốt". SNAPSHOT_HISTORY_LIMIT
+// = 20 (features/snapshots/queries.ts) nên trang đầu getSnapshotHistory() phải
+// dừng đúng ở 20 dòng dù DB có nhiều hơn; getMoreSnapshotHistory() (Server
+// Action loadMoreSnapshotHistory, gọi qua nút "Xem thêm") phải tải nốt phần
+// còn lại, không trùng/thiếu dòng.
+test("'Các mốc đã chốt': trang đầu dừng ở 20 dòng, bấm 'Xem thêm' tải nốt phần còn lại (issue #83)", async ({
+  browser,
+}) => {
+  const session = await createTestSession("snapshot-history-load-more");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  try {
+    // 25 mốc THỦ CÔNG rời rạc, chỉ khác date/value — value = i triệu (i =
+    // 1..25, i=25 mới nhất/i=1 cũ nhất) để mỗi dòng có "vân tay" riêng qua
+    // formatMoney compact ("1tr".."25tr", tất cả khác nhau) — dùng để xác
+    // nhận ĐÚNG dòng nào đã render, không chỉ đếm số lượng chung chung (đếm
+    // đúng số nhưng lặp/thiếu dòng vẫn có thể trùng đếm nếu chỉ check count).
+    const total = 25;
+    await db.snapshot.createMany({
+      data: Array.from({ length: total }, (_, idx) => {
+        const i = idx + 1;
+        return {
+          userId: session.userId,
+          holdingId: null,
+          date: daysAgo(total + 1 - i),
+          value: `${i * 1_000_000}`,
+          source: "AUTO" as const,
+          period: "PERIODIC" as const,
+          frozen: true,
+        };
+      }),
+    });
+
+    await page.goto("/snapshots");
+
+    // Trang đầu (desc theo date -> i=25..6, 20 dòng): dòng mới nhất (25tr) và
+    // dòng cuối trang 1 (6tr) hiện; 5 dòng cũ nhất (5tr..1tr, thuộc trang 2)
+    // CHƯA hiện.
+    await expect(page.getByText("20 snapshot", { exact: true })).toBeVisible();
+    await expect(page.getByText("25tr", { exact: true })).toBeVisible();
+    await expect(page.getByText("6tr", { exact: true })).toBeVisible();
+    await expect(page.getByText("5tr", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("1tr", { exact: true })).toHaveCount(0);
+
+    const loadMoreButton = page.getByRole("button", { name: "Xem thêm" });
+    await expect(loadMoreButton).toBeVisible();
+    await loadMoreButton.click();
+
+    // Sau khi tải thêm: đủ 25/25, 5 dòng còn lại hiện ra, nút "Xem thêm" biến
+    // mất (nextCursor null — trang 2 chỉ có 5 dòng, ít hơn LIMIT nên
+    // getMoreSnapshotHistory() trả hết trong 1 lần).
+    await expect(page.getByText("25 snapshot", { exact: true })).toBeVisible();
+    await expect(page.getByText("5tr", { exact: true })).toBeVisible();
+    await expect(page.getByText("1tr", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Xem thêm" })).toHaveCount(0);
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});
+
+// Issue #83 — nhãn cột biểu đồ NAV thêm năm ("T12/25" thay vì "T12") để phân
+// biệt 2 mốc CÙNG tháng, KHÁC năm (trước fix: cả hai render cùng "T{tháng}",
+// không phân biệt được trên trục biểu đồ).
+test("Biểu đồ NAV gắn nhãn năm để phân biệt 2 mốc cùng tháng khác năm (issue #83)", async ({
+  browser,
+}) => {
+  const session = await createTestSession("snapshot-history-chart-label");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  try {
+    // recentDate/oldDate lệch ĐÚNG 1 năm (cùng tháng/ngày) — tái hiện chính
+    // xác ca 2 mốc cùng tháng khác năm. Tính label bằng ĐÚNG công thức production
+    // (lib/snapshot-history.ts::buildSnapshotHistoryView) để test không phụ
+    // thuộc múi giờ chạy CI — chỉ cần xác nhận 2 nhãn tính ra THỰC SỰ khác
+    // nhau (nhờ hậu tố năm) và cả hai đều render đúng trên UI.
+    const recentDate = daysAgo(20);
+    const oldDate = new Date(recentDate);
+    oldDate.setUTCFullYear(oldDate.getUTCFullYear() - 1);
+
+    const recentLabel = `T${recentDate.getUTCMonth() + 1}/${String(
+      recentDate.getUTCFullYear(),
+    ).slice(-2)}`;
+    const oldLabel = `T${oldDate.getUTCMonth() + 1}/${String(
+      oldDate.getUTCFullYear(),
+    ).slice(-2)}`;
+    // Sanity trên chính test data — nếu 2 nhãn tình cờ trùng nhau (edge case
+    // lịch), assertion bên dưới sẽ pass giả dù code label sai; chặn sớm ở đây.
+    expect(recentLabel).not.toBe(oldLabel);
+
+    await db.snapshot.createMany({
+      data: [
+        {
+          userId: session.userId,
+          holdingId: null,
+          date: recentDate,
+          value: "2000000",
+          source: "AUTO" as const,
+          period: "PERIODIC" as const,
+          frozen: true,
+        },
+        {
+          userId: session.userId,
+          holdingId: null,
+          date: oldDate,
+          value: "1000000",
+          source: "AUTO" as const,
+          period: "PERIODIC" as const,
+          frozen: true,
+        },
+      ],
+    });
+
+    await page.goto("/snapshots");
+
+    // Trước fix #83, cả 2 nhãn này render giống hệt "T{tháng}" (không có hậu
+    // tố năm) -> getByText(recentLabel với "/YY") sẽ KHÔNG tìm thấy phần tử
+    // nào, test fail đúng như kỳ vọng nếu suffix năm bị revert.
+    await expect(page.getByText(recentLabel, { exact: true })).toBeVisible();
+    await expect(page.getByText(oldLabel, { exact: true })).toBeVisible();
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});

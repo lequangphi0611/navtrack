@@ -3,7 +3,11 @@
 import { ChevronRight, Droplet } from "lucide-react";
 import { useState } from "react";
 
-import { formatMoney, formatPercent, signColorClass } from "@/lib/format";
+import {
+  formatCostDragPercent,
+  formatMoney,
+  signColorClass,
+} from "@/lib/format";
 import type { CostDragBreakdownEntry } from "@/lib/portfolio-valuation";
 import { cn } from "@/lib/utils";
 
@@ -113,7 +117,7 @@ function PnlCostDragCard({
           <div className="mt-0.5 font-mono text-[10.5px] text-muted-faint">
             Thuế + phí đã ăn{" "}
             <span className="font-semibold text-warning">
-              {formatPercent(costDragPercent)}
+              {formatCostDragPercent(costDragPercent)}
             </span>{" "}
             vốn đã bỏ ra mua
           </div>
