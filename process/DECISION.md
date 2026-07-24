@@ -300,3 +300,14 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - Không đụng Prisma schema/migration — field `paymentDate` đã tồn tại từ #61.
 - Docs đã sync: `docs/domain/03-dividends.md` (mục "Entity / field"), `docs/domain/05-returns-xirr-and-pnl.md` (mục "Cách tính"), `docs/02-data-model.md` (comment field `paymentDate` trong snippet `Dividend`).
 - Tham chiếu: GitHub issue #65.
+
+## 2026-07-24
+
+**Chốt quy ước viết e2e theo Page Object Model + tách tài liệu e2e ra khỏi production code.**
+- Bối cảnh: bộ e2e hiện tại (`e2e/*.spec.ts`) viết lối thủ tục — gọi `page.getByRole/locator` trực tiếp trong spec, trùng lặp selector nặng, có chỗ bám class Tailwind (`div.rounded-2xl.border-border`) làm selector giòn, và tri thức domain (redirect `?cashflowId=`, DatePicker input hidden, timezone lệch ngày...) nằm rải rác trong comment từng spec. Cần một quy ước để spec mới nhất quán và gom tri thức lại một nơi.
+- **Quyết định:** áp dụng **Page Object Model** cho e2e — ba tầng rạch ròi: **page object** (theo màn hình, ở `e2e/pages/`, giữ URL + selector + action), **component object** (widget dùng lại xuyên màn), **fixture** cross-cutting (ở `e2e/support/`, đã có sẵn: session, dates, date-picker, urls). Spec chỉ mô tả ý định + kỳ vọng, gọi page object.
+- **Chiến lược selector:** role/label-first (repo có **0 `data-testid`** — dựa vào selector khả truy cập đúng khuyến nghị Playwright); `input[name="..."]` được phép cho form field (hợp đồng ổn định với Server Action); **cấm bám class CSS/Tailwind**; `data-testid` là **ngoại lệ có kiểm soát** — chỉ thêm vào `src/` khi selector khả truy cập thật sự không phân biệt được, nêu rõ trong PR.
+- **Assertion:** locator là API chính của page object, `expect` nằm ở **spec** (giữ ý định kỳ vọng dễ đọc); chỉ thêm assertion helper trong page object khi lặp ≥3 lần.
+- **Tách tài liệu e2e vs production (mục tiêu token/ngữ cảnh):** tri thức e2e gom vào `e2e/` + `docs/rules/` để khi Claude làm e2e chỉ nạp context e2e, không kéo `src/` vào; page object tập trung selector giúp người viết spec không phải mở internals component. Scoped `e2e/CLAUDE.md` auto-load chỉ khi làm trong `e2e/`.
+- **Phạm vi lần này: chỉ tài liệu**, không tạo `e2e/pages/` thật, không refactor spec đang xanh (tránh rủi ro vỡ test). Refactor spec cũ sang POM theo dõi ở GitHub issue riêng — spec **mới** viết theo POM ngay; spec cũ đụng tới đâu POM hoá tới đó.
+- Docs đã sync: `docs/rules/e2e-page-object.md` (rule mới — gồm mục "Best practices" gom lại: test independence/isolation cho `fullyParallel`, cấm logic điều khiển trong page object, tránh trừu tượng hoá non), `docs/coding-rules.md` (index), `docs/rules/testing.md` (mục End-to-end trỏ sang), `CLAUDE.md` (root — mục "Đọc khi cần" trỏ tường minh tới `e2e/CLAUDE.md`), `e2e/CLAUDE.md` (instruction scoped), `e2e/GOTCHAS.md` (nhật ký bẫy, seed từ bug thật đã gặp).
