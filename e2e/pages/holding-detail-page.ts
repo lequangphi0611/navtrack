@@ -1,5 +1,8 @@
 import type { Locator, Page } from "@playwright/test";
 
+import { HoldingsPage } from "./holdings-page";
+import { TransactionForm } from "./transaction-form";
+
 // Màn hình chi tiết một vị thế (/holdings/[id]). Nhận holdingUrl (base URL
 // sạch) từ nơi tạo/điều hướng tới nó — không tự đoán id.
 export class HoldingDetailPage {
@@ -7,6 +10,12 @@ export class HoldingDetailPage {
     private readonly page: Page,
     private readonly holdingUrl: string,
   ) {}
+
+  // Base URL sạch (không cashflowId) — cho ca cần điều hướng trực tiếp không
+  // qua UI (vd test cách ly tài khoản: account khác cố truy cập thẳng URL).
+  get url(): string {
+    return this.holdingUrl;
+  }
 
   async goto() {
     await this.page.goto(this.holdingUrl);
@@ -30,6 +39,27 @@ export class HoldingDetailPage {
 
   get deleteBlockedError(): Locator {
     return this.page.getByText(/Không thể xóa — có giao dịch bán sau đó/);
+  }
+
+  get backLink(): Locator {
+    return this.page.getByRole("link", { name: "Quay lại" });
+  }
+
+  async goBack(): Promise<HoldingsPage> {
+    const holdingsPage = new HoldingsPage(this.page);
+    await this.backLink.click();
+    await this.page.waitForURL(holdingsPage.url);
+    return holdingsPage;
+  }
+
+  get addTransactionLink(): Locator {
+    return this.page.getByRole("link", { name: "Thêm giao dịch" });
+  }
+
+  async goToNewTransaction(): Promise<TransactionForm> {
+    await this.addTransactionLink.click();
+    await this.page.waitForURL(`${this.holdingUrl}/transactions/new`);
+    return new TransactionForm(this.page, this.holdingUrl);
   }
 
   // Một dòng trong "Lịch sử giao dịch", chọn theo nội dung ổn định (số tiền)

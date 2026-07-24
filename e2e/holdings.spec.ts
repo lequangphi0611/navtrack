@@ -1,9 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { HoldingDetailPage } from "./pages/holding-detail-page";
 import { HoldingsPage } from "./pages/holdings-page";
-import { NewHoldingPage } from "./pages/new-holding-page";
-import { TransactionForm } from "./pages/transaction-form";
 import {
   cleanupTestUser,
   closeContext,
@@ -25,44 +22,53 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
   const page = await context.newPage();
 
   try {
-    const holdingsPage = new HoldingsPage(page);
+    let holdingsPage = new HoldingsPage(page);
     await holdingsPage.goto();
     await expect(holdingsPage.emptyState).toBeVisible();
 
     // Nhập vị thế ban đầu: 100 FPT @ 100k
-    const holdingUrl = await new NewHoldingPage(page).create({
+    const newHoldingPage = await holdingsPage.goToNewHolding();
+    let detail = await newHoldingPage.create({
       symbol: "FPT",
       quantity: 100,
       pricePerUnit: 100_000,
     });
-    const detail = new HoldingDetailPage(page, holdingUrl);
     await expect(detail.heading("FPT")).toBeVisible();
     await expect(detail.quantityText).toHaveText("100 cổ phần");
 
-    // Xuất hiện trong danh sách vị thế mở
-    await holdingsPage.goto();
+    // Xuất hiện trong danh sách vị thế mở (quay lại danh sách qua "Quay lại")
+    holdingsPage = await detail.goBack();
     await expect(holdingsPage.holdingLink("FPT")).toBeVisible();
 
+    // Mở lại chi tiết vị thế để tiếp tục ghi giao dịch
+    detail = await holdingsPage.openHolding("FPT");
+
     // Mua thêm 100 @ 120k -> giá vốn bình quân recompute thành 110k
-    const form = new TransactionForm(page, holdingUrl);
-    await form.addBuy({ quantity: 100, pricePerUnit: 120_000 });
+    let form = await detail.goToNewTransaction();
+    await form.submitBuy({ quantity: 100, pricePerUnit: 120_000 });
     await expect(detail.quantityText).toHaveText("200 cổ phần");
     await expect(detail.avgCost).toContainText("110k");
 
     // Bán một phần 50 @ 130k -> giá vốn bình quân giữ nguyên, SL giảm
-    await form.addSell({ quantity: 50, pricePerUnit: 130_000 });
+    form = await detail.goToNewTransaction();
+    await form.submitSell({ quantity: 50, pricePerUnit: 130_000 });
     await expect(detail.quantityText).toHaveText("150 cổ phần");
     await expect(detail.avgCost).toContainText("110k");
 
     // Bán vượt số lượng đang giữ -> bị chặn
+    form = await detail.goToNewTransaction();
     await form.submitSellExceedingQuantity({
       quantity: 999,
       pricePerUnit: 130_000,
     });
     await expect(detail.sellExceedsQuantityError).toBeVisible();
 
-    // Mua trùng mã đang giữ -> tự gộp vào Holding cũ, không tạo bản ghi mới
-    await new NewHoldingPage(page).create({
+    // Đóng form, quay về danh sách, khai báo lại mã đã có -> tự gộp vào
+    // Holding cũ, không tạo bản ghi mới
+    detail = await form.close();
+    holdingsPage = await detail.goBack();
+    const newHoldingPageAgain = await holdingsPage.goToNewHolding();
+    detail = await newHoldingPageAgain.create({
       symbol: "FPT",
       quantity: 10,
       pricePerUnit: 140_000,
@@ -83,29 +89,32 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
   const page = await context.newPage();
 
   try {
-    const holdingUrl = await new NewHoldingPage(page).create({
+    let holdingsPage = new HoldingsPage(page);
+    await holdingsPage.goto();
+    const newHoldingPage = await holdingsPage.goToNewHolding();
+    let detail = await newHoldingPage.create({
       symbol: "VNM",
       quantity: 50,
       pricePerUnit: 80_000,
     });
-    const detail = new HoldingDetailPage(page, holdingUrl);
-    const form = new TransactionForm(page, holdingUrl);
 
     // Bán hết toàn bộ -> SL về 0
-    await form.addSell({ quantity: 50, pricePerUnit: 90_000 });
+    const form = await detail.goToNewTransaction();
+    await form.submitSell({ quantity: 50, pricePerUnit: 90_000 });
     await expect(detail.quantityText).toHaveText("0 cổ phần");
 
     // Vị thế đóng (SL=0) không còn hiện trong danh sách vị thế mở
-    const holdingsPage = new HoldingsPage(page);
-    await holdingsPage.goto();
+    holdingsPage = await detail.goBack();
     await expect(holdingsPage.holdingLink("VNM")).toHaveCount(0);
 
     // Vị thế đóng xuất hiện đúng ở route "Đã đóng" (điều hướng qua segmented nav)
     await holdingsPage.openClosed();
     await expect(holdingsPage.holdingLink("VNM")).toBeVisible();
 
+    // Mở lại chi tiết vị thế đã đóng để thao tác xóa giao dịch
+    detail = await holdingsPage.openHolding("VNM");
+
     // Xóa BUY khi vẫn còn SELL phụ thuộc -> bị chặn
-    await detail.goto();
     await detail.deleteTransaction("80.000");
     await expect(detail.deleteBlockedError).toBeVisible();
 
@@ -129,7 +138,10 @@ test("cách ly dữ liệu giữa hai tài khoản", async ({ browser }) => {
   const pageB = await contextB.newPage();
 
   try {
-    const holdingUrl = await new NewHoldingPage(pageA).create({
+    const holdingsPageA = new HoldingsPage(pageA);
+    await holdingsPageA.goto();
+    const newHoldingPageA = await holdingsPageA.goToNewHolding();
+    const detailA = await newHoldingPageA.create({
       symbol: "HPG",
       quantity: 20,
       pricePerUnit: 25_000,
@@ -139,7 +151,10 @@ test("cách ly dữ liệu giữa hai tài khoản", async ({ browser }) => {
     const holdingsPageB = new HoldingsPage(pageB);
     await holdingsPageB.goto();
     await expect(holdingsPageB.emptyState).toBeVisible();
-    await pageB.goto(holdingUrl);
+
+    // Truy cập thẳng URL của account A (không có link nào dẫn tới, mô phỏng
+    // đoán/rò rỉ URL) -> vẫn phải bị chặn dù đi thẳng URL chứ không qua flow.
+    await pageB.goto(detailA.url);
     await expect(pageB.getByRole("heading", { name: "404" })).toBeVisible();
   } finally {
     await closeContext(contextA);
