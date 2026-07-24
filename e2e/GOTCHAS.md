@@ -134,3 +134,17 @@ commit** (kèm trỏ file/spec gốc). Cách viết e2e chung ở
 - **Cách né:** đã cấu hình `retries: 1` cả local + `timeout: 60s` (`playwright.config.ts`).
   Lỗi **thật** do code sai sẽ fail lại y hệt ở retry, không bị che. Đừng nới timeout vô tội
   vạ để "chữa" một lỗi domain thật.
+
+## 14. `workers > 1` → lỗi Serializable / P2002 khi nhiều test cùng cập nhật 1 bản ghi dùng chung
+
+- **Triệu chứng:** chạy song song (từng gặp ở `workers: 4`) đỏ ngẫu nhiên với lỗi serialize
+  transaction ("could not serialize access" / write conflict) hoặc `P2002`, ở các test cùng
+  đụng `Setting` toàn cục / `PriceQuote`.
+- **Nguyên nhân:** các bản ghi này **không** scoped theo user (global) → nhiều worker cùng
+  ghi vào **cùng một record** trong transaction Serializable → xung đột. Khác với data scoped
+  theo user (Holding/Cashflow) vốn tách được bằng user random (mỗi test một user riêng).
+- **Cách né:** `playwright.config.ts` đặt **`workers: 1`** → chạy tuần tự, hết xung đột đồng
+  thời. `fullyParallel: true` khi đó **vô hại nhưng vô hiệu** (chỉ kích hoạt khi `workers ≥ 2`).
+  **Muốn nâng `workers` về sau:** trước hết phải làm mọi ghi vào record dùng chung chịu được
+  đồng thời (upsert nuốt `P2002` như #8, hoặc tách khoá theo test) — không nâng workers trước
+  khi isolate xong, sẽ tái hiện đúng lỗi này.

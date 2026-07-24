@@ -292,14 +292,25 @@ trước khi viết:
 9. **e2e phủ luồng nối dây, không test lại logic thuần** — XIRR/cost basis/thuế thuộc unit
    (`testing.md`).
 
-**Về tính độc lập của test (BẮT BUỘC — `playwright.config.ts` bật `fullyParallel: true`)**
+**Về tính độc lập của test (BẮT BUỘC)**
+
+> **Về concurrency:** `playwright.config.ts` hiện đặt **`workers: 1`** → các test chạy
+> **tuần tự**, KHÔNG song song (cờ `fullyParallel: true` chỉ có tác dụng khi `workers ≥ 2`,
+> nên hiện tại nó vô hại nhưng cũng vô hiệu). Lý do chọn `workers: 1`: vài bản ghi **dùng
+> chung, không isolate được theo user** (`Setting` toàn cục, `PriceQuote`) — chạy nhiều
+> worker cùng cập nhật chúng gây lỗi **Serializable / P2002** (đã gặp thật ở `workers: 4`,
+> xem [`GOTCHAS.md`](../../e2e/GOTCHAS.md) #14). Dù chạy tuần tự, tính độc lập **vẫn bắt
+> buộc**: các test **chung một DB** nên data sót từ test trước rò sang test sau; `retries`
+> chạy lại phải idempotent; và giữ isolation là điều kiện để **nâng `workers` an toàn** về sau.
+
 10. **Mỗi test tự dựng data của nó, tự dọn** — không dựa vào data test khác để lại, không
     dựa vào **thứ tự chạy**. Mẫu chuẩn đã có: `createTestSession()` (user + session random)
     ở đầu, dọn trong `finally` — `closeContext()` **trước** rồi `cleanupTestUser()` (thứ tự
     này quan trọng, xem [`GOTCHAS.md`](../../e2e/GOTCHAS.md) #5).
 11. **Không chia sẻ state đổi được giữa các test.** Với data **không** cascade theo User
-    (`PriceQuote`, `Setting` toàn cục), dùng **mã/khoá random mỗi lần chạy** và tự xoá — nếu
-    không, hai worker song song đạp lên nhau (GOTCHAS #6, #8).
+    (`PriceQuote`, `Setting` toàn cục), dùng **mã/khoá random mỗi lần chạy** và tự xoá — data
+    sót lại rò sang test sau; và nếu sau này nâng `workers`, hai worker sẽ đạp lên nhau
+    (GOTCHAS #6, #8, #14).
 12. **Không hardcode ngày/năm tuyệt đối** — ngày tương đối qua `daysAgo()` (`support/dates.ts`)
     để test không vỡ khi chạy ở thời điểm khác; khớp ô lịch dùng `localIsoDate` (GOTCHAS #3).
 
