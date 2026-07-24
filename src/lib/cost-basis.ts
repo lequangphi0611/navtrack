@@ -119,8 +119,12 @@ export type StockDividendInput = {
 // wentNegative (như cũ) lẫn avgCost (mới). Dùng ở 4 action ghi giao dịch
 // (features/holdings/actions.ts) và getHoldingDetail
 // (features/holdings/queries.ts) — derivePosition() giữ nguyên không đổi
-// (vẫn đúng/đủ cho các test case riêng của nó, không còn nơi nào khác gọi
-// trực tiếp derivePosition() ngoài hàm này).
+// (vẫn đúng/đủ cho các test case riêng của nó). Từ sau fix này, KHÔNG còn
+// production code nào gọi derivePosition() trực tiếp nữa (chỉ còn dùng
+// trong cost-basis.test.ts) — nếu sau này cần thêm một call site mới, PHẢI
+// đi qua derivePositionIncludingStockDividends() thay vì gọi derivePosition()
+// thẳng, để tránh lặp lại đúng bug vừa sửa (avgCost sai khi holding có cổ
+// tức cổ phiếu).
 export function derivePositionIncludingStockDividends(
   cashflows: CashflowInputWithEvent[],
   stockDividends: StockDividendInput[],
