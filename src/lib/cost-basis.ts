@@ -1,7 +1,10 @@
 import Decimal from "decimal.js";
 
 import type { CashflowType } from "@prisma/client";
-import { buildQuantityTimeline } from "@/lib/position-trail";
+import {
+  buildQuantityTimeline,
+  sortByPositionTrailOrder,
+} from "@/lib/position-trail";
 import type { PositionTrailEvent } from "@/lib/position-trail";
 
 export type CashflowInput = {
@@ -92,20 +95,36 @@ export type StockDividendInput = {
 // Issue #59: derivePosition() một mình KHÔNG đủ để tính vị thế đúng — nó chỉ
 // biết Cashflow, nên (1) SL trả về thiếu cổ tức cổ phiếu đã nhận, và (2)
 // wentNegative có thể báo "bán vượt" SAI cho một lệnh bán thực ra hợp lệ (SL
-// bán nằm trong phần SL đến từ cổ tức cổ phiếu, không phải mua). Hàm này kết
-// hợp derivePosition() (avgCost — CHỈ dẫn xuất từ Cashflow, cổ tức cổ phiếu
-// không đổi avgCost, xem docs/domain/03-dividends.md) với
+// bán nằm trong phần SL đến từ cổ tức cổ phiếu, không phải mua).
+//
+// Sửa lần 2 (retrofit, process/DECISION.md sau 2026-07-24 (2)): trước đây hàm
+// này lấy avgCost THẲNG từ derivePosition(cashflows) — nhưng derivePosition()
+// chỉ phát lại BUY/SELL, không biết cổ tức cổ phiếu, nên khi một lệnh SELL
+// "ăn" cả phần SL đến từ cổ tức, quantity nội bộ CHỈ-cashflow của nó đi âm mà
+// không bao giờ đúng bằng 0 → điều kiện reset avgCost (`quantity.isZero()`)
+// không kích hoạt, avgCost sai vĩnh viễn cho BUY kế tiếp — bug write-path
+// thật (khác bug retrofit ở computeRealizedGainForHolding, lib/realized-pnl.ts,
+// cùng họ nhưng ở đường đọc). Fix: KHÔNG dùng derivePosition() cho avgCost
+// nữa — tính avgCost bằng vòng lặp riêng, chỉ xử lý BUY, dùng SL THỰC (gồm cả
+// cổ tức cổ phiếu, before/after đã có sẵn từ buildQuantityTimeline() bên dưới
+// — tái dùng không tính lại) làm cơ sở bình quân di động. Khi SL thực trước
+// BUY = 0 (vị thế thực sự đóng hết, kể cả phần đến từ cổ tức), số hạng
+// SL_trước × avgCost_cũ = 0 tự "quên" avgCost cũ — không cần bước reset tường
+// minh riêng, đúng cho CẢ ca đóng hết LẪN ca bán một phần (không đóng hết).
+// avgCost vẫn CHỈ đổi bởi BUY, KHÔNG đổi bởi cổ tức cổ phiếu — giữ nguyên quy
+// tắc domain (docs/domain/03-dividends.md).
+//
 // buildQuantityTimeline() (lib/position-trail.ts, đã phát lại đúng thứ tự
-// thời gian CẢ Cashflow lẫn Dividend{STOCK}) để lấy SL + validate bán vượt
-// đúng. Dùng ở 4 action ghi giao dịch (features/holdings/actions.ts) và
-// getHoldingDetail (features/holdings/queries.ts) — derivePosition() giữ
-// nguyên không đổi (vẫn đúng/đủ cho avgCost, có unit test riêng bao phủ).
+// thời gian CẢ Cashflow lẫn Dividend{STOCK}) dùng chung cho cả quantity/
+// wentNegative (như cũ) lẫn avgCost (mới). Dùng ở 4 action ghi giao dịch
+// (features/holdings/actions.ts) và getHoldingDetail
+// (features/holdings/queries.ts) — derivePosition() giữ nguyên không đổi
+// (vẫn đúng/đủ cho các test case riêng của nó, không còn nơi nào khác gọi
+// trực tiếp derivePosition() ngoài hàm này).
 export function derivePositionIncludingStockDividends(
   cashflows: CashflowInputWithEvent[],
   stockDividends: StockDividendInput[],
 ): { quantity: Decimal; avgCost: Decimal; wentNegative: boolean } {
-  const { avgCost } = derivePosition(cashflows);
-
   const events: PositionTrailEvent[] = [
     ...cashflows.map((cf) => ({
       id: cf.id,
@@ -129,6 +148,24 @@ export function derivePositionIncludingStockDividends(
   for (const entry of timeline.values()) {
     quantity = entry.after;
     if (entry.after.isNegative()) wentNegative = true;
+  }
+
+  // avgCost: chỉ BUY đổi, dùng SL thực (before/after từ timeline ở trên, gồm
+  // cả cổ tức cổ phiếu) làm cơ sở bình quân — xem giải thích ở comment đầu
+  // hàm. Guard chia 0 giữ nguyên tinh thần derivePosition() gốc.
+  let avgCost = new Decimal(0);
+  for (const cf of sortByPositionTrailOrder(cashflows)) {
+    if (cf.type !== "BUY") continue;
+    const entry = timeline.get(cf.id)!;
+    const realQuantityBefore = entry.before;
+    const afterQty = entry.after;
+    avgCost = afterQty.isZero()
+      ? new Decimal(0)
+      : realQuantityBefore
+          .mul(avgCost)
+          .plus(cf.quantity.mul(cf.pricePerUnit))
+          .plus(cf.feeAmount)
+          .div(afterQty);
   }
 
   return { quantity, avgCost, wentNegative };

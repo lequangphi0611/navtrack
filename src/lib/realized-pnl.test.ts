@@ -162,18 +162,20 @@ describe("computeRealizedGainForHolding", () => {
   });
 
   // Issue #83 code review #1 — cổ tức cổ phiếu không tạo Cashflow (cộng thẳng
-  // vào Holding.quantity, features/dividends/actions.ts) nên phải track riêng
-  // realQuantity để biết đúng lúc vị thế thực sự đóng hết, tránh reset sai
-  // avgCost cho lô mua tiếp theo. Số đã tính tay (oracle bắt đúng bug):
-  // 1. BUY 100, amount=-1.000.000 -> avgCost=10.000.
+  // vào Holding.quantity, features/dividends/actions.ts) nên realQuantity phải
+  // gồm cả cổ tức để biết đúng lúc vị thế thực sự đóng hết. Số đã tính tay
+  // (oracle bắt đúng bug — vẫn đúng với thiết kế "1 bộ đếm realQuantity" sửa
+  // lần 2, process/DECISION.md sau 2026-07-24 (2)):
+  // 1. BUY 100, amount=-1.000.000 -> avgCost=10.000, realQuantity=100.
   // 2. Cổ tức cổ phiếu +20 -> realQuantity=120, avgCost KHÔNG đổi.
   // 3. SELL 120, amount=1.300.000 -> realizedGain = 1.300.000-120*10.000=100.000;
-  //    realQuantity chạm 0 -> reset avgCost/avgCostQuantity về 0.
-  // 4. BUY 50, amount=-600.000 -> avgCost lô mới PHẢI = 600.000/50=12.000 (nếu
-  //    không reset đúng sẽ ra 13.333,33 — bắt đúng bug qua bước 5).
+  //    realQuantity về 0.
+  // 4. BUY 50, amount=-600.000 -> realQuantityTrước=0 nên avgCost lô mới =
+  //    (0*10.000+600.000)/50=12.000 (nếu không "quên" avgCost cũ đúng lúc sẽ
+  //    ra 13.333,33 — bắt đúng bug qua bước 5).
   // 5. SELL 30, amount=390.000 -> += 390.000-30*12.000=30.000.
   // Tổng kỳ vọng = 100.000 + 30.000 = 130.000.
-  test("cổ tức cổ phiếu: realQuantity quyết định lúc reset avgCost, không phải avgCostQuantity", () => {
+  test("cổ tức cổ phiếu: realQuantity quyết định avgCost, kể cả khi về 0 rồi mua lại", () => {
     const cashflows: RealizedGainCashflowInput[] = [
       {
         id: "cf1",
@@ -220,6 +222,74 @@ describe("computeRealizedGainForHolding", () => {
     expect(
       computeRealizedGainForHolding(cashflows, stockDividends).toString(),
     ).toBe("130000");
+  });
+
+  // Sửa lần 2 (retrofit, process/DECISION.md sau 2026-07-24 (2)) — ca biên
+  // thiết kế "2 bộ đếm song song" cũ (đã merge) KHÔNG xử lý đúng: BÁN MỘT
+  // PHẦN (không đóng hết, kể cả tính CP từ cổ tức) rồi mua tiếp, khác test
+  // trên (đóng hết rồi mua lại). Bộ số khớp test cost-basis.test.ts
+  // "bán một phần (không đóng hết) rồi mua tiếp" để đối chiếu avgCost 171.500.
+  // Tính tay theo thiết kế MỚI (1 bộ đếm realQuantity, oracle đúng):
+  // 1. BUY 100, amount=-1.000.000 -> avgCost=10.000, realQuantity=100.
+  // 2. Cổ tức cổ phiếu +20 -> realQuantity=120, avgCost KHÔNG đổi.
+  // 3. SELL 105, amount=1.260.000 -> realizedGain += 1.260.000-105*10.000=210.000;
+  //    realQuantity=15 (KHÔNG về 0 — ca biên mà thiết kế cũ xử lý sai).
+  // 4. BUY 85, amount=-17.000.000 -> avgCost mới = (15*10.000+17.000.000)/100
+  //    = 171.500 (khớp test cost-basis). realQuantity=100.
+  // 5. SELL 100 (đóng hết), amount=25.000.000 -> realizedGain +=
+  //    25.000.000-100*171.500=7.850.000.
+  // Tổng kỳ vọng = 210.000 + 7.850.000 = 8.060.000 (chính xác tuyệt đối).
+  // Thiết kế "2 bộ đếm" CŨ (sai): avgCostQuantity chỉ-cashflow không bao giờ
+  // về 0 (100-105=-5) nên không reset -> avgCost lô 2 tính SAI, ra tổng
+  // realizedGain = 4.022.500 thay vì 8.060.000 — test này là oracle bắt đúng
+  // bug đó.
+  test("bán một phần (không đóng hết) rồi mua tiếp, sau đó đóng hết: realizedGain tính đúng theo avgCost mới", () => {
+    const cashflows: RealizedGainCashflowInput[] = [
+      {
+        id: "cf1",
+        type: "BUY",
+        date: d("2023-01-01"),
+        createdAt: d("2023-01-01"),
+        quantity: new Decimal(100),
+        amount: new Decimal(-1_000_000),
+      },
+      {
+        id: "cf2",
+        type: "SELL",
+        date: d("2023-03-01"),
+        createdAt: d("2023-03-01"),
+        quantity: new Decimal(105),
+        amount: new Decimal(1_260_000),
+      },
+      {
+        id: "cf3",
+        type: "BUY",
+        date: d("2023-04-01"),
+        createdAt: d("2023-04-01"),
+        quantity: new Decimal(85),
+        amount: new Decimal(-17_000_000),
+      },
+      {
+        id: "cf4",
+        type: "SELL",
+        date: d("2023-05-01"),
+        createdAt: d("2023-05-01"),
+        quantity: new Decimal(100),
+        amount: new Decimal(25_000_000),
+      },
+    ];
+    const stockDividends: RealizedGainStockDividendInput[] = [
+      {
+        id: "div1",
+        date: d("2023-02-01"),
+        createdAt: d("2023-02-01"),
+        quantity: new Decimal(20),
+      },
+    ];
+
+    expect(
+      computeRealizedGainForHolding(cashflows, stockDividends).toString(),
+    ).toBe("8060000");
   });
 
   // Issue #83 code review #4 — tiebreak (date, createdAt, id) phải ổn định,

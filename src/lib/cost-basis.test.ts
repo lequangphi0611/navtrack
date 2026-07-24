@@ -436,4 +436,62 @@ describe("derivePositionIncludingStockDividends", () => {
     expect(withDividends.avgCost.toString()).toBe(plain.avgCost.toString());
     expect(withDividends.wentNegative).toBe(plain.wentNegative);
   });
+
+  // Sửa lần 2 (retrofit, process/DECISION.md sau 2026-07-24 (2)) — bug write-
+  // path: bán một phần (không đóng hết, kể cả tính CP từ cổ tức) rồi mua tiếp.
+  // Code CŨ lấy avgCost thẳng từ derivePosition(cashflows) — chỉ phát lại
+  // BUY/SELL, không biết cổ tức cổ phiếu — nên quantity nội bộ chỉ-cashflow
+  // của nó là 100-105=-5 (không bao giờ về 0), điều kiện reset avgCost không
+  // kích hoạt -> avgCost SAI = 211.875 thay vì đúng 171.500 (đối chiếu tính
+  // tay bên dưới). Test này là oracle bắt đúng bug đó.
+  test("bán một phần (không đóng hết) rồi mua tiếp: avgCost tính đúng theo SL thực gồm cổ tức", () => {
+    const cashflows = [
+      {
+        id: "buy-1",
+        type: "BUY" as const,
+        date: new Date("2026-01-01"),
+        createdAt: new Date("2026-01-01"),
+        quantity: new Decimal(100),
+        pricePerUnit: new Decimal(10_000),
+        feeAmount: new Decimal(0),
+      },
+      {
+        id: "sell-1",
+        type: "SELL" as const,
+        date: new Date("2026-03-01"),
+        createdAt: new Date("2026-03-01"),
+        quantity: new Decimal(105),
+        pricePerUnit: new Decimal(12_000),
+        feeAmount: new Decimal(0),
+      },
+      {
+        id: "buy-2",
+        type: "BUY" as const,
+        date: new Date("2026-04-01"),
+        createdAt: new Date("2026-04-01"),
+        quantity: new Decimal(85),
+        pricePerUnit: new Decimal(200_000),
+        feeAmount: new Decimal(0),
+      },
+    ];
+    const stockDividends = [
+      {
+        id: "div-1",
+        date: new Date("2026-02-01"),
+        createdAt: new Date("2026-02-01"),
+        quantity: new Decimal(20),
+      },
+    ];
+
+    const position = derivePositionIncludingStockDividends(
+      cashflows,
+      stockDividends,
+    );
+
+    // SL thực: 100 (buy-1) +20 (div-1) =120 -105 (sell-1) =15 +85 (buy-2) =100.
+    // avgCost = (15*10.000 + 85*200.000) / 100 = 171.500.
+    expect(position.quantity.toString()).toBe("100");
+    expect(position.avgCost.toString()).toBe("171500");
+    expect(position.wentNegative).toBe(false);
+  });
 });

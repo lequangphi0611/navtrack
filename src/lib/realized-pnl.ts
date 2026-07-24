@@ -49,16 +49,27 @@ export type RealizedGainStockDividendInput = {
 // Cổ tức cổ phiếu (issue #83 code review #1): không tạo Cashflow nên
 // derivePosition()-style replay CHỈ theo BUY/SELL không đủ để biết khi nào vị
 // thế THỰC SỰ đóng hết — một lệnh SELL hợp lệ (nhờ có thêm CP từ cổ tức) có
-// thể khiến quantity nội bộ (chỉ tính BUY/SELL) âm mà không reset, làm sai
-// avgCost/realizedGain cho các giao dịch sau. Sửa bằng 2 BỘ ĐẾM SONG SONG,
-// mirror đúng cách derivePositionIncludingStockDividends() (lib/cost-basis.ts,
-// issue #59) đã giải quyết vấn đề tương tự ở write-path:
-// - avgCostQuantity/avgCost: CHỈ track BUY/SELL, công thức bình quân di động
-//   giữ nguyên — avgCost ở đây PHẢI khớp avgCost cache thật trên Holding
-//   (chỉ derive từ Cashflow, cổ tức cổ phiếu không đổi avgCost).
-// - realQuantity: track CẢ BUY/SELL lẫn cổ tức cổ phiếu (luôn dương) — dùng
-//   DUY NHẤT để biết khi nào vị thế thực sự về 0, quyết định thời điểm reset
-//   avgCost/avgCostQuantity.
+// thể khiến quantity nội bộ (chỉ tính BUY/SELL) âm mà không về đúng 0, làm sai
+// avgCost/realizedGain cho các giao dịch sau.
+//
+// Sửa lần 2 (retrofit, process/DECISION.md sau 2026-07-24 (2)): thiết kế đầu
+// (2 BỘ ĐẾM SONG SONG — avgCostQuantity chỉ track BUY/SELL, reset tường minh
+// khi realQuantity chạm 0) chỉ đúng cho ca ĐÓNG HẾT vị thế rồi mở lại; ca BÁN
+// MỘT PHẦN (không đóng hết, kể cả tính CP từ cổ tức) rồi mua tiếp thì
+// avgCostQuantity không bao giờ được reset dù đã lệch khỏi realQuantity — sai.
+// Đổi sang 1 BỘ ĐẾM `realQuantity` DUY NHẤT (gồm cả BUY/SELL lẫn cổ tức cổ
+// phiếu — khớp SL thực trên Holding). avgCost chỉ đổi ở BUY, dùng `realQuantity`
+// NGAY TRƯỚC sự kiện đó (không phải một biến cashflow-only riêng) làm cơ sở
+// bình quân: newAvgCost = (realQuantityTrước*avgCostCũ + tiềnMua) / (realQuantityTrước+SLMua).
+// Khi vị thế đóng hết thật (realQuantityTrước=0), số hạng 0*avgCostCũ=0 tự
+// "quên" avgCost cũ — không cần bước reset tường minh nào nữa, đúng cho CẢ ca
+// đóng hết LẪN ca bán một phần. Mirror đúng cách
+// derivePositionIncludingStockDividends() (lib/cost-basis.ts, issue #59, sửa
+// lần 2 cùng đợt) đã fix bug write-path cùng họ.
+//
+// Ca lý thuyết "cổ tức cổ phiếu xen giữa lúc realQuantity=0 và BUY kế tiếp"
+// (holding không giữ cổ phần nào mà vẫn nhận cổ tức) là trạng thái dữ liệu
+// không hợp lệ theo domain — không xử lý, chỉ ghi chú ở đây.
 export function computeRealizedGainForHolding(
   cashflows: RealizedGainCashflowInput[],
   stockDividends: RealizedGainStockDividendInput[] = [],
@@ -85,7 +96,6 @@ export function computeRealizedGainForHolding(
   ];
   const sorted = sortByPositionTrailOrder(events);
 
-  let avgCostQuantity = new Decimal(0);
   let avgCost = new Decimal(0);
   let realQuantity = new Decimal(0);
   let realizedGain = new Decimal(0);
@@ -98,29 +108,16 @@ export function computeRealizedGainForHolding(
 
     const cf = event.cf;
     if (cf.type === "BUY") {
-      const newAvgCostQuantity = avgCostQuantity.plus(cf.quantity);
-      avgCost = newAvgCostQuantity.isZero()
+      const newRealQuantity = realQuantity.plus(cf.quantity);
+      avgCost = newRealQuantity.isZero()
         ? new Decimal(0)
-        : avgCostQuantity
-            .mul(avgCost)
-            .plus(cf.amount.abs())
-            .div(newAvgCostQuantity);
-      avgCostQuantity = newAvgCostQuantity;
-      realQuantity = realQuantity.plus(cf.quantity);
+        : realQuantity.mul(avgCost).plus(cf.amount.abs()).div(newRealQuantity);
+      realQuantity = newRealQuantity;
     } else {
       realizedGain = realizedGain.plus(
         cf.amount.minus(cf.quantity.mul(avgCost)),
       );
-      avgCostQuantity = avgCostQuantity.minus(cf.quantity);
       realQuantity = realQuantity.minus(cf.quantity);
-      // Reset theo realQuantity (KHÔNG avgCostQuantity) — vị thế THỰC SỰ đóng
-      // hết (kể cả phần đến từ cổ tức cổ phiếu) mới xoá sạch phần dư đọng lại
-      // trong avgCostQuantity do chênh lệch với realQuantity. Đây là fix mấu
-      // chốt của issue #83 code review #1.
-      if (realQuantity.isZero()) {
-        avgCostQuantity = new Decimal(0);
-        avgCost = new Decimal(0);
-      }
     }
   }
 
