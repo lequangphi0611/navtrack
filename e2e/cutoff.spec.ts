@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { DashboardPage } from "./pages/dashboard-page";
+import { SettingsPage } from "./pages/settings-page";
 import {
   cleanupTestUser,
   closeContext,
@@ -29,16 +31,13 @@ test("đổi mốc chốt ở Cài đặt lan đúng sang Dashboard (không bị
   const page = await context.newPage();
 
   try {
-    await page.goto("/settings");
-    await expect(
-      page.getByText("Mốc chốt định giá", { exact: true }),
-    ).toBeVisible();
+    const settingsPage = new SettingsPage(page);
+    await settingsPage.goto();
+    await expect(settingsPage.cutoffSectionHeading).toBeVisible();
 
-    const todayOption = page.getByRole("link", { name: /Hôm nay/ });
-    const endOfMonthOption = page.getByRole("link", {
-      name: /Cuối tháng này/,
-    });
-    const endOfYearOption = page.getByRole("link", { name: /Cuối năm nay/ });
+    const todayOption = settingsPage.cutoffOption("Hôm nay");
+    const endOfMonthOption = settingsPage.cutoffOption("Cuối tháng này");
+    const endOfYearOption = settingsPage.cutoffOption("Cuối năm nay");
 
     await expect(todayOption).toBeVisible();
     await expect(endOfMonthOption).toBeVisible();
@@ -47,27 +46,25 @@ test("đổi mốc chốt ở Cài đặt lan đúng sang Dashboard (không bị
     // Mặc định "Hôm nay" đang chọn — component không có aria-current, chỉ
     // phân biệt active bằng class (đã tự verify tắt CutoffHardNavGuard làm
     // spec FAIL đúng chỗ dưới, không phải false-negative — xem báo cáo cuối).
-    await expect(todayOption).toHaveClass(/border-primary\/40/);
-    await expect(endOfMonthOption).not.toHaveClass(/border-primary\/40/);
+    await settingsPage.expectSelected("Hôm nay");
+    await settingsPage.expectNotSelected("Cuối tháng này");
 
     // Click link thật (không giả lập gì đặc biệt) — nếu CutoffHardNavGuard
     // hoạt động đúng, đây là hard navigation full page.
-    await endOfMonthOption.click();
+    await settingsPage.selectCutoff("Cuối tháng này");
 
     // Điểm mấu chốt: sau khi click, "Cuối tháng này" phải hiện active — nếu
     // thiếu guard, UI vẫn kẹt ở "Hôm nay" active dù cookie đã đổi (đúng bug
     // đã fix). KHÔNG reload thủ công ở đây — reload sẽ luôn pass dù bug tái
     // diễn, làm mất giá trị của spec.
-    await expect(page).toHaveURL(/\/settings$/);
-    await expect(endOfMonthOption).toHaveClass(/border-primary\/40/);
-    await expect(todayOption).not.toHaveClass(/border-primary\/40/);
+    await settingsPage.expectSelected("Cuối tháng này");
+    await settingsPage.expectNotSelected("Hôm nay");
 
     // Lựa chọn phải lan đúng sang route khác (Dashboard) — chứng minh cookie
     // dùng chung, không phải state cục bộ ở /settings.
-    await page.goto("/");
-    await expect(page.getByRole("link", { name: /Mốc chốt/ })).toContainText(
-      "Cuối tháng này",
-    );
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
+    await expect(dashboardPage.cutoffLink).toContainText("Cuối tháng này");
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
