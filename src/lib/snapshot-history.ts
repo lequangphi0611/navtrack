@@ -122,7 +122,7 @@ export function buildSnapshotHistoryView(
 
   const points: NavHistoryChartPoint[] = [
     ...chartFrozenAsc.map((row) => ({
-      label: `T${row.date.getUTCMonth() + 1}`,
+      label: `T${row.date.getUTCMonth() + 1}/${String(row.date.getUTCFullYear()).slice(-2)}`,
       heightPercent: heightPercentOf(new Decimal(row.value), max),
     })),
     {

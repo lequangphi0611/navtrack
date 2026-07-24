@@ -85,11 +85,11 @@ describe("buildSnapshotHistoryView", () => {
 
     const { chart } = buildSnapshotHistoryView(frozenDesc, "3200000", NOW);
 
-    // chartFrozenAsc = đảo ngược slice(0,7) => cũ->mới: s1(T12), s2(T5), s3(T6), rồi live.
+    // chartFrozenAsc = đảo ngược slice(0,7) => cũ->mới: s1(T12/25), s2(T5/26), s3(T6/26), rồi live.
     expect(chart.points.map((p) => p.label)).toEqual([
-      "T12",
-      "T5",
-      "T6",
+      "T12/25",
+      "T5/26",
+      "T6/26",
       "nay",
     ]);
     expect(chart.points[0]?.heightPercent).toBeCloseTo(62.5);
@@ -126,9 +126,24 @@ describe("buildSnapshotHistoryView", () => {
     const { chart } = buildSnapshotHistoryView(frozenDesc, "0", NOW);
 
     expect(chart.points).toEqual([
-      { label: "T6", heightPercent: 0 },
+      { label: "T6/26", heightPercent: 0 },
       { label: "nay", heightPercent: 0, isLive: true },
     ]);
+  });
+
+  test("label chart phân biệt được các mốc cùng tháng khác năm (issue #82)", () => {
+    const frozenDesc: FrozenSnapshotRow[] = [
+      frozen("s2", "2025-12-31T00:00:00.000Z", "3000000", "YEAR_END"),
+      frozen("s1", "2024-12-31T00:00:00.000Z", "2000000", "YEAR_END"),
+    ];
+
+    const { chart } = buildSnapshotHistoryView(frozenDesc, "3200000", NOW);
+
+    const frozenLabels = chart.points
+      .filter((p) => !p.isLive)
+      .map((p) => p.label);
+    expect(frozenLabels).toEqual(["T12/24", "T12/25"]);
+    expect(new Set(frozenLabels).size).toBe(frozenLabels.length);
   });
 
   test("changePercent = 0 khi chưa có dòng frozen nào", () => {
