@@ -4,6 +4,7 @@ import { formatDate } from "./format";
 import { ROUTES } from "./routes";
 import {
   buildSnapshotHistoryView,
+  toFrozenSnapshotListRow,
   type FrozenSnapshotRow,
 } from "./snapshot-history";
 
@@ -158,5 +159,26 @@ describe("buildSnapshotHistoryView", () => {
     expect(chart.changePercent).toBeCloseTo(
       ((3200000 - 3000000) / 3000000) * 100,
     );
+  });
+});
+
+describe("toFrozenSnapshotListRow", () => {
+  test("map 1 FrozenSnapshotRow sang SnapshotListRow{kind:frozen} — label/badge/dateNote/href đúng theo period", () => {
+    const row = frozen(
+      "periodic",
+      "2026-06-30T00:00:00.000Z",
+      "3000000",
+      "PERIODIC",
+    );
+
+    expect(toFrozenSnapshotListRow(row)).toEqual({
+      kind: "frozen",
+      id: "periodic",
+      label: "Cuối tháng 6",
+      badge: { text: "ĐỊNH KỲ", variant: "default" },
+      dateNote: `${formatDate(row.date)} · định kỳ hàng tháng`,
+      value: "3000000",
+      href: ROUTES.snapshotDetail("periodic"),
+    });
   });
 });

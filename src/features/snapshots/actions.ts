@@ -12,6 +12,7 @@ import { formatTime } from "@/lib/format";
 import { logger } from "@/lib/logger";
 import { planManualSnapshot } from "@/lib/manual-snapshot";
 import { ROUTES } from "@/lib/routes";
+import { toFrozenSnapshotListRow } from "@/lib/snapshot-history";
 import { valuateHoldings } from "@/lib/valuation";
 
 // Cross-feature import (snapshots -> holdings) — cùng tiền lệ lib/portfolio-valuation.ts
@@ -20,7 +21,8 @@ import { valuateHoldings } from "@/lib/valuation";
 // snapshots/actions.ts -> holdings/queries.ts, không có cạnh nào quay lại holdings/actions.ts.
 import { getOpenHoldings } from "@/features/holdings/queries";
 
-import type { SnapshotTodayState } from "./types";
+import { getMoreSnapshotHistory } from "./queries";
+import type { SnapshotHistoryPage, SnapshotTodayState } from "./types";
 
 // Core — ghi/upsert Snapshot{period: MANUAL} tại "hôm nay" (ICT): 1 dòng mỗi Holding đang
 // mở đã định giá được + 1 dòng tổng danh mục (holdingId: null). Dùng cho cả 2 trigger
@@ -182,6 +184,22 @@ export async function freezeManualSnapshot(): Promise<
       value: aggregateValue.toString(),
       snapshotAt: formatTime(new Date()),
     },
+  };
+}
+
+// Load-more "Các mốc đã chốt" (/snapshots, cursor-based, issue #83) — action ĐỌC
+// thuần, KHÔNG revalidatePath (không mutate dữ liệu, docs/rules/error-handling.md).
+// Lỗi bất ngờ (DB lỗi...) để throw tự nhiên, không nuốt bằng try/catch.
+export async function loadMoreSnapshotHistory(
+  cursor: string,
+): Promise<ActionResult<SnapshotHistoryPage>> {
+  const session = await getSession();
+  if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
+
+  const { rows, nextCursor } = await getMoreSnapshotHistory(cursor);
+  return {
+    ok: true,
+    data: { rows: rows.map(toFrozenSnapshotListRow), nextCursor },
   };
 }
 

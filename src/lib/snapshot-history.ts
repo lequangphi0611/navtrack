@@ -83,6 +83,25 @@ function heightPercentOf(value: Decimal, max: Decimal): number {
   return value.div(max).mul(100).toNumber();
 }
 
+// Tách khỏi buildSnapshotHistoryView để getMoreSnapshotHistory() (queries.ts,
+// load-more cursor-based, issue #83) map trực tiếp 1 FrozenSnapshotRow -> 1
+// SnapshotListRow{kind:"frozen"} không cần chạy lại toàn bộ buildSnapshotHistoryView
+// (vốn còn build chart, không cần cho payload load-more).
+export function toFrozenSnapshotListRow(
+  row: FrozenSnapshotRow,
+): Extract<SnapshotListRow, { kind: "frozen" }> {
+  const { label, badge, description } = describePeriod(row.period, row.date);
+  return {
+    kind: "frozen",
+    id: row.id,
+    label,
+    badge,
+    dateNote: `${formatDate(row.date)} · ${description}`,
+    value: row.value,
+    href: ROUTES.snapshotDetail(row.id),
+  };
+}
+
 // Dựng dữ liệu cho /snapshots (mockup 3a) — chart 8 cột + danh sách "Các mốc
 // đã chốt" — từ chuỗi Snapshot{holdingId: null, frozen: true} đã lưu +
 // NAV "hôm nay" tính động (không lưu). `now` truyền vào để test được (mặc
@@ -133,18 +152,7 @@ export function buildSnapshotHistoryView(
     value: navToday,
   };
 
-  const frozenRows: SnapshotListRow[] = frozenDesc.map((row) => {
-    const { label, badge, description } = describePeriod(row.period, row.date);
-    return {
-      kind: "frozen",
-      id: row.id,
-      label,
-      badge,
-      dateNote: `${formatDate(row.date)} · ${description}`,
-      value: row.value,
-      href: ROUTES.snapshotDetail(row.id),
-    };
-  });
+  const frozenRows: SnapshotListRow[] = frozenDesc.map(toFrozenSnapshotListRow);
 
   return {
     chart: { navToday, changePercent, points },

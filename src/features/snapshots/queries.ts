@@ -128,25 +128,89 @@ const SNAPSHOT_HISTORY_LIMIT = 20;
 export async function getSnapshotHistory(
   navToday: string,
   now: Date = new Date(),
-): Promise<ReturnType<typeof buildSnapshotHistoryView>> {
+): Promise<
+  ReturnType<typeof buildSnapshotHistoryView> & {
+    hasMore: boolean;
+    nextCursor: string | null;
+  }
+> {
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
   const frozen = await db.snapshot.findMany({
     where: { userId: session.user.id, holdingId: null, frozen: true },
-    orderBy: { date: "desc" },
-    take: SNAPSHOT_HISTORY_LIMIT,
+    orderBy: [{ date: "desc" }, { id: "desc" }],
+    // +1 "peek" — biết còn dữ liệu phía sau hay không mà không cần COUNT riêng.
+    take: SNAPSHOT_HISTORY_LIMIT + 1,
     select: { id: true, date: true, value: true, period: true },
   });
 
-  const frozenRows: FrozenSnapshotRow[] = frozen.map((s) => ({
+  const hasMore = frozen.length > SNAPSHOT_HISTORY_LIMIT;
+  const page = hasMore ? frozen.slice(0, SNAPSHOT_HISTORY_LIMIT) : frozen;
+  const nextCursor = hasMore ? (page[page.length - 1]?.id ?? null) : null;
+
+  const frozenRows: FrozenSnapshotRow[] = page.map((s) => ({
     id: s.id,
     date: s.date,
     value: s.value.toString(),
     period: s.period,
   }));
 
-  return buildSnapshotHistoryView(frozenRows, navToday, now);
+  return {
+    ...buildSnapshotHistoryView(frozenRows, navToday, now),
+    hasMore,
+    nextCursor,
+  };
+}
+
+// Trang tiếp theo của "Các mốc đã chốt" (load-more, issue #83) — cursor là `id`
+// của dòng cuối cùng đã hiển thị. Không dùng Prisma `cursor:` API gốc vì nó
+// KHÔNG tự áp filter userId khi tra cursor — tra thủ công bằng findFirst có
+// where userId trước, tránh rò rỉ tồn tại/date của snapshot user khác qua id.
+export async function getMoreSnapshotHistory(
+  cursor: string,
+): Promise<{ rows: FrozenSnapshotRow[]; nextCursor: string | null }> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const cursorRow = await db.snapshot.findFirst({
+    where: {
+      id: cursor,
+      userId: session.user.id,
+      holdingId: null,
+      frozen: true,
+    },
+    select: { date: true },
+  });
+  if (!cursorRow) return { rows: [], nextCursor: null };
+
+  const frozen = await db.snapshot.findMany({
+    where: {
+      userId: session.user.id,
+      holdingId: null,
+      frozen: true,
+      OR: [
+        { date: { lt: cursorRow.date } },
+        { date: cursorRow.date, id: { lt: cursor } },
+      ],
+    },
+    orderBy: [{ date: "desc" }, { id: "desc" }],
+    take: SNAPSHOT_HISTORY_LIMIT + 1,
+    select: { id: true, date: true, value: true, period: true },
+  });
+
+  const hasMore = frozen.length > SNAPSHOT_HISTORY_LIMIT;
+  const page = hasMore ? frozen.slice(0, SNAPSHOT_HISTORY_LIMIT) : frozen;
+  const nextCursor = hasMore ? (page[page.length - 1]?.id ?? null) : null;
+
+  const rows: FrozenSnapshotRow[] = page.map((s) => ({
+    id: s.id,
+    date: s.date,
+    value: s.value.toString(),
+    period: s.period,
+  }));
+
+  return { rows, nextCursor };
 }
 
 // Subtitle 3c (không có recomputedComparison) — mở rộng đúng câu mockup gốc
