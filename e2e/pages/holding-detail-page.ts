@@ -45,6 +45,27 @@ export class HoldingDetailPage {
     return this.page.getByRole("link", { name: "Quay lại" });
   }
 
+  // TransactionSnapshotBanner (issue #37) — hiện ngay dưới PageHeader khi vừa
+  // ghi giao dịch (redirect gắn `?cashflowId=`, xem afterTransactionUrl).
+  get transactionSnapshotBannerHeading(): Locator {
+    return this.page.getByText("Đã ghi giao dịch & chốt snapshot");
+  }
+
+  // Nhãn giao dịch trong banner (vd "Mua 10 cổ phần") cũng lặp lại ở Lịch sử
+  // giao dịch bên dưới — banner render trước trong DOM (ngay dưới
+  // PageHeader), `.first()` lấy đúng bản trong banner.
+  bannerTransactionLabel(label: string): Locator {
+    return this.page.getByText(label).first();
+  }
+
+  get snapshotAutoNote(): Locator {
+    return this.page.getByText("Snapshot MANUAL tạo tự động sau khi mua");
+  }
+
+  get navAfterTransactionNote(): Locator {
+    return this.page.getByText("NAV danh mục sau giao dịch");
+  }
+
   async goBack(): Promise<HoldingsPage> {
     const holdingsPage = new HoldingsPage(this.page);
     await this.backLink.click();

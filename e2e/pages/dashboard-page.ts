@@ -73,6 +73,16 @@ export class DashboardPage {
     return this.navDeltaRow.locator("svg");
   }
 
+  // SnapshotTodayCard — CTA "Chốt số liệu hôm nay" ngay trên Dashboard (khác
+  // SnapshotFreezeSheet ở /snapshots, cùng gọi chung 1 Server Action).
+  get snapshotTodayButton(): Locator {
+    return this.page.getByRole("button", { name: "Chốt ngay" });
+  }
+
+  get snapshotTodayBadge(): Locator {
+    return this.page.getByText(/Đã chốt lúc \d{2}:\d{2}/);
+  }
+
   private get quickMenuToggle(): Locator {
     return this.page.getByRole("button", { name: "Mở menu nhanh" });
   }

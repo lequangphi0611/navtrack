@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
+import { DashboardPage } from "./pages/dashboard-page";
+import { NewHoldingPage } from "./pages/new-holding-page";
+import { SettingsPage } from "./pages/settings-page";
+import { SnapshotPage } from "./pages/snapshot-page";
 import { daysAgo } from "./support/dates";
 import {
   cleanupTestUser,
@@ -47,32 +51,23 @@ test("mua tạo Snapshot MANUAL cho holding + tổng danh mục, banner 'vừa g
       update: { price: "100000", source: "vnstock" },
     });
 
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("10");
-    await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
     // Redirect gắn ?cashflowId=<id> (holdingDetailAfterTransaction) — cờ cho
     // getJustRecordedBanner() dựng TransactionSnapshotBanner.
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
-    const holdingId = new URL(page.url()).pathname.split("/").pop();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 100_000,
+    });
+    const holdingId = new URL(detail.url).pathname.split("/").pop();
 
     // Banner "vừa giao dịch xong" (TransactionSnapshotBanner) — đọc thẳng từ
     // getJustRecordedBanner() (features/holdings/queries.ts), không phải mock.
-    await expect(
-      page.getByText("Đã ghi giao dịch & chốt snapshot"),
-    ).toBeVisible();
-    // "Mua 10 cổ phần" xuất hiện 2 lần trên trang (banner + Lịch sử giao dịch
-    // bên dưới) — banner render trước trong DOM (HoldingDetailScreen đặt
-    // TransactionSnapshotBanner ngay dưới PageHeader), .first() lấy đúng bản
-    // trong banner.
-    await expect(page.getByText("Mua 10 cổ phần").first()).toBeVisible();
-    await expect(
-      page.getByText("Snapshot MANUAL tạo tự động sau khi mua"),
-    ).toBeVisible();
-    await expect(page.getByText("NAV danh mục sau giao dịch")).toBeVisible();
+    await expect(detail.transactionSnapshotBannerHeading).toBeVisible();
+    await expect(detail.bannerTransactionLabel("Mua 10 cổ phần")).toBeVisible();
+    await expect(detail.snapshotAutoNote).toBeVisible();
+    await expect(detail.navAfterTransactionNote).toBeVisible();
 
     // Bằng chứng thật ở DB (không chỉ tin UI): đúng 1 dòng per-holding + 1 dòng
     // tổng danh mục (holdingId: null), period MANUAL, ghi hôm nay.
@@ -126,15 +121,14 @@ test("số liệu Snapshot đã đóng băng không đổi khi PriceQuote cập 
       update: { price: "100000", source: "vnstock" },
     });
 
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("10");
-    await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
-    const holdingId = new URL(page.url()).pathname.split("/").pop();
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 100_000,
+    });
+    const holdingId = new URL(detail.url).pathname.split("/").pop();
 
     // Snapshot MANUAL đầu tiên (tự động sau mua) = 10 * 100.000 = 1.000.000.
     const beforeRow = await db.snapshot.findFirst({
@@ -175,13 +169,13 @@ test("số liệu Snapshot đã đóng băng không đổi khi PriceQuote cập 
     // mốc chốt khác ("Cuối tháng này") để query chạy với cache key MỚI, cùng
     // pattern đã dùng ở nav-override.spec.ts (không phải né bug — mốc chốt
     // khác vẫn hợp lệ vì PriceQuote seed <= cuối tháng này).
-    await page.goto("/settings");
-    await page.getByRole("link", { name: /Cuối tháng này/ }).click();
+    const settingsPage = new SettingsPage(page);
+    await settingsPage.goto();
+    await settingsPage.selectCutoff("Cuối tháng này");
 
-    await page.goto("/");
-    await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
-    ).toContainText("9.999.999.990");
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
+    await expect(dashboardPage.navValueBlock).toContainText("9.999.999.990");
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -198,23 +192,23 @@ test("bấm 'Chốt ngay' trên Dashboard hiện badge 'Đã chốt lúc HH:mm';
   const page = await context.newPage();
 
   try {
-    await page.goto("/");
-    await expect(page.getByRole("button", { name: "Chốt ngay" })).toBeVisible();
-    await expect(page.getByText(/Đã chốt lúc/)).toHaveCount(0);
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
+    await expect(dashboardPage.snapshotTodayButton).toBeVisible();
+    await expect(dashboardPage.snapshotTodayBadge).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Chốt ngay" }).click();
-    const badge = page.getByText(/Đã chốt lúc \d{2}:\d{2}/);
-    await expect(badge).toBeVisible();
-    const takenAtText = (await badge.innerText()).trim();
+    await dashboardPage.snapshotTodayButton.click();
+    await expect(dashboardPage.snapshotTodayBadge).toBeVisible();
+    const takenAtText = (
+      await dashboardPage.snapshotTodayBadge.innerText()
+    ).trim();
 
     // Server truth (getManualSnapshotToday() đọc DB), không phải chỉ giữ lại
     // client state useActionState — tải lại trang (mount mới, state client mất)
     // vẫn phải hiện đúng, và nút "Chốt ngay" không còn xuất hiện lại.
     await page.reload();
     await expect(page.getByText(takenAtText)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Chốt ngay" })).toHaveCount(
-      0,
-    );
+    await expect(dashboardPage.snapshotTodayButton).toHaveCount(0);
 
     // User không có Holding nào — NAV = 0 là số thật, vẫn ghi đúng 1 dòng tổng
     // danh mục (docs/domain/06-snapshots.md mục "Ca biên").
@@ -248,28 +242,28 @@ test("bấm 'Đóng băng số liệu' trên /snapshots nhiều lần trong ngà
       update: { price: "50000", source: "vnstock" },
     });
 
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("20");
-    await page.locator('input[name="pricePerUnit"]').fill("50000");
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
     // Redirect gắn ?cashflowId=<id> — createHolding tự trigger 1 lần chốt
     // MANUAL đầu tiên (1 dòng holding + 1 dòng tổng, xem test "mua tạo
     // Snapshot MANUAL..." phía trên).
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    await newHoldingPage.create({
+      symbol,
+      quantity: 20,
+      pricePerUnit: 50_000,
+    });
 
     // Bấm "Đóng băng số liệu" (SnapshotFreezeSheet) 3 lần, MỖI LẦN QUA MỘT LẦN
     // TẢI TRANG MỚI: SnapshotFreezeSheetProps KHÔNG có prop "đã chốt hôm nay"
     // từ server (khác SnapshotTodayCard) — useActionState reset về null lúc
     // mount, nên form luôn cho bấm lại được ngay cả khi đã chốt trong ngày
     // (process/DECISION.md 2026-07-15 (3)) — mô phỏng đúng ca "bấm nhiều lần".
+    const snapshotPage = new SnapshotPage(page);
     for (let i = 0; i < 3; i += 1) {
-      await page.goto("/snapshots");
-      await page.getByRole("button", { name: "Chốt số liệu hôm nay" }).click();
-      await page.getByRole("button", { name: "Đóng băng số liệu" }).click();
-      await expect(page.getByText(/Đã chốt lúc \d{2}:\d{2}/)).toBeVisible();
+      await snapshotPage.goto();
+      await snapshotPage.openFreezeSheet();
+      await snapshotPage.submitFreeze();
+      await expect(snapshotPage.freezeDoneBadge).toBeVisible();
     }
 
     // Tổng cộng đã chốt 4 lần (1 tự động sau mua + 3 lần bấm tay) — vẫn đúng 1
@@ -316,44 +310,37 @@ test("2 tab bấm 'Đóng băng số liệu' CÙNG LÚC (Promise.all, không qua
     // Tạo 1 Holding đang mở (quantity > 0) qua UI ở tab A — cũng tự trigger 1
     // lần chốt MANUAL đầu tiên (side effect của createHolding), giống các test
     // phía trên.
-    await pageA.goto("/holdings/new");
-    await pageA.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await pageA.locator('input[name="quantity"]').fill("20");
-    await pageA.locator('input[name="pricePerUnit"]').fill("50000");
-    await pageA.getByRole("button", { name: "Xong", exact: true }).click();
-    await pageA.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
+    const newHoldingPageA = new NewHoldingPage(pageA);
+    await newHoldingPageA.goto();
+    await newHoldingPageA.create({
+      symbol,
+      quantity: 20,
+      pricePerUnit: 50_000,
+    });
 
-    await pageA.goto("/snapshots");
-    await pageB.goto("/snapshots");
-    await pageA.getByRole("button", { name: "Chốt số liệu hôm nay" }).click();
-    await pageB.getByRole("button", { name: "Chốt số liệu hôm nay" }).click();
-    await expect(
-      pageA.getByRole("button", { name: "Đóng băng số liệu" }),
-    ).toBeVisible();
-    await expect(
-      pageB.getByRole("button", { name: "Đóng băng số liệu" }),
-    ).toBeVisible();
+    const snapshotPageA = new SnapshotPage(pageA);
+    const snapshotPageB = new SnapshotPage(pageB);
+    await snapshotPageA.goto();
+    await snapshotPageB.goto();
+    await snapshotPageA.openFreezeSheet();
+    await snapshotPageB.openFreezeSheet();
+    await expect(snapshotPageA.freezeSubmitButton).toBeVisible();
+    await expect(snapshotPageB.freezeSubmitButton).toBeVisible();
 
     // Bắn 2 submit CÙNG LÚC qua Promise.all (không await tuần tự) — 2 request
     // POST tới Server Action gần như overlap, khác hẳn cách tải-lại-trang-rồi-bấm
     // tuần tự ở test phía trên.
     await Promise.all([
-      pageA.getByRole("button", { name: "Đóng băng số liệu" }).click(),
-      pageB.getByRole("button", { name: "Đóng băng số liệu" }).click(),
+      snapshotPageA.submitFreeze(),
+      snapshotPageB.submitFreeze(),
     ]);
 
     // Mỗi tab phải kết thúc ở 1 trong 2 trạng thái hợp lệ: chốt thành công
     // (badge "Đã chốt lúc") hoặc thua trong đua tranh, được báo thử lại (Alert
     // "Không chốt được") — KHÔNG được crash/treo/hiện lỗi khác.
     const settleStates = [
-      pageA
-        .getByText(/Đã chốt lúc \d{2}:\d{2}/)
-        .or(pageA.getByText("Không chốt được")),
-      pageB
-        .getByText(/Đã chốt lúc \d{2}:\d{2}/)
-        .or(pageB.getByText("Không chốt được")),
+      snapshotPageA.freezeDoneBadge.or(snapshotPageA.freezeErrorState),
+      snapshotPageB.freezeDoneBadge.or(snapshotPageB.freezeErrorState),
     ];
     await Promise.all(
       settleStates.map((locator) => expect(locator).toBeVisible()),
