@@ -8,6 +8,7 @@ commit** (kèm trỏ file/spec gốc). Cách viết e2e chung ở
 ---
 
 <a id="redirect-cashflowid"></a>
+
 ## 1. Redirect sau giao dịch gắn `?cashflowId=` → so URL tuyệt đối bị treo
 
 - **Triệu chứng:** `waitForURL("/holdings/<id>")` sau khi tạo vị thế / ghi giao dịch không

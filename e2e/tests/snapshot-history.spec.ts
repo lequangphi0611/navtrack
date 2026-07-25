@@ -3,14 +3,16 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
-import { daysAgo } from "./support/dates";
+import { SnapshotDetailPage } from "../pages/snapshot-detail-page";
+import { SnapshotPage } from "../pages/snapshot-page";
+import { daysAgo } from "../support/dates";
 import {
   cleanupTestUser,
   closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
-} from "./support/test-session";
+} from "../support/test-session";
 
 // Issue #46 (process/DECISION.md 2026-07-15 (4)) — getSnapshotHistory()/
 // getSnapshotDetail(id) đọc chuỗi Snapshot{holdingId, frozen: true} thật thay
@@ -109,57 +111,42 @@ test("mở /snapshots thấy đúng lịch sử thật (không phải sample cũ
       },
     });
 
-    await page.goto("/snapshots");
+    const snapshotPage = new SnapshotPage(page);
+    await snapshotPage.goto();
 
-    // Dòng "live" luôn ở đầu — mốc hôm nay tính động, không lưu. Label "Hôm
-    // nay" nằm chung 1 <div> với span "· trực tiếp" (không tách riêng thành
-    // element có text khớp exact) — match theo dateNote đặc trưng của dòng
-    // live thay vì label.
-    await expect(page.getByText(/tính động, chưa lưu/)).toBeVisible();
+    // Dòng "live" luôn ở đầu — mốc hôm nay tính động, không lưu.
+    await expect(snapshotPage.liveRowNote).toBeVisible();
 
     // Cả 3 badge suy từ period đều hiện trên dữ liệu thật vừa seed.
-    await expect(page.getByText("ĐỊNH KỲ", { exact: true })).toBeVisible();
-    await expect(page.getByText("CUỐI NĂM", { exact: true })).toBeVisible();
-    await expect(page.getByText("THỦ CÔNG", { exact: true })).toBeVisible();
+    await expect(snapshotPage.periodBadge("ĐỊNH KỲ")).toBeVisible();
+    await expect(snapshotPage.periodBadge("CUỐI NĂM")).toBeVisible();
+    await expect(snapshotPage.periodBadge("THỦ CÔNG")).toBeVisible();
 
     // Giá trị thật (không phải số sample cũ) — 2tr/1,5tr/1tr theo compact.
-    await expect(page.getByText("2tr", { exact: true })).toBeVisible();
-    await expect(page.getByText("1,5tr", { exact: true })).toBeVisible();
+    await expect(snapshotPage.entry("2tr", { exact: true })).toBeVisible();
+    await expect(snapshotPage.entry("1,5tr", { exact: true })).toBeVisible();
 
     // Bấm vào mốc THỦ CÔNG -> điều hướng đúng /snapshots/[id] của đúng dòng
     // tổng danh mục vừa seed.
-    await page.getByRole("link", { name: /Chốt thủ công/ }).click();
-    await page.waitForURL(new RegExp(`/snapshots/${manualAggregate.id}$`));
+    const detail = await snapshotPage.openEntry(/Chốt thủ công/);
+    expect(detail.url).toBe(`/snapshots/${manualAggregate.id}`);
 
-    // NAV đã đóng băng hiển thị đúng con số thật (không phải sample). Label
-    // và giá trị NAV nằm cách nhau 2 cấp DOM (label lồng trong 1 flex div con
-    // của card, giá trị là sibling của flex div đó — khác pattern Dashboard
-    // 1 cấp) nên cần .locator("..") 2 lần.
-    await expect(
-      page.getByText("NAV đã đóng băng").locator("..").locator(".."),
-    ).toContainText("1.000.000");
+    // NAV đã đóng băng hiển thị đúng con số thật (không phải sample).
+    await expect(detail.navBox).toContainText("1.000.000");
 
     // Không có lệch giá (historicalPrice === currentPrice) -> 3c, KHÔNG hiện
     // khối so sánh 3f.
-    await expect(page.getByText("Chốt thủ công · toàn danh mục")).toBeVisible();
-    await expect(page.getByText("Nếu tính lại với giá mới")).toHaveCount(0);
-    await expect(
-      page.getByText(/Giá trị đóng băng dùng giá EOD tại/),
-    ).toBeVisible();
+    await expect(detail.entry("Chốt thủ công · toàn danh mục")).toBeVisible();
+    await expect(detail.entry("Nếu tính lại với giá mới")).toHaveCount(0);
+    await expect(detail.unchangedPriceNote).toBeVisible();
 
     // Meta đúng nguồn/chu kỳ của dòng tổng danh mục.
-    await expect(
-      page.getByText("Chu kỳ", { exact: true }).locator(".."),
-    ).toContainText("MANUAL");
-    await expect(
-      page.getByText("Nguồn", { exact: true }).locator(".."),
-    ).toContainText("AUTO");
+    await expect(detail.metaValue("Chu kỳ")).toContainText("MANUAL");
+    await expect(detail.metaValue("Nguồn")).toContainText("AUTO");
 
     // Breakdown per-holding đúng dòng đã seed cùng mốc.
-    await expect(page.getByText(symbol)).toBeVisible();
-    await expect(
-      page.getByText("Giá trị từng vị thế").locator("..").locator(".."),
-    ).toContainText("1tr");
+    await expect(detail.holdingEntry(symbol)).toBeVisible();
+    await expect(detail.breakdownValueBlock).toContainText("1tr");
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -170,14 +157,24 @@ test("mở /snapshots thấy đúng lịch sử thật (không phải sample cũ
 test("cách ly quyền: user khác cố mở URL /snapshots/[id] của snapshot thuộc user A -> 404, không lộ dữ liệu", async ({
   browser,
 }) => {
-  const sessionA = await createTestSession("snapshot-detail-isolation-a");
-  const sessionB = await createTestSession("snapshot-detail-isolation-b");
-  const contextA = await browser.newContext();
-  const contextB = await browser.newContext();
-  await signInAs(contextA, sessionA.sessionToken);
-  await signInAs(contextB, sessionB.sessionToken);
-  const pageA = await contextA.newPage();
-  const pageB = await contextB.newPage();
+  // 2 tài khoản độc lập -> dựng song song bằng Promise.all (review PR #97
+  // finding #8), không phải chạy tuần tự từng await riêng lẻ.
+  const [sessionA, sessionB] = await Promise.all([
+    createTestSession("snapshot-detail-isolation-a"),
+    createTestSession("snapshot-detail-isolation-b"),
+  ]);
+  const [contextA, contextB] = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  await Promise.all([
+    signInAs(contextA, sessionA.sessionToken),
+    signInAs(contextB, sessionB.sessionToken),
+  ]);
+  const [pageA, pageB] = await Promise.all([
+    contextA.newPage(),
+    contextB.newPage(),
+  ]);
 
   try {
     const snapshotA = await db.snapshot.create({
@@ -192,16 +189,18 @@ test("cách ly quyền: user khác cố mở URL /snapshots/[id] của snapshot 
       },
     });
 
-    // Chính chủ mở được bình thường.
-    await pageA.goto(`/snapshots/${snapshotA.id}`);
-    await expect(
-      pageA.getByText("NAV đã đóng băng").locator("..").locator(".."),
-    ).toContainText("12.345.678");
+    // Chính chủ mở được bình thường — không có link nào dẫn tới (dựng thẳng
+    // từ id vừa seed qua Prisma), goto() trực tiếp là cách duy nhất (rule mục
+    // 4 case 2/3).
+    const detailA = new SnapshotDetailPage(pageA, snapshotA.id);
+    await detailA.goto();
+    await expect(detailA.navBox).toContainText("12.345.678");
 
     // User B (không liên quan) cố mở thẳng URL của snapshot A -> 404, không
     // lộ số liệu (cùng pattern "cách ly dữ liệu giữa hai tài khoản",
-    // e2e/holdings.spec.ts).
-    await pageB.goto(`/snapshots/${snapshotA.id}`);
+    // e2e/tests/holdings.spec.ts).
+    const snapshotAAsSeenByB = new SnapshotDetailPage(pageB, snapshotA.id);
+    await snapshotAAsSeenByB.goto();
     await expect(pageB.getByRole("heading", { name: "404" })).toBeVisible();
     await expect(pageB.getByText("12.345.678")).toHaveCount(0);
   } finally {
@@ -246,10 +245,12 @@ test("mở /snapshots/[id] khi holdingId không null hoặc snapshot không tồ
       },
     });
 
-    await page.goto(`/snapshots/${holdingSnapshot.id}`);
+    const detail = new SnapshotDetailPage(page, holdingSnapshot.id);
+    await detail.goto();
     await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
 
-    await page.goto("/snapshots/does-not-exist");
+    const missing = new SnapshotDetailPage(page, "does-not-exist");
+    await missing.goto();
     await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
   } finally {
     await closeContext(context);
@@ -329,23 +330,22 @@ test("giá lịch sử khác giá hiện tại đủ ngưỡng -> hiện đúng 
       },
     });
 
-    await page.goto(`/snapshots/${aggregate.id}`);
+    const detail = new SnapshotDetailPage(page, aggregate.id);
+    await detail.goto();
 
     // Subtitle + banner đổi sang biến thể "giá đã đổi" (3f).
-    await expect(page.getByText("Giá đã đổi từ khi chốt")).toBeVisible();
+    await expect(detail.entry("Giá đã đổi từ khi chốt")).toBeVisible();
     await expect(
-      page.getByText(/Giá thị trường đã cập nhật sau ngày chốt/),
+      detail.entry(/Giá thị trường đã cập nhật sau ngày chốt/),
     ).toBeVisible();
 
     // Khối so sánh: recomputed = 10 * 150.000 = 1.500.000, delta = 500.000.
-    await expect(page.getByText("Nếu tính lại với giá mới")).toBeVisible();
-    await expect(page.getByText("1,5tr").first()).toBeVisible();
-    await expect(page.getByText(/500k/)).toBeVisible();
+    await expect(detail.recomputedHeading).toBeVisible();
+    await expect(detail.entry("1,5tr").first()).toBeVisible();
+    await expect(detail.entry(/500k/)).toBeVisible();
 
     // 3c (info banner "không đổi") KHÔNG hiện song song với 3f.
-    await expect(
-      page.getByText(/Giá trị đóng băng dùng giá EOD tại/),
-    ).toHaveCount(0);
+    await expect(detail.unchangedPriceNote).toHaveCount(0);
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -393,28 +393,32 @@ test("'Các mốc đã chốt': trang đầu dừng ở 20 dòng, bấm 'Xem th�
       }),
     });
 
-    await page.goto("/snapshots");
+    const snapshotPage = new SnapshotPage(page);
+    await snapshotPage.goto();
 
     // Trang đầu (desc theo date -> i=25..6, 20 dòng): dòng mới nhất (25tr) và
     // dòng cuối trang 1 (6tr) hiện; 5 dòng cũ nhất (5tr..1tr, thuộc trang 2)
     // CHƯA hiện.
-    await expect(page.getByText("20 snapshot", { exact: true })).toBeVisible();
-    await expect(page.getByText("25tr", { exact: true })).toBeVisible();
-    await expect(page.getByText("6tr", { exact: true })).toBeVisible();
-    await expect(page.getByText("5tr", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("1tr", { exact: true })).toHaveCount(0);
+    await expect(
+      snapshotPage.entry("20 snapshot", { exact: true }),
+    ).toBeVisible();
+    await expect(snapshotPage.entry("25tr", { exact: true })).toBeVisible();
+    await expect(snapshotPage.entry("6tr", { exact: true })).toBeVisible();
+    await expect(snapshotPage.entry("5tr", { exact: true })).toHaveCount(0);
+    await expect(snapshotPage.entry("1tr", { exact: true })).toHaveCount(0);
 
-    const loadMoreButton = page.getByRole("button", { name: "Xem thêm" });
-    await expect(loadMoreButton).toBeVisible();
-    await loadMoreButton.click();
+    await expect(snapshotPage.loadMoreButton).toBeVisible();
+    await snapshotPage.loadMore();
 
     // Sau khi tải thêm: đủ 25/25, 5 dòng còn lại hiện ra, nút "Xem thêm" biến
     // mất (nextCursor null — trang 2 chỉ có 5 dòng, ít hơn LIMIT nên
     // getMoreSnapshotHistory() trả hết trong 1 lần).
-    await expect(page.getByText("25 snapshot", { exact: true })).toBeVisible();
-    await expect(page.getByText("5tr", { exact: true })).toBeVisible();
-    await expect(page.getByText("1tr", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Xem thêm" })).toHaveCount(0);
+    await expect(
+      snapshotPage.entry("25 snapshot", { exact: true }),
+    ).toBeVisible();
+    await expect(snapshotPage.entry("5tr", { exact: true })).toBeVisible();
+    await expect(snapshotPage.entry("1tr", { exact: true })).toBeVisible();
+    await expect(snapshotPage.loadMoreButton).toHaveCount(0);
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -475,13 +479,16 @@ test("Biểu đồ NAV gắn nhãn năm để phân biệt 2 mốc cùng tháng 
       ],
     });
 
-    await page.goto("/snapshots");
+    const snapshotPage = new SnapshotPage(page);
+    await snapshotPage.goto();
 
     // Trước fix #83, cả 2 nhãn này render giống hệt "T{tháng}" (không có hậu
     // tố năm) -> getByText(recentLabel với "/YY") sẽ KHÔNG tìm thấy phần tử
     // nào, test fail đúng như kỳ vọng nếu suffix năm bị revert.
-    await expect(page.getByText(recentLabel, { exact: true })).toBeVisible();
-    await expect(page.getByText(oldLabel, { exact: true })).toBeVisible();
+    await expect(
+      snapshotPage.entry(recentLabel, { exact: true }),
+    ).toBeVisible();
+    await expect(snapshotPage.entry(oldLabel, { exact: true })).toBeVisible();
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);

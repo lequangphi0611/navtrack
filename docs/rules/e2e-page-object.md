@@ -5,16 +5,20 @@ Quy ước viết end-to-end cho Navtrack theo **Page Object Model (POM)**. Đ�
 (unit, integration Python) ở [`testing.md`](./testing.md); cách chạy + bẫy đã gặp ở
 [`../../e2e/CLAUDE.md`](../../e2e/CLAUDE.md) và [`../../e2e/GOTCHAS.md`](../../e2e/GOTCHAS.md).
 
-> **Trạng thái áp dụng:** bộ spec hiện tại (`e2e/*.spec.ts`) viết theo lối **thủ tục**
-> (gọi `page.getByRole/locator` trực tiếp trong spec) — có trước quy ước này. Refactor
-> dần sang POM được theo dõi ở issue riêng; **spec MỚI viết theo file này**, spec cũ đụng
-> tới đâu POM hoá tới đó (không refactor ồ ạt làm vỡ test đang xanh).
+> **Trạng thái áp dụng:** phần lớn `e2e/tests/*.spec.ts` vẫn viết theo lối **thủ tục** (gọi
+> `page.getByRole/locator` trực tiếp trong spec) — có trước quy ước này. Refactor dần sang
+> POM theo dõi ở issue #88 (7 sub-issue #90-#96, mỗi spec 1 sub-issue). `holdings.spec.ts`
+> đã POM hoá xong (#90) — dùng làm ví dụ tham chiếu ở file này thay vì tự viết mẫu riêng.
+> **spec MỚI viết theo file này**, spec cũ đụng tới đâu POM hoá tới đó (không refactor ồ ạt
+> làm vỡ test đang xanh).
 
 ---
 
 ## 1. Vì sao POM (vấn đề đang có)
 
-Đọc `e2e/holdings.spec.ts` hiện tại thấy rõ 3 chi phí của lối thủ tục:
+`e2e/tests/holdings.spec.ts` **trước khi POM hoá** (issue #90) là ví dụ rõ nhất cho 3 chi phí của
+lối thủ tục — các spec còn lại (`e2e/tests/dashboard.spec.ts`, `dividends.spec.ts`... chưa refactor,
+xem issue #88) vẫn mắc y hệt 3 vấn đề này:
 
 1. **Trùng lặp selector.** `getByPlaceholder("VD: FPT")`, `input[name="quantity"]`, nút
    `"Xong"`, pattern redirect `?cashflowId=` xuất hiện lại ở nhiều spec. UI đổi 1 nhãn →
@@ -64,7 +68,9 @@ Quy tắc phân loại nhanh:
 e2e/
   CLAUDE.md              # instruction bắt buộc đọc khi làm e2e (trỏ về file này + GOTCHAS)
   GOTCHAS.md             # nhật ký bẫy đã gặp: triệu chứng → nguyên nhân → cách fix
-  *.spec.ts              # spec: chỉ ý định + kỳ vọng, gọi page object
+  tests/                 # spec: chỉ ý định + kỳ vọng, gọi page object
+    holdings.spec.ts
+    dashboard.spec.ts
   pages/                 # 1 file / màn hình (hoặc component object dùng lại)
     holdings-page.ts     #   class HoldingsPage
     holding-detail-page.ts
@@ -136,6 +142,37 @@ Nguyên tắc:
 - **Action trả về gì:** nếu action điều hướng sang màn khác, trả về page object đích để
   spec nối chuỗi — *chỉ khi* điều hướng là chắc chắn 1 đích. Nếu không, trả `void`.
 
+### `goto()` vs điều hướng qua flow (click)
+
+**Ưu tiên đi qua UI thật** (bấm link/nút đang có trên màn hiện tại) **hơn** gọi `goto()`
+thẳng tới URL đích, mỗi khi màn hiện tại có sẵn đường dẫn tới đó. Action nối chuỗi thể hiện
+đúng cách người dùng thật di chuyển, và tiện thể verify luôn cả đường điều hướng (link đúng
+href, route wiring đúng) — thứ mà `goto()` thẳng bỏ qua hoàn toàn:
+
+```ts
+// ❌ Mỗi nơi cần vào 1 màn lại tự new + goto(), dù đã có link thật để bấm
+const form = new TransactionForm(page, holdingUrl);
+await page.goto(`${holdingUrl}/transactions/new`);
+await form.addBuy({ quantity: 100, pricePerUnit: 120_000 });
+
+// ✅ Action ở màn hiện tại bấm đúng link, trả về page/component object đích
+const form = await detail.goToNewTransaction(); // bấm "Thêm giao dịch"
+await form.submitBuy({ quantity: 100, pricePerUnit: 120_000 });
+```
+
+`goto()` vẫn cần thiết và hợp lệ cho:
+
+1. **Điểm vào đầu tiên của một test** — browser vừa mở, chưa có màn nào để bấm.
+2. **Truy cập thẳng URL có chủ đích** — vd test cách ly tài khoản: account B cố mở URL của
+   account A dù UI không có link nào dẫn tới đó (mô phỏng đoán/rò rỉ URL, đúng ý test).
+3. **Vào thẳng 1 màn cụ thể** khi test không quan tâm tới flow dẫn tới nó (ít gặp — cân nhắc
+   trước khi dùng, phần lớn spec Navtrack có flow thật để đi qua).
+
+Hệ quả: page/component object không nhất thiết còn giữ `goto()` riêng nếu **mọi** cách vào nó
+đều qua click từ màn khác (vd `TransactionForm` — luôn mở qua
+`HoldingDetailPage.goToNewTransaction()`, không có `goto()` của riêng nó). Vẫn giữ `goto()`
+cho page object nào còn cần điểm vào trực tiếp (case 1-3 ở trên).
+
 ### Locator getter vs method
 
 - Không tham số → **getter** (`get emptyState()`).
@@ -193,13 +230,20 @@ Navtrack có một quirk điều hướng phải bọc trong page object (chi ti
 Page object bọc lại thành action rõ nghĩa, spec không thấy regex:
 
 ```ts
-// trong TransactionForm
-async submitBuy(): Promise<string> {
-  await this.page.getByRole("button", { name: "Ghi nhận giao dịch mua" }).click();
+// trong TransactionForm — mở qua HoldingDetailPage.goToNewTransaction() (click
+// "Thêm giao dịch"), không tự goto() nên submitBuy() không cần nhận lại URL,
+// redirect quay về đúng HoldingDetailPage spec đang giữ.
+async submitBuy({ quantity, pricePerUnit }: TransactionInput) {
+  await this.quantityInput.fill(String(quantity));
+  await this.priceInput.fill(String(pricePerUnit));
+  await this.submitBuyButton.click();
   await this.page.waitForURL(afterTransactionUrl(this.holdingUrl));
-  return stripQuery(this.page.url()); // base URL sạch cho bước sau
 }
 ```
+
+`stripQuery` vẫn cần ở nơi **tạo mới** một page object đích chưa biết trước URL (vd
+`NewHoldingPage.create()` trả về `HoldingDetailPage` với id vừa tạo, `HoldingsPage.openHolding()`
+trả về `HoldingDetailPage` sau khi bấm vào 1 dòng trong danh sách).
 
 Lưu ý ngoại lệ (đã ghi ở `support/urls.ts`): `saveNavOverride` redirect **không** gắn
 `cashflowId`, `deleteTransaction` **không** điều hướng — dùng `waitForURL(exact)` cho 2 ca
@@ -221,8 +265,8 @@ Quy ước Navtrack — **locator là API chính, expect nằm ở spec**:
 ```ts
 // ✅ Good — kỳ vọng nằm ở spec, cơ chế nằm ở page object
 test("mua thêm → giá vốn bình quân recompute 110k", async ({ page }) => {
-  const form = new TransactionForm(page, holdingUrl);
-  await form.addBuy({ quantity: 100, pricePerUnit: 120_000 });
+  const form = await detail.goToNewTransaction(); // bấm "Thêm giao dịch"
+  await form.submitBuy({ quantity: 100, pricePerUnit: 120_000 });
   await expect(detail.quantityText).toHaveText("200 cổ phần");
   await expect(detail.avgCost).toContainText("110k");
 });
@@ -232,33 +276,39 @@ test("mua thêm → giá vốn bình quân recompute 110k", async ({ page }) => 
 
 ## 8. Spec sau khi POM hoá trông thế nào
 
-So sánh trực tiếp với `holdings.spec.ts` hiện tại (mục 1):
+So sánh trực tiếp với `holdings.spec.ts` hiện tại (mục 1). Điều hướng đi qua flow thật
+(click) thay vì mỗi bước tự `goto()` — chỉ điểm vào đầu test (`holdingsPage.goto()`) là
+`goto()` trực tiếp, vì lúc đó chưa có màn nào để bấm (mục 4, "goto() vs điều hướng qua flow"):
 
 ```ts
-// ✅ Mục tiêu — spec chỉ có ý định + kỳ vọng
+// ✅ Mục tiêu — spec chỉ có ý định + kỳ vọng, điều hướng nối chuỗi qua click
 import { expect, test } from "@playwright/test";
 import { withUser } from "./fixtures"; // gộp session + cleanup (tuỳ chọn)
-import { NewHoldingPage } from "./pages/new-holding-page";
-import { HoldingDetailPage } from "./pages/holding-detail-page";
-import { TransactionForm } from "./pages/transaction-form";
+import { HoldingsPage } from "./pages/holdings-page";
 
 test("nhập vị thế, mua thêm, tính giá vốn bình quân", async ({ page }) => {
   await withUser(page, async () => {
-    const holdingUrl = await new NewHoldingPage(page).create({
+    const holdingsPage = new HoldingsPage(page);
+    await holdingsPage.goto(); // điểm vào đầu test — chưa có màn nào để bấm
+
+    const newHoldingPage = await holdingsPage.goToNewHolding(); // bấm FAB/CTA
+    const detail = await newHoldingPage.create({
       symbol: "FPT", quantity: 100, pricePerUnit: 100_000,
     });
-    const detail = new HoldingDetailPage(page, holdingUrl);
     await expect(detail.heading("FPT")).toBeVisible();
     await expect(detail.quantityText).toHaveText("100 cổ phần");
 
-    await new TransactionForm(page, holdingUrl).addBuy({ quantity: 100, pricePerUnit: 120_000 });
+    const form = await detail.goToNewTransaction(); // bấm "Thêm giao dịch"
+    await form.submitBuy({ quantity: 100, pricePerUnit: 120_000 });
     await expect(detail.quantityText).toHaveText("200 cổ phần");
     await expect(detail.avgCost).toContainText("110k");
   });
 });
 ```
 
-Ý định nghiệp vụ đọc thẳng; DOM/selector/redirect biến mất khỏi spec.
+Ý định nghiệp vụ đọc thẳng; DOM/selector/redirect biến mất khỏi spec. Chú ý `newHoldingPage`,
+`detail`, `form` đều là **kết quả trả về** của action điều hướng trước đó (mục 4), không phải
+tự `new` rồi `goto()` độc lập từng cái.
 
 ---
 
@@ -277,20 +327,24 @@ trước khi viết:
    là mùi — quyết định đó thuộc **spec**. Page object chỉ được rẽ nhánh cho **cơ chế UI**
    thuần (vd DatePicker bấm next/prev bao nhiêu lần — xem `support/date-picker.ts`).
 4. **Constructor nhẹ, không `goto`.** Tạo object không được có side-effect điều hướng (mục 4).
-5. **Đừng trừu tượng hoá non.** Chỉ tạo page object / helper khi thao tác **dùng lại** hoặc
+5. **Ưu tiên điều hướng qua flow thật (click) hơn `goto()` độc lập** khi màn hiện tại có sẵn
+   link/nút dẫn tới màn đích — action trả về page/component object đích để spec nối chuỗi.
+   `goto()` dành cho điểm vào đầu test, truy cập thẳng URL có chủ đích, hoặc vào thẳng 1 màn
+   không phụ thuộc flow trước đó (mục 4, "goto() vs điều hướng qua flow").
+6. **Đừng trừu tượng hoá non.** Chỉ tạo page object / helper khi thao tác **dùng lại** hoặc
    selector **lặp**. Thứ dùng đúng một lần trong một spec cứ để thẳng — POM để bớt trùng lặp,
    không phải để có class cho đẹp.
 
 **Về selector & chờ**
-6. **Locator khả truy cập trước** (role → label/placeholder → `name` form → text); **cấm class
+7. **Locator khả truy cập trước** (role → label/placeholder → `name` form → text); **cấm class
    CSS/nth cứng** (mục 5).
-7. **Auto-wait, không `waitForTimeout`.** Chờ bằng `expect(...).toBeVisible()` / `waitForURL`
+8. **Auto-wait, không `waitForTimeout`.** Chờ bằng `expect(...).toBeVisible()` / `waitForURL`
    (mục 5, 10).
 
 **Về assertion**
-8. **Kỳ vọng nằm ở spec**, locator là API; helper `expectXxx` chỉ khi lặp ≥3 lần (mục 7).
-9. **e2e phủ luồng nối dây, không test lại logic thuần** — XIRR/cost basis/thuế thuộc unit
-   (`testing.md`).
+9. **Kỳ vọng nằm ở spec**, locator là API; helper `expectXxx` chỉ khi lặp ≥3 lần (mục 7).
+10. **e2e phủ luồng nối dây, không test lại logic thuần** — XIRR/cost basis/thuế thuộc unit
+    (`testing.md`).
 
 **Về tính độc lập của test (BẮT BUỘC)**
 
@@ -303,15 +357,15 @@ trước khi viết:
 > buộc**: các test **chung một DB** nên data sót từ test trước rò sang test sau; `retries`
 > chạy lại phải idempotent; và giữ isolation là điều kiện để **nâng `workers` an toàn** về sau.
 
-10. **Mỗi test tự dựng data của nó, tự dọn** — không dựa vào data test khác để lại, không
+11. **Mỗi test tự dựng data của nó, tự dọn** — không dựa vào data test khác để lại, không
     dựa vào **thứ tự chạy**. Mẫu chuẩn đã có: `createTestSession()` (user + session random)
     ở đầu, dọn trong `finally` — `closeContext()` **trước** rồi `cleanupTestUser()` (thứ tự
     này quan trọng, xem [`GOTCHAS.md`](../../e2e/GOTCHAS.md) #5).
-11. **Không chia sẻ state đổi được giữa các test.** Với data **không** cascade theo User
+12. **Không chia sẻ state đổi được giữa các test.** Với data **không** cascade theo User
     (`PriceQuote`, `Setting` toàn cục), dùng **mã/khoá random mỗi lần chạy** và tự xoá — data
     sót lại rò sang test sau; và nếu sau này nâng `workers`, hai worker sẽ đạp lên nhau
     (GOTCHAS #6, #8, #14).
-12. **Không hardcode ngày/năm tuyệt đối** — ngày tương đối qua `daysAgo()` (`support/dates.ts`)
+13. **Không hardcode ngày/năm tuyệt đối** — ngày tương đối qua `daysAgo()` (`support/dates.ts`)
     để test không vỡ khi chạy ở thời điểm khác; khớp ô lịch dùng `localIsoDate` (GOTCHAS #3).
 
 ---
@@ -321,6 +375,9 @@ trước khi viết:
 - ❌ **Selector inline trùng lặp** giữa các spec — lý do POM tồn tại; đưa vào page object.
 - ❌ **Bám class Tailwind / cấu trúc DOM** — dùng role/text/name; cần thì đề xuất testid.
 - ❌ **God object** ôm nhiều màn — 1 page object = 1 màn hình.
+- ❌ **Tự `new` page object rồi `goto()` thẳng URL** dù màn hiện tại đã có link/nút thật dẫn
+  tới đó — bỏ qua kiểm thử đường điều hướng, không giống flow người dùng thật. Dùng action
+  điều hướng trả về page object đích để nối chuỗi (mục 4).
 - ❌ **Assertion nhồi hết vào page object** — kỳ vọng ở spec (mục 7).
 - ❌ **`waitForTimeout` cứng** — auto-wait qua `expect`/`waitForURL`.
 - ❌ **Đưa logic thuần vào e2e** — XIRR/cost basis/thuế test bằng **unit** (`testing.md`);
@@ -337,6 +394,8 @@ trước khi viết:
 - [ ] Page object mới đặt đúng tầng (mục 2): màn → `pages/`, cross-cutting → `support/`.
 - [ ] Selector theo thứ tự ưu tiên mục 5; **không** bám class CSS.
 - [ ] Kỳ vọng (`expect`) nằm ở spec, trừ helper lặp ≥3 lần (mục 7).
+- [ ] Điều hướng ưu tiên qua flow thật (click) hơn `goto()` độc lập, trừ điểm vào đầu test /
+      truy cập thẳng URL có chủ đích (mục 4, "goto() vs điều hướng qua flow").
 - [ ] Điều hướng có redirect dùng helper `support/urls.ts`, không so URL tuyệt đối sai chỗ.
 - [ ] Bẫy mới phát hiện đã ghi vào [`GOTCHAS.md`](../../e2e/GOTCHAS.md).
 - [ ] Chạy được: `pnpm e2e <file>` (Claude Local) — Claude Cloud **skip**, báo rõ chưa

@@ -23,9 +23,9 @@ dưới, đọc **trước khi viết/sửa/chạy** bất kỳ e2e nào — đ�
 ## Bản đồ thư mục
 
 ```
+tests/      # spec (*.spec.ts) — chỉ ý định người dùng + kỳ vọng, gọi page object
 pages/      # page object — 1 file/màn hình, giữ selector + action (kebab-case file, PascalCase class)
 support/    # fixture cross-cutting: test-session (session+cleanup), dates, date-picker, urls
-*.spec.ts   # spec — chỉ ý định người dùng + kỳ vọng, gọi page object
 ```
 
 > Trạng thái: spec hiện tại viết lối thủ tục (có trước quy ước POM). Spec **mới** theo POM;

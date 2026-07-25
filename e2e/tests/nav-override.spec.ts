@@ -3,16 +3,18 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
-import { daysAgo, isoDate } from "./support/dates";
-import { fillDatePicker } from "./support/date-picker";
+import { DashboardPage } from "../pages/dashboard-page";
+import { NavOverrideForm } from "../pages/nav-override-form";
+import { NewHoldingPage } from "../pages/new-holding-page";
+import { SettingsPage } from "../pages/settings-page";
+import { daysAgo, isoDate } from "../support/dates";
 import {
   cleanupTestUser,
   closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
-} from "./support/test-session";
-import { stripQuery } from "./support/urls";
+} from "../support/test-session";
 
 // PriceQuote không có UI ghi — seed trực tiếp qua Prisma (cùng cách
 // dashboard.spec.ts), cần cho test dưới (STOCK/FUND có cả PriceQuote lẫn
@@ -42,36 +44,34 @@ test("nhập giá tay (NavOverride) cho vị thế Vàng cập nhật NAV toàn 
     // GOLD mặc định định giá thủ công — không có giá tự động vnstock
     // (docs/domain/04-pricing-and-valuation.md) nên chưa có PriceQuote nào
     // cho mã này ngay sau khi tạo.
-    await page.goto("/holdings/new");
-    await page.getByRole("button", { name: "Vàng", exact: true }).click();
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("10");
-    await page.locator('input[name="pricePerUnit"]').fill("7000000");
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
-    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
-    // Bỏ query string — saveNavOverride bên dưới redirect KHÔNG gắn cashflowId
-    // (không phải 1 trong 4 action mua/bán), cần base URL sạch để so khớp đúng.
-    const holdingUrl = stripQuery(page.url());
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 7_000_000,
+      assetType: "Vàng",
+    });
+
+    const dashboardPage = new DashboardPage(page);
 
     // Trước khi nhập giá tay: Dashboard liệt vị thế vào "thiếu giá" (chưa có
     // cả PriceQuote lẫn NavOverride).
-    await page.goto("/");
-    await expect(page.getByText("Vàng · chưa có giá nhập tay")).toBeVisible();
+    await dashboardPage.goto();
+    await expect(
+      dashboardPage.missingPriceNote("Vàng · chưa có giá nhập tay"),
+    ).toBeVisible();
 
     // Nhập giá tay 8.000.000 / chỉ, áp dụng hôm nay.
-    await page.goto(`${holdingUrl}/price`);
-    await page.locator('input[name="price"]').fill("8000000");
-    const today = new Date().toISOString().slice(0, 10);
-    await fillDatePicker(page, "date", today);
-    await page.getByRole("button", { name: "Lưu giá nhập tay" }).click();
-
-    // saveNavOverride (Server Action) redirect về đúng chi tiết vị thế khi
-    // thành công — validation lỗi sẽ KHÔNG redirect, ở lại trang nhập giá.
-    await page.waitForURL(holdingUrl);
-    await expect(page.getByRole("heading", { name: symbol })).toBeVisible();
+    const priceForm = new NavOverrideForm(page, detail.url);
+    await priceForm.goto();
+    // saveNavOverride redirect về đúng chi tiết vị thế khi thành công —
+    // validation lỗi sẽ KHÔNG redirect, ở lại trang nhập giá.
+    const detailAfterSave = await priceForm.save({
+      price: 8_000_000,
+      date: isoDate(new Date()),
+    });
+    await expect(detailAfterSave.heading(symbol)).toBeVisible();
 
     // GHI CHÚ (đã xác nhận đọc code trước khi viết spec): HoldingDetailScreen
     // hiện CHƯA wiring prop `valuation` (NAV/PriceSourceBadge) vào route
@@ -81,19 +81,19 @@ test("nhập giá tay (NavOverride) cho vị thế Vàng cập nhật NAV toàn 
     // NavOverride để hiển thị là Dashboard (getPortfolioValuation) — verify
     // hiệu ứng NavOverride qua đó thay vì badge "Nhập tay" trên trang chi
     // tiết (chưa có trên route thật để assert).
-    await page.goto("/");
+    await dashboardPage.goto();
 
     // NAV giờ gồm cả vị thế này = 10 * 8.000.000 = 80.000.000.
-    await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
-    ).toContainText("80.000.000");
+    await expect(dashboardPage.navValueBlock).toContainText("80.000.000");
 
     // Không còn nằm trong danh sách thiếu giá.
-    await expect(page.getByText("Vàng · chưa có giá nhập tay")).toHaveCount(0);
+    await expect(
+      dashboardPage.missingPriceNote("Vàng · chưa có giá nhập tay"),
+    ).toHaveCount(0);
 
     // priceFreshnessNote phản ánh có mã đang dùng giá nhập tay (nguồn MANUAL
     // đã thắng — GOLD không có nguồn AUTO nào để so sánh).
-    await expect(page.getByText(/dùng giá nhập tay/)).toBeVisible();
+    await expect(dashboardPage.manualPriceNote).toBeVisible();
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -137,40 +137,31 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
 
     // STOCK (mặc định của form) — loại có cả nguồn AUTO lẫn cho sửa tay.
     const buyDate = isoDate(daysAgo(730));
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("10");
-    await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await fillDatePicker(page, "date", buyDate);
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
-    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
-    // Bỏ query string — saveNavOverride bên dưới redirect KHÔNG gắn cashflowId
-    // (không phải 1 trong 4 action mua/bán), cần base URL sạch để so khớp đúng.
-    const holdingUrl = stripQuery(page.url());
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 100_000,
+      date: buyDate,
+    });
+
+    const dashboardPage = new DashboardPage(page);
 
     // Baseline: chỉ có AUTO -> NAV = 10 * 100.000 = 1.000.000.
-    await page.goto("/");
-    await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
-    ).toContainText("1.000.000");
-    await expect(page.getByText(/dùng giá nhập tay/)).toHaveCount(0);
+    await dashboardPage.goto();
+    await expect(dashboardPage.navValueBlock).toContainText("1.000.000");
+    await expect(dashboardPage.manualPriceNote).toHaveCount(0);
 
     // Nhập giá tay 200.000, ngày MỚI HƠN PriceQuote hiện có (5 ngày trước >
     // 10 ngày trước) -> MANUAL thắng theo rule so ngày.
-    await page.goto(`${holdingUrl}/price`);
-    await page.locator('input[name="price"]').fill("200000");
-    await fillDatePicker(page, "date", isoDate(overrideDate));
-    await page.getByRole("button", { name: "Lưu giá nhập tay" }).click();
-    await page.waitForURL(holdingUrl);
+    const priceForm = new NavOverrideForm(page, detail.url);
+    await priceForm.goto();
+    await priceForm.save({ price: 200_000, date: isoDate(overrideDate) });
 
-    await page.goto("/");
-    await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
-    ).toContainText("2.000.000");
-    await expect(page.getByText(/dùng giá nhập tay/)).toBeVisible();
+    await dashboardPage.goto();
+    await expect(dashboardPage.navValueBlock).toContainText("2.000.000");
+    await expect(dashboardPage.manualPriceNote).toBeVisible();
 
     // Giả lập job EOD chạy sau, ghi PriceQuote MỚI HƠN cả NavOverride vừa
     // nhập (1 ngày trước > 5 ngày trước) -> đúng kịch bản issue #40.
@@ -192,16 +183,15 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
     // đã cache — không phải cách né bug, mà vì bài test cần đọc DB thật ngay
     // lập tức thay vì chờ TTL, và mốc chốt khác vẫn hợp lệ (PriceQuote mới
     // vẫn <= cuối tháng này).
-    await page.goto("/settings");
-    await page.getByRole("link", { name: /Cuối tháng này/ }).click();
+    const settingsPage = new SettingsPage(page);
+    await settingsPage.goto();
+    await settingsPage.selectCutoff("Cuối tháng này");
 
-    await page.goto("/");
+    await dashboardPage.goto();
     // NAV quay lại dùng AUTO mới nhất = 10 * 300.000 = 3.000.000 — PriceQuote
     // mới hơn đã "un-shadow" NavOverride cũ, không còn kẹt vĩnh viễn ở MANUAL.
-    await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
-    ).toContainText("3.000.000");
-    await expect(page.getByText(/dùng giá nhập tay/)).toHaveCount(0);
+    await expect(dashboardPage.navValueBlock).toContainText("3.000.000");
+    await expect(dashboardPage.manualPriceNote).toHaveCount(0);
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
