@@ -12,7 +12,7 @@ import { freezeManualSnapshot } from "@/features/snapshots/actions";
 import type { ActionResult } from "@/lib/action-result";
 import { toFieldErrors } from "@/lib/action-result";
 import { getSession } from "@/lib/auth";
-import { derivePositionIncludingStockDividends } from "@/lib/cost-basis";
+import { derivePosition } from "@/lib/cost-basis";
 import { computeCashflowAmount } from "@/lib/cost-basis";
 import type {
   CashflowInputWithEvent,
@@ -155,9 +155,9 @@ export async function createHolding(
                 feeAmount: true,
               },
               // Khớp thứ tự tie-break của migration backfill (date, createdAt, id) —
-              // derivePositionIncludingStockDividends() sort theo (date, createdAt, id)
-              // qua buildQuantityTimeline(), orderBy này chỉ để nhất quán hiển thị debug,
-              // không còn là nguồn tie-break duy nhất như derivePosition() cũ.
+              // derivePosition() sort theo (date, createdAt, id) qua
+              // buildQuantityTimeline(), orderBy này chỉ để nhất quán hiển thị debug,
+              // không phải nguồn tie-break duy nhất.
               orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
             },
             // Issue #59: SL đang giữ phải gồm cả cổ tức cổ phiếu, không chỉ Cashflow —
@@ -186,7 +186,7 @@ export async function createHolding(
           feeAmount: new Decimal(feeAmount),
         };
 
-        const position = derivePositionIncludingStockDividends(
+        const position = derivePosition(
           [...(existing?.cashflows.map(toCashflowInput) ?? []), candidate],
           existing?.dividends.map(toStockDividendInput) ?? [],
         );
@@ -352,7 +352,7 @@ export async function addTransaction(
           feeAmount: new Decimal(feeAmount),
         };
 
-        const position = derivePositionIncludingStockDividends(
+        const position = derivePosition(
           [...holding.cashflows.map(toCashflowInput), candidate],
           holding.dividends.map(toStockDividendInput),
         );
@@ -498,7 +498,7 @@ export async function updateTransaction(
           feeAmount: new Decimal(feeAmount),
         };
 
-        const position = derivePositionIncludingStockDividends(
+        const position = derivePosition(
           [
             ...cashflow.holding.cashflows
               .filter((cf) => cf.id !== cashflowId)
@@ -636,7 +636,7 @@ export async function deleteTransaction(
           .filter((cf) => cf.id !== cashflowId)
           .map(toCashflowInput);
 
-        const position = derivePositionIncludingStockDividends(
+        const position = derivePosition(
           remaining,
           cashflow.holding.dividends.map(toStockDividendInput),
         );

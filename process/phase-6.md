@@ -15,6 +15,7 @@ Trực quan hóa danh mục bằng hai biểu đồ và bổ sung chế độ �
   - **Hysteresis:** buffer 3 điểm % chống nhấp nháy quanh ngưỡng — bật ở `threshold`, chỉ tắt khi xuống dưới `threshold − 3`; cần cơ chế lưu trạng thái cảnh báo trước đó per-`Holding` (field cụ thể do implementer quyết định lúc code)
   - **Chú thích liên kết trên biểu đồ phân bổ:** khi có ≥1 `Holding` đang cảnh báo, hiện dòng chú thích nhỏ dưới biểu đồ phân bổ tài sản (theo nhóm `AssetType`) dạng "N mã đang vượt ngưỡng tập trung — xem bảng vị thế bên dưới", tránh user nhìn biểu đồ theo nhóm rồi tưởng đã đa dạng dù có 1 mã lệch hẳn trong nhóm
 - [x] Skeleton per-route + Suspense tách nhỏ cho từng vùng data
+- [x] **Tách realized/unrealized PnL (issue #67):** card "Lãi/lỗ" trên Dashboard tách `absolutePnl` thành `realizedPnl` (đã chốt: bán thật + cổ tức tiền mặt) và `unrealizedPnl` (trên giấy: vị thế đang mở) — công thức đầy đủ ở `docs/domain/05-returns-xirr-and-pnl.md` mục "Cách tính"
 
 ## Tiêu chí hoàn thành
 - [x] Hai biểu đồ hiển thị đúng dữ liệu
@@ -25,6 +26,7 @@ Trực quan hóa danh mục bằng hai biểu đồ và bổ sung chế độ �
 - [x] Danh mục có `100/n > threshold` (n = số Holding mở có giá): badge kèm ghi chú "tập trung tự nhiên do ít mã"
 - [x] Badge không nhấp nháy khi `concentrationPercent` dao động sát ngưỡng (hysteresis buffer 3 điểm %)
 - [x] Biểu đồ phân bổ tài sản có chú thích liên kết khi có Holding đang cảnh báo tập trung
+- [x] **Issue #67:** `realizedPnl + unrealizedPnl` khớp `absolutePnl` tuyệt đối (cutoff = hôm nay, không thiếu giá) — có unit test đối chiếu bằng công thức tay
 
 ## Ghi chú xác thực còn thiếu (Claude Cloud)
 Đã tick đủ dựa trên bằng chứng code + unit test (lint/typecheck/test/build đều PASS, 241 test). Hai việc sau **chưa** verify thật vì cần hạ tầng chỉ có ở Claude Local, cần chạy lại trước khi hoàn toàn yên tâm:

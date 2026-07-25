@@ -5,9 +5,43 @@ import type { BrowserContext } from "@playwright/test";
 
 const db = new PrismaClient();
 
+const SETTING_BASELINE_DATE = new Date("2020-01-01");
+
+// `CONCENTRATION_WARNING_THRESHOLD` (Setting) đọc bởi getConcentrationBadges()
+// (lib/portfolio-valuation.ts) mỗi lần render HoldingsPositionsSection — tức
+// GẦN NHƯ MỌI test chạm /holdings, không riêng phase-6. Không seed tự động
+// cho DB e2e (scripts/e2e.mjs chỉ `prisma migrate deploy`, không chạy `pnpm
+// db:seed` — khác DB dev, xem prisma/seed.ts). Thiếu key này ->
+// resolveDecimalSetting() throw AppError ngay lúc render, phá luôn section
+// (không phải toàn trang, nên nhiều test vẫn "tình cờ" pass nếu assertion
+// không chạm khu vực đó — dễ gây ấn tượng sai là flake). Seed idempotent ở
+// đây (createTestSession, gọi bởi MỌI spec) thay vì rải lại ở từng spec —
+// cùng tinh thần seed AllowedUser/User/Session ngay phía dưới.
+async function ensureConcentrationWarningThresholdSeeded() {
+  await db.setting.upsert({
+    where: {
+      key_effectiveFrom: {
+        key: "CONCENTRATION_WARNING_THRESHOLD",
+        effectiveFrom: SETTING_BASELINE_DATE,
+      },
+    },
+    update: {},
+    create: {
+      key: "CONCENTRATION_WARNING_THRESHOLD",
+      value: "30",
+      valueType: "DECIMAL",
+      label: "Ngưỡng cảnh báo tập trung (%)",
+      group: "DISPLAY",
+      effectiveFrom: SETTING_BASELINE_DATE,
+    },
+  });
+}
+
 // Tạo một tài khoản test riêng biệt (email random) + Session hợp lệ trong DB, rồi
 // gắn cookie session vào context — bỏ qua luồng OAuth thật của Google cho mục đích e2e.
 export async function createTestSession(namePrefix: string) {
+  await ensureConcentrationWarningThresholdSeeded();
+
   const email = `${namePrefix}-${randomUUID()}@e2e.test`;
 
   await db.allowedUser.create({

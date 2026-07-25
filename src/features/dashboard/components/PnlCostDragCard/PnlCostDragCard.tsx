@@ -3,7 +3,11 @@
 import { ChevronRight, Droplet } from "lucide-react";
 import { useState } from "react";
 
-import { formatMoney, formatPercent, signColorClass } from "@/lib/format";
+import {
+  formatCostDragPercent,
+  formatMoney,
+  signColorClass,
+} from "@/lib/format";
 import type { CostDragBreakdownEntry } from "@/lib/portfolio-valuation";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +17,16 @@ type PnlCostDragCardProps = {
   // Decimal đã serialize — lãi/lỗ thực nhận (đã trừ thuế + phí), có thể âm.
   pnlValue: string;
   pnlNote?: string;
+  // Bất biến (issue #67): realizedPnl + unrealizedPnl ≈ pnlValue (absolutePnl).
+  // realizedPnl: lãi/lỗ đã chốt thật (đã bán + cổ tức tiền mặt).
+  // unrealizedPnl: lãi/lỗ trên giấy (vị thế đang mở, chưa bán).
+  realizedPnl: string;
+  unrealizedPnl: string;
+  // Ghi chú phụ (issue #2 code review PR #87) — hiện khi mốc chốt đang chọn
+  // khác "hôm nay" (PortfolioValuation.pnlSplitIsApproximate), vì phần tách
+  // realized/unrealized dựa trên avgCost/quantity hiện tại có thể lệch nhẹ so
+  // với đúng-tại-mốc-chốt (docs/domain/ giới hạn cutoff-accuracy đã chốt).
+  splitNote?: string;
   costDragAmount: string;
   costDragPercent: number;
   // grossInvested + costDragBreakdown: cần để render CostDragSheet (mở từ
@@ -30,6 +44,9 @@ type PnlCostDragCardProps = {
 function PnlCostDragCard({
   pnlValue,
   pnlNote,
+  realizedPnl,
+  unrealizedPnl,
+  splitNote,
   costDragAmount,
   costDragPercent,
   grossInvested,
@@ -38,6 +55,8 @@ function PnlCostDragCard({
 }: PnlCostDragCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const pnlNumber = Number(pnlValue);
+  const realizedPnlNumber = Number(realizedPnl);
+  const unrealizedPnlNumber = Number(unrealizedPnl);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -56,6 +75,33 @@ function PnlCostDragCard({
         {pnlNote ? (
           <div className="mt-1.5 text-[10.5px] text-muted-faint">{pnlNote}</div>
         ) : null}
+        <div className="mt-2 grid grid-cols-2 gap-2 text-[10.5px]">
+          <div>
+            <span className="text-muted-faint">Đã thực hiện: </span>
+            <span
+              className={cn(
+                "font-mono font-semibold tabular-nums",
+                signColorClass(realizedPnlNumber),
+              )}
+            >
+              {formatMoney(realizedPnl, { hidden })}
+            </span>
+          </div>
+          <div>
+            <span className="text-muted-faint">Chưa thực hiện: </span>
+            <span
+              className={cn(
+                "font-mono font-semibold tabular-nums",
+                signColorClass(unrealizedPnlNumber),
+              )}
+            >
+              {formatMoney(unrealizedPnl, { hidden })}
+            </span>
+          </div>
+        </div>
+        {splitNote ? (
+          <div className="mt-1 text-[10px] text-muted-faint">{splitNote}</div>
+        ) : null}
       </div>
 
       <button
@@ -71,7 +117,7 @@ function PnlCostDragCard({
           <div className="mt-0.5 font-mono text-[10.5px] text-muted-faint">
             Thuế + phí đã ăn{" "}
             <span className="font-semibold text-warning">
-              {formatPercent(costDragPercent)}
+              {formatCostDragPercent(costDragPercent)}
             </span>{" "}
             vốn đã bỏ ra mua
           </div>

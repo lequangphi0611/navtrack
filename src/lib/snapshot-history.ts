@@ -78,9 +78,43 @@ function describePeriod(
   }
 }
 
+// Phân trang kiểu "peek LIMIT+1" dùng chung cho getSnapshotHistory()/
+// getMoreSnapshotHistory() (features/snapshots/queries.ts, issue #83) — nhận
+// `rows` đã query với `take: limit + 1` (caller tự peek), tính hasMore/page/
+// nextCursor. Pure, generic theo T có id để cả FrozenSnapshotRow lẫn row thô
+// từ Prisma dùng chung được.
+export function paginateWithCursor<T extends { id: string }>(
+  rows: T[],
+  limit: number,
+): { page: T[]; hasMore: boolean; nextCursor: string | null } {
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? (page[page.length - 1]?.id ?? null) : null;
+  return { page, hasMore, nextCursor };
+}
+
 function heightPercentOf(value: Decimal, max: Decimal): number {
   if (max.isZero()) return 0;
   return value.div(max).mul(100).toNumber();
+}
+
+// Tách khỏi buildSnapshotHistoryView để getMoreSnapshotHistory() (queries.ts,
+// load-more cursor-based, issue #83) map trực tiếp 1 FrozenSnapshotRow -> 1
+// SnapshotListRow{kind:"frozen"} không cần chạy lại toàn bộ buildSnapshotHistoryView
+// (vốn còn build chart, không cần cho payload load-more).
+export function toFrozenSnapshotListRow(
+  row: FrozenSnapshotRow,
+): Extract<SnapshotListRow, { kind: "frozen" }> {
+  const { label, badge, description } = describePeriod(row.period, row.date);
+  return {
+    kind: "frozen",
+    id: row.id,
+    label,
+    badge,
+    dateNote: `${formatDate(row.date)} · ${description}`,
+    value: row.value,
+    href: ROUTES.snapshotDetail(row.id),
+  };
 }
 
 // Dựng dữ liệu cho /snapshots (mockup 3a) — chart 8 cột + danh sách "Các mốc
@@ -103,7 +137,7 @@ export function buildSnapshotHistoryView(
 
   const points: NavHistoryChartPoint[] = [
     ...chartFrozenAsc.map((row) => ({
-      label: `T${row.date.getUTCMonth() + 1}`,
+      label: `T${row.date.getUTCMonth() + 1}/${String(row.date.getUTCFullYear()).slice(-2)}`,
       heightPercent: heightPercentOf(new Decimal(row.value), max),
     })),
     {
@@ -133,18 +167,7 @@ export function buildSnapshotHistoryView(
     value: navToday,
   };
 
-  const frozenRows: SnapshotListRow[] = frozenDesc.map((row) => {
-    const { label, badge, description } = describePeriod(row.period, row.date);
-    return {
-      kind: "frozen",
-      id: row.id,
-      label,
-      badge,
-      dateNote: `${formatDate(row.date)} · ${description}`,
-      value: row.value,
-      href: ROUTES.snapshotDetail(row.id),
-    };
-  });
+  const frozenRows: SnapshotListRow[] = frozenDesc.map(toFrozenSnapshotListRow);
 
   return {
     chart: { navToday, changePercent, points },

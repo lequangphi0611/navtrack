@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/PageHeader";
+import type { SnapshotHistoryPage } from "@/features/snapshots/types";
 import {
   NavHistoryChart,
   type NavHistoryChartProps,
@@ -11,12 +12,20 @@ import {
   SnapshotHistoryList,
   type SnapshotListRow,
 } from "@/features/snapshots/components/SnapshotHistoryList";
+import type { ActionResult } from "@/lib/action-result";
 
 type SnapshotHistoryScreenProps = {
   backHref: string; // ROUTES.dashboard
   chart: NavHistoryChartProps;
   freezeSheet: SnapshotFreezeSheetProps;
   rows: SnapshotListRow[];
+  // Load-more "Các mốc đã chốt" (cursor-based, issue #83) — SnapshotHistoryList
+  // tự quản lý state phân trang, nhận sẵn trang đầu (initialNextCursor, đã fetch
+  // ở page.tsx) + action server để tự gọi tiếp khi cần xem thêm.
+  initialNextCursor: string | null;
+  loadMoreAction: (
+    cursor: string,
+  ) => Promise<ActionResult<SnapshotHistoryPage>>;
 };
 
 // Organism cho /snapshots (mockup 3a) — PageHeader + mini chart NAV + CTA chốt
@@ -26,6 +35,8 @@ function SnapshotHistoryScreen({
   chart,
   freezeSheet,
   rows,
+  initialNextCursor,
+  loadMoreAction,
 }: SnapshotHistoryScreenProps) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4.5 p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
@@ -33,7 +44,11 @@ function SnapshotHistoryScreen({
 
       <NavHistoryChart {...chart} />
       <SnapshotFreezeSheet {...freezeSheet} />
-      <SnapshotHistoryList rows={rows} />
+      <SnapshotHistoryList
+        rows={rows}
+        initialNextCursor={initialNextCursor}
+        loadMoreAction={loadMoreAction}
+      />
     </div>
   );
 }

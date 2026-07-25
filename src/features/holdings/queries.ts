@@ -18,7 +18,7 @@ import type { TransactionSnapshotBannerProps } from "@/features/holdings/compone
 import { getManualSnapshotToday } from "@/features/snapshots/queries";
 import { getSession } from "@/lib/auth";
 import { computeCostDrag } from "@/lib/cost-drag";
-import { derivePositionIncludingStockDividends } from "@/lib/cost-basis";
+import { derivePosition } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
@@ -47,6 +47,7 @@ import { computeWeightedAverageXirr } from "@/lib/weighted-average-xirr";
 import { computeXirr } from "@/lib/xirr";
 import { buildXirrCashflows } from "@/lib/xirr-cashflow";
 
+import { buildCashflowTimeline } from "./build-cashflow-timeline";
 import { groupHoldingsByType } from "./group-holdings";
 import type {
   CashflowRow,
@@ -141,7 +142,9 @@ export async function hasAnyHolding(): Promise<boolean> {
 async function getCashDividends(
   holdingId: string,
   cutoffDate: Date,
-): Promise<{ date: Date; paymentDate: Date | null; netAmount: Decimal }[]> {
+): Promise<
+  { id: string; date: Date; paymentDate: Date | null; netAmount: Decimal }[]
+> {
   const rows = await db.dividend.findMany({
     where: {
       holdingId,
@@ -149,10 +152,20 @@ async function getCashDividends(
       netAmount: { not: null },
       date: { lte: cutoffDate },
     },
-    select: { date: true, paymentDate: true, netAmount: true },
+    select: {
+      id: true,
+      date: true,
+      createdAt: true,
+      paymentDate: true,
+      netAmount: true,
+    },
+    // Khớp tie-break convention dùng cho cashflows ở include của getHoldingDetail
+    // (date, createdAt, id) — createdAt chỉ dùng để order, không trả ra ngoài.
+    orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
   });
 
   return rows.map((row) => ({
+    id: row.id,
     date: row.date,
     paymentDate: row.paymentDate,
     // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
@@ -179,8 +192,8 @@ export async function getHoldingDetail(
     where: { id: holdingId },
     include: {
       // Khớp thứ tự tie-break dùng ở actions.ts/migration backfill (date, createdAt, id) —
-      // derivePositionIncludingStockDividends() sort theo (date, createdAt, id), cần thứ tự
-      // DB nhất quán khi trùng ngày để không lệch với Holding.quantity/avgCost đã materialize
+      // derivePosition() sort theo (date, createdAt, id), cần thứ tự DB nhất quán khi
+      // trùng ngày để không lệch với Holding.quantity/avgCost đã materialize
       // (docs/domain/02).
       cashflows: {
         orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
@@ -234,7 +247,7 @@ export async function getHoldingDetail(
   // getOpenHoldings/getOpenHoldingsWithValuation). Dùng để valuate/xác định
   // isOpenPosition đúng thời điểm đang xem, nhất quán với cashflowsForXirr/
   // dividends bên dưới.
-  const position = derivePositionIncludingStockDividends(
+  const position = derivePosition(
     cashflowsUpToCutoff.map((cf) => ({
       id: cf.id,
       type: cf.type,
@@ -298,13 +311,18 @@ export async function getHoldingDetail(
   // quán với dòng tiền thật sự đưa vào XIRR (không tự suy luận riêng).
   const appendedNavPoint = isOpenPosition && currentNav !== null;
 
-  const timeline: CashflowTimelineRow[] = cashflowsUpToCutoff.map((cf) => ({
-    id: cf.id,
-    kind: cf.type,
-    label: `${cf.type === "BUY" ? "Mua" : "Bán"} ${formatQuantity(cf.quantity.toString(), holding.unit)}`,
-    dateNote: `${formatDate(cf.date)} · giá ${formatMoney(cf.pricePerUnit.toString())}`,
-    amount: cf.amount.toString(),
-  }));
+  const timeline: CashflowTimelineRow[] = buildCashflowTimeline(
+    cashflowsUpToCutoff.map((cf) => ({
+      id: cf.id,
+      type: cf.type,
+      date: cf.date,
+      quantity: new Decimal(cf.quantity.toString()),
+      pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
+      amount: new Decimal(cf.amount.toString()),
+    })),
+    dividends,
+    holding.unit,
+  );
 
   if (appendedNavPoint) {
     // currentNav !== null đã xác nhận ở appendedNavPoint — non-null assertion an toàn.

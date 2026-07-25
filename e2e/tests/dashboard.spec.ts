@@ -3,16 +3,16 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
-import { daysAgo, isoDate } from "./support/dates";
-import { fillDatePicker } from "./support/date-picker";
+import { DashboardPage } from "../pages/dashboard-page";
+import { NewHoldingPage } from "../pages/new-holding-page";
+import { daysAgo, isoDate } from "../support/dates";
 import {
   cleanupTestUser,
   closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
-} from "./support/test-session";
-import { stripQuery } from "./support/urls";
+} from "../support/test-session";
 
 // PriceQuote không có UI ghi (chỉ job Python ghi được, xem
 // jobs/price-fetcher/**) — seed trực tiếp qua Prisma trong spec, cùng cách
@@ -61,57 +61,31 @@ test("Dashboard hiển thị đúng NAV/XIRR/lãi-lỗ khi vị thế có giá t
     // tiền giả định NAV (ghép ở cutoffDate) không quá sát ngày mua, tránh ca
     // biên "kỳ rất ngắn" khiến Newton-Raphson khó hội tụ (docs/domain/05).
     const buyDate = isoDate(daysAgo(730));
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("100");
-    await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await fillDatePicker(page, "date", buyDate);
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
-    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 100_000,
+      date: buyDate,
+    });
 
-    await page.goto("/");
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
 
-    // NAV = 100 * 150.000 = 15.000.000. Lên 2 cấp (không phải 1) vì commit
-    // 13146d6 bọc label vào 1 row riêng chung với pill "Lịch sử" — số NAV giờ
-    // là sibling của row đó, không còn là con trực tiếp.
-    await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
-    ).toContainText("15.000.000");
+    // NAV = 100 * 150.000 = 15.000.000.
+    await expect(dashboardPage.navValueBlock).toContainText("15.000.000");
 
     // XIRR tính được — không rơi vào "Chưa tính được" (docs/domain/05: có ít
     // nhất 1 dòng tiền âm (mua) + 1 dòng tiền dương (NAV giả định tại mốc)).
-    await expect(page.getByText("Chưa tính được")).toHaveCount(0);
-    // Nhãn "XIRR" trơn (PortfolioStatsRow.tsx) — cố ý đổi thành "XIRR (sau
-    // thuế)" ở Phase 5 (process/phase-5.md mục "Cấu trúc lại ReturnMetrics/
-    // card lãi-lỗ trên Dashboard", process/DECISION.md 2026-07-18): hàng 2 cột
-    // Dashboard-only ghép "XIRR (sau thuế)" + "Vốn đã bỏ ra mua", thay hẳn
-    // ReturnMetrics 2 cột XIRR+PnL cũ. Cùng cấp cha-con trực tiếp (label +
-    // value là 2 con của cùng 1 div, xem PortfolioStatsRow.tsx) — chỉ cần lên
-    // 1 cấp, không phải 2 như trước.
-    const xirrCard = page
-      .getByText("XIRR (sau thuế)", { exact: true })
-      .locator("..");
-    await expect(xirrCard).toContainText("%");
+    await expect(dashboardPage.noXirrState).toHaveCount(0);
+    await expect(dashboardPage.xirrCard).toContainText("%");
 
     // Lãi/lỗ tuyệt đối dương = NAV - vốn đã bỏ vào = 15tr - 10tr = 5.000.000.
-    // Nhãn "Lãi/lỗ tuyệt đối" (ReturnMetrics cũ) đổi thành "Lãi/lỗ (thực nhận)"
-    // ở Phase 5 (process/phase-5.md: "nhãn 'Lãi/lỗ (thực nhận)'... vì đã trừ
-    // cả phí, không chỉ thuế", process/DECISION.md 2026-07-18) — card riêng
-    // full-width mới (PnlCostDragCard.tsx) thay nửa PnL của ReturnMetrics cũ.
-    // Cấu trúc: label -> div cha (.p-4.5) -> root card (2 cấp, xem
-    // PnlCostDragCard.tsx) chứa cả pnlValue span, khác 1 cấp của XIRR ở trên.
-    await expect(
-      page
-        .getByText("Lãi/lỗ (thực nhận)", { exact: true })
-        .locator("..")
-        .locator(".."),
-    ).toContainText("5.000.000");
+    await expect(dashboardPage.pnlCard).toContainText("5.000.000");
 
     // priceFreshnessNote (mốc giá tự động gần nhất).
-    await expect(page.getByText(/Giá tự động cập nhật EOD/)).toBeVisible();
+    await expect(dashboardPage.autoPriceFreshnessNote).toBeVisible();
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -146,34 +120,27 @@ test("Dashboard hiển thị đúng màu/mũi tên khi NAV lỗ so với vốn",
     // Mua 100 <symbol> @ 100.000 -> vốn 10.000.000, NAV = 100 * 50.000 =
     // 5.000.000 -> lỗ 5.000.000 (-50%).
     const buyDate = isoDate(daysAgo(730));
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("100");
-    await page.locator('input[name="pricePerUnit"]').fill("100000");
-    await fillDatePicker(page, "date", buyDate);
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
-    // Redirect gắn thêm ?cashflowId=<id> (issue #37, lib/routes.ts::holdingDetailAfterTransaction).
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 100_000,
+      date: buyDate,
+    });
 
-    await page.goto("/");
-
-    const navDeltaRow = page
-      .getByText("so với vốn đã bỏ vào", { exact: true })
-      .locator("..");
-    const navDeltaAmount = navDeltaRow.locator("span").first();
-    const navDeltaIcon = navDeltaRow.locator("svg");
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
 
     // Số âm — "-5.000.000" (formatMoney dùng dấu trừ ASCII cho số âm, đã tự
     // verify ở formatMoney test "số âm vẫn format đúng dấu").
-    await expect(navDeltaAmount).toContainText("-5.000.000");
+    await expect(dashboardPage.navDeltaAmount).toContainText("-5.000.000");
 
     // Đúng màu lỗ, KHÔNG lẫn màu lãi.
-    await expect(navDeltaAmount).toHaveClass(/text-destructive/);
-    await expect(navDeltaAmount).not.toHaveClass(/text-gain/);
-    await expect(navDeltaIcon).toHaveClass(/text-destructive/);
-    await expect(navDeltaIcon).not.toHaveClass(/text-gain/);
+    await expect(dashboardPage.navDeltaAmount).toHaveClass(/text-destructive/);
+    await expect(dashboardPage.navDeltaAmount).not.toHaveClass(/text-gain/);
+    await expect(dashboardPage.navDeltaIcon).toHaveClass(/text-destructive/);
+    await expect(dashboardPage.navDeltaIcon).not.toHaveClass(/text-gain/);
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -198,48 +165,40 @@ test('FAB "Mua / Bán" mở picker chọn mã, chọn xong vào thẳng màn gia
   try {
     // Tạo 2 Holding đang mở — picker phải liệt kê cả 2, và filter phải thu
     // hẹp đúng theo mã gõ vào (client-side, không phải server round-trip).
+    const newHoldingPage = new NewHoldingPage(page);
     for (const symbol of [symbolA, symbolB]) {
-      await page.goto("/holdings/new");
-      await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-      await page.locator('input[name="quantity"]').fill("10");
-      await page.locator('input[name="pricePerUnit"]').fill("50000");
-      await page.getByRole("button", { name: "Xong", exact: true }).click();
-      await page.waitForURL(
-        /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-      );
+      await newHoldingPage.goto();
+      await newHoldingPage.create({
+        symbol,
+        quantity: 10,
+        pricePerUnit: 50_000,
+      });
     }
 
-    await page.goto("/");
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
 
-    await page.getByRole("button", { name: "Mở menu nhanh" }).click();
-    await page.getByRole("button", { name: "Mua / Bán", exact: true }).click();
+    const picker = await dashboardPage.openTradePicker();
 
     // Scope vào đúng Sheet (role="dialog", @base-ui/react/dialog) — 2 Holding
     // vừa tạo CHƯA có PriceQuote nên cũng xuất hiện ở MissingPriceList trên
-    // chính Dashboard phía sau Sheet; không scope sẽ đụng "strict mode
-    // violation" (2 phần tử cùng khớp text mã).
-    const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("Chọn mã giao dịch")).toBeVisible();
-    await expect(sheet.getByText(symbolA, { exact: true })).toBeVisible();
-    await expect(sheet.getByText(symbolB, { exact: true })).toBeVisible();
+    // chính Dashboard phía sau Sheet; TransactionHoldingPicker đã tự scope
+    // locator theo dialog để tránh "strict mode violation".
+    await expect(picker.title).toBeVisible();
+    await expect(picker.holdingEntry(symbolA)).toBeVisible();
+    await expect(picker.holdingEntry(symbolB)).toBeVisible();
 
     // Lọc client-side theo symbol A — symbol B phải biến mất khỏi danh sách,
     // không round-trip server (không có network request nào cần chờ).
-    await sheet.getByPlaceholder("Tìm mã…").fill(symbolA);
-    await expect(sheet.getByText(symbolA, { exact: true })).toBeVisible();
-    await expect(sheet.getByText(symbolB, { exact: true })).toHaveCount(0);
+    await picker.search(symbolA);
+    await expect(picker.holdingEntry(symbolA)).toBeVisible();
+    await expect(picker.holdingEntry(symbolB)).toHaveCount(0);
 
     // Chọn đúng mã A -> điều hướng thẳng ROUTES.newTransaction(holdingId) của
     // ĐÚNG mã A, không phải /holdings (danh sách) hay mã B.
-    await sheet.getByText(symbolA, { exact: true }).click();
-    await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+\/transactions\/new$/);
-    // TransactionForm hiện "{symbol} · {quantity} đang giữ" trong cùng 1 div
-    // (name null -> fallback symbol) — không dùng `exact: true` vì text node
-    // của symbol không tách riêng khỏi span con liền kề.
-    await expect(page.getByText(new RegExp(symbolA))).toBeVisible();
-
-    const transactionFormUrl = stripQuery(page.url());
-    expect(transactionFormUrl).toContain("/transactions/new");
+    const form = await picker.selectHolding(symbolA);
+    await expect(form.holdingSummary(symbolA)).toBeVisible();
+    expect(page.url()).toContain("/transactions/new");
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -261,22 +220,21 @@ test('Picker "Mua / Bán": gõ mã không tồn tại hiện đúng no-match sta
   const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
 
   try {
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("10");
-    await page.locator('input[name="pricePerUnit"]').fill("50000");
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 50_000,
+    });
 
-    await page.goto("/");
-    await page.getByRole("button", { name: "Mở menu nhanh" }).click();
-    await page.getByRole("button", { name: "Mua / Bán", exact: true }).click();
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
+    const picker = await dashboardPage.openTradePicker();
 
-    await page.getByPlaceholder("Tìm mã…").fill("KHONGTONTAIXYZ");
-    await expect(page.getByText("Không tìm thấy mã phù hợp.")).toBeVisible();
-    await expect(page.getByText("Chưa có vị thế nào đang mở.")).toHaveCount(0);
+    await picker.search("KHONGTONTAIXYZ");
+    await expect(picker.noMatchState).toBeVisible();
+    await expect(picker.emptyState).toHaveCount(0);
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);

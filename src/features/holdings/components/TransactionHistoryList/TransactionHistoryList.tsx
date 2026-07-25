@@ -53,6 +53,7 @@ function TransactionHistoryList({
       {cashflows.map((cf) => (
         <div
           key={cf.id}
+          data-testid="transaction-row"
           className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5"
         >
           <Badge variant={cf.type === "BUY" ? "gain" : "destructive"}>
