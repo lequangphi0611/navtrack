@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { afterTransactionUrl } from "../support/urls";
 import { HoldingDetailPage } from "./holding-detail-page";
@@ -40,6 +40,13 @@ export class TransactionForm {
 
   get closeLink() {
     return this.page.getByRole("link", { name: "Đóng" });
+  }
+
+  // Khối "{tên/mã} · {SL} đang giữ" đầu form (TransactionForm.tsx dòng ~389)
+  // — không `exact: true` vì text node của symbol không tách riêng khỏi span
+  // con liền kề (SL + "đang giữ").
+  holdingSummary(symbol: string): Locator {
+    return this.page.getByText(new RegExp(symbol));
   }
 
   // Huỷ form, quay lại trang chi tiết vị thế (backHref của PageHeader variant
