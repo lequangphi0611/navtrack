@@ -32,21 +32,24 @@ function DashboardScreenClient({
   const [, startTransition] = useTransition();
 
   const handleToggleHidden = () => {
-    setHidden((previous) => {
-      const next = !previous;
-      startTransition(() => {
-        // Ghi thất bại -> quay lại giá trị TRƯỚC đó thay vì để UI đứng yên ở
-        // trạng thái optimistic chưa lưu được (code review #14, cùng fix
-        // PrivacyToggle).
-        void setHideAmountsByDefault(next)
-          .then((result) => {
-            if (!result.ok) setHidden(previous);
-          })
-          .catch(() => {
-            setHidden(previous);
-          });
-      });
-      return next;
+    // startTransition ở TOP-LEVEL handler, KHÔNG lồng trong updater function
+    // của setHidden — lồng bên trong (bản trước đó) khiến React thỉnh thoảng
+    // gọi lại startTransition giữa lúc đang render, ném "Cannot call
+    // startTransition while rendering" (phát hiện khi verify fix #14 bằng
+    // e2e thật, privacy-mode.spec.ts). Cùng pattern PrivacyToggle.tsx.
+    const previous = hidden;
+    const next = !previous;
+    setHidden(next);
+    startTransition(() => {
+      // Ghi thất bại -> quay lại giá trị TRƯỚC đó thay vì để UI đứng yên ở
+      // trạng thái optimistic chưa lưu được (code review #14).
+      void setHideAmountsByDefault(next)
+        .then((result) => {
+          if (!result.ok) setHidden(previous);
+        })
+        .catch(() => {
+          setHidden(previous);
+        });
     });
   };
 
