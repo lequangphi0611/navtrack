@@ -47,12 +47,12 @@ expect(screen.getByText("...")).toBeInTheDocument();
 ## End-to-end — Playwright
 
 - Dùng **Playwright** cho các luồng chính: đăng nhập Google, nhập vị thế ban đầu, ghi giao dịch, xem dashboard, bật/tắt ẩn số tiền.
-- Đặt trong thư mục `e2e/` riêng.
+- Đặt trong thư mục `e2e/` riêng, spec (`*.spec.ts`) nằm ở `e2e/tests/`.
 - **Cách viết: theo Page Object Model** — quy ước đầy đủ (ba tầng page object/fixture/spec, chiến lược selector, URL & redirect, anti-pattern) ở [`e2e-page-object.md`](./e2e-page-object.md); instruction lúc thao tác + bẫy đã gặp ở [`../../e2e/CLAUDE.md`](../../e2e/CLAUDE.md) và [`../../e2e/GOTCHAS.md`](../../e2e/GOTCHAS.md).
 - **DB riêng, ephemeral, tách khỏi DB dev:** `pnpm e2e` tự `docker compose -f docker-compose.test.yml up` một Postgres riêng (service `db-test`, cổng 5434, `.env.test`), áp migration, chạy test, rồi `down` khi xong — kể cả lúc fail. Không bao giờ chạy e2e nhắm vào DB dev (`.env`, cổng 5433): tránh sinh data test lẫn vào data thật đang dùng để dev tay.
 
 ```ts
-// ✅ Good — e2e/dashboard.spec.ts (luồng thật, không mock logic)
+// ✅ Good — e2e/tests/dashboard.spec.ts (luồng thật, không mock logic)
 test("ẩn số tiền che giá trị VND nhưng giữ phần trăm", async ({ page }) => {
   await page.goto("/dashboard");
   await page.getByRole("button", { name: /ẩn số tiền/i }).click();

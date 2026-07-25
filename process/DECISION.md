@@ -358,3 +358,10 @@ File này ghi các **quyết định quan trọng** làm thay đổi business/do
 - **Tách tài liệu e2e vs production (mục tiêu token/ngữ cảnh):** tri thức e2e gom vào `e2e/` + `docs/rules/` để khi Claude làm e2e chỉ nạp context e2e, không kéo `src/` vào; page object tập trung selector giúp người viết spec không phải mở internals component. Scoped `e2e/CLAUDE.md` auto-load chỉ khi làm trong `e2e/`.
 - **Phạm vi lần này: chỉ tài liệu**, không tạo `e2e/pages/` thật, không refactor spec đang xanh (tránh rủi ro vỡ test). Refactor spec cũ sang POM theo dõi ở GitHub issue riêng — spec **mới** viết theo POM ngay; spec cũ đụng tới đâu POM hoá tới đó.
 - Docs đã sync: `docs/rules/e2e-page-object.md` (rule mới — gồm mục "Best practices" gom lại: test independence/isolation cho `fullyParallel`, cấm logic điều khiển trong page object, tránh trừu tượng hoá non), `docs/coding-rules.md` (index), `docs/rules/testing.md` (mục End-to-end trỏ sang), `CLAUDE.md` (root — mục "Đọc khi cần" trỏ tường minh tới `e2e/CLAUDE.md`), `e2e/CLAUDE.md` (instruction scoped), `e2e/GOTCHAS.md` (nhật ký bẫy, seed từ bug thật đã gặp).
+
+## 2026-07-25
+
+**Tách spec e2e (`*.spec.ts`) ra `e2e/tests/`, không còn nằm chung cấp với `pages/`/`support/`.**
+- Bối cảnh: sau khi PR #97 POM hoá xong toàn bộ 9 spec (đóng issue #88), `e2e/` có 9 file `*.spec.ts` nằm ngang hàng với 2 thư mục hạ tầng (`pages/`, `support/`) ngay tại root — khó phân biệt nhanh đâu là test thật, đâu là code dùng chung khi liệt kê thư mục.
+- **Quyết định:** chuyển toàn bộ `*.spec.ts` vào `e2e/tests/`; `pages/`, `support/`, `CLAUDE.md`, `GOTCHAS.md` giữ nguyên vị trí (ngang hàng với `tests/`, không lồng vào trong). `playwright.config.ts` đổi `testDir` sang `./e2e/tests`. Import trong spec từ `./pages/...`/`./support/...` đổi thành `../pages/...`/`../support/...`.
+- Docs đã sync: `e2e/CLAUDE.md` (bản đồ thư mục), `docs/rules/e2e-page-object.md` (sơ đồ cấu trúc mục 3 + các path ví dụ), `docs/rules/testing.md` (path ví dụ), `.claude/agents/verifier.md` + `.claude/agents/e2e-verifier.md` (phạm vi sửa `e2e/tests/*.spec.ts`).

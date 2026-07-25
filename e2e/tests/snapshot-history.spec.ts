@@ -3,16 +3,16 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
-import { SnapshotDetailPage } from "./pages/snapshot-detail-page";
-import { SnapshotPage } from "./pages/snapshot-page";
-import { daysAgo } from "./support/dates";
+import { SnapshotDetailPage } from "../pages/snapshot-detail-page";
+import { SnapshotPage } from "../pages/snapshot-page";
+import { daysAgo } from "../support/dates";
 import {
   cleanupTestUser,
   closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
-} from "./support/test-session";
+} from "../support/test-session";
 
 // Issue #46 (process/DECISION.md 2026-07-15 (4)) — getSnapshotHistory()/
 // getSnapshotDetail(id) đọc chuỗi Snapshot{holdingId, frozen: true} thật thay
@@ -198,7 +198,7 @@ test("cách ly quyền: user khác cố mở URL /snapshots/[id] của snapshot 
 
     // User B (không liên quan) cố mở thẳng URL của snapshot A -> 404, không
     // lộ số liệu (cùng pattern "cách ly dữ liệu giữa hai tài khoản",
-    // e2e/holdings.spec.ts).
+    // e2e/tests/holdings.spec.ts).
     const snapshotAAsSeenByB = new SnapshotDetailPage(pageB, snapshotA.id);
     await snapshotAAsSeenByB.goto();
     await expect(pageB.getByRole("heading", { name: "404" })).toBeVisible();

@@ -3,17 +3,17 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { Prisma, PrismaClient } from "@prisma/client";
 
-import { DashboardPage } from "./pages/dashboard-page";
-import { NewHoldingPage } from "./pages/new-holding-page";
-import { TransactionForm } from "./pages/transaction-form";
-import { daysAgo, isoDate } from "./support/dates";
+import { DashboardPage } from "../pages/dashboard-page";
+import { NewHoldingPage } from "../pages/new-holding-page";
+import { TransactionForm } from "../pages/transaction-form";
+import { daysAgo, isoDate } from "../support/dates";
 import {
   cleanupTestUser,
   closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
-} from "./support/test-session";
+} from "../support/test-session";
 
 // Phase 5 (docs/domain/07-tax.md) — thuế bán + phí giao dịch. Cùng lý do đã
 // ghi ở dividends.spec.ts: scripts/e2e.mjs chỉ `prisma migrate deploy`, KHÔNG

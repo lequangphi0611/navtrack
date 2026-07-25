@@ -4,19 +4,19 @@ import { expect, test } from "@playwright/test";
 import { Prisma, PrismaClient } from "@prisma/client";
 import Decimal from "decimal.js";
 
-import { BottomNav } from "./pages/bottom-nav";
-import { DividendForm } from "./pages/dividend-form";
-import { DividendHistoryPage } from "./pages/dividend-history-page";
-import { HoldingDetailPage } from "./pages/holding-detail-page";
-import { NewHoldingPage } from "./pages/new-holding-page";
-import { daysAgo, isoDate } from "./support/dates";
+import { BottomNav } from "../pages/bottom-nav";
+import { DividendForm } from "../pages/dividend-form";
+import { DividendHistoryPage } from "../pages/dividend-history-page";
+import { HoldingDetailPage } from "../pages/holding-detail-page";
+import { NewHoldingPage } from "../pages/new-holding-page";
+import { daysAgo, isoDate } from "../support/dates";
 import {
   cleanupTestUser,
   closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
-} from "./support/test-session";
+} from "../support/test-session";
 
 // `DIVIDEND_TAX_RATE`/`DIVIDEND_PAR_VALUE` (Setting, docs/domain/03-dividends.md)
 // KHÔNG được seed tự động cho DB e2e — scripts/e2e.mjs chỉ `prisma migrate

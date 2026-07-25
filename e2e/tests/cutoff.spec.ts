@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-import { DashboardPage } from "./pages/dashboard-page";
-import { SettingsPage } from "./pages/settings-page";
+import { DashboardPage } from "../pages/dashboard-page";
+import { SettingsPage } from "../pages/settings-page";
 import {
   cleanupTestUser,
   closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
-} from "./support/test-session";
+} from "../support/test-session";
 
 test.afterAll(async () => {
   await disconnectTestDb();

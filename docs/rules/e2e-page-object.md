@@ -5,7 +5,7 @@ Quy ước viết end-to-end cho Navtrack theo **Page Object Model (POM)**. Đ�
 (unit, integration Python) ở [`testing.md`](./testing.md); cách chạy + bẫy đã gặp ở
 [`../../e2e/CLAUDE.md`](../../e2e/CLAUDE.md) và [`../../e2e/GOTCHAS.md`](../../e2e/GOTCHAS.md).
 
-> **Trạng thái áp dụng:** phần lớn `e2e/*.spec.ts` vẫn viết theo lối **thủ tục** (gọi
+> **Trạng thái áp dụng:** phần lớn `e2e/tests/*.spec.ts` vẫn viết theo lối **thủ tục** (gọi
 > `page.getByRole/locator` trực tiếp trong spec) — có trước quy ước này. Refactor dần sang
 > POM theo dõi ở issue #88 (7 sub-issue #90-#96, mỗi spec 1 sub-issue). `holdings.spec.ts`
 > đã POM hoá xong (#90) — dùng làm ví dụ tham chiếu ở file này thay vì tự viết mẫu riêng.
@@ -16,8 +16,8 @@ Quy ước viết end-to-end cho Navtrack theo **Page Object Model (POM)**. Đ�
 
 ## 1. Vì sao POM (vấn đề đang có)
 
-`e2e/holdings.spec.ts` **trước khi POM hoá** (issue #90) là ví dụ rõ nhất cho 3 chi phí của
-lối thủ tục — các spec còn lại (`e2e/dashboard.spec.ts`, `dividends.spec.ts`... chưa refactor,
+`e2e/tests/holdings.spec.ts` **trước khi POM hoá** (issue #90) là ví dụ rõ nhất cho 3 chi phí của
+lối thủ tục — các spec còn lại (`e2e/tests/dashboard.spec.ts`, `dividends.spec.ts`... chưa refactor,
 xem issue #88) vẫn mắc y hệt 3 vấn đề này:
 
 1. **Trùng lặp selector.** `getByPlaceholder("VD: FPT")`, `input[name="quantity"]`, nút
@@ -68,7 +68,9 @@ Quy tắc phân loại nhanh:
 e2e/
   CLAUDE.md              # instruction bắt buộc đọc khi làm e2e (trỏ về file này + GOTCHAS)
   GOTCHAS.md             # nhật ký bẫy đã gặp: triệu chứng → nguyên nhân → cách fix
-  *.spec.ts              # spec: chỉ ý định + kỳ vọng, gọi page object
+  tests/                 # spec: chỉ ý định + kỳ vọng, gọi page object
+    holdings.spec.ts
+    dashboard.spec.ts
   pages/                 # 1 file / màn hình (hoặc component object dùng lại)
     holdings-page.ts     #   class HoldingsPage
     holding-detail-page.ts

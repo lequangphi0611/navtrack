@@ -3,16 +3,16 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
-import { DashboardPage } from "./pages/dashboard-page";
-import { NewHoldingPage } from "./pages/new-holding-page";
-import { daysAgo, isoDate } from "./support/dates";
+import { DashboardPage } from "../pages/dashboard-page";
+import { NewHoldingPage } from "../pages/new-holding-page";
+import { daysAgo, isoDate } from "../support/dates";
 import {
   cleanupTestUser,
   closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
-} from "./support/test-session";
+} from "../support/test-session";
 
 // PriceQuote không có UI ghi (chỉ job Python ghi được, xem
 // jobs/price-fetcher/**) — seed trực tiếp qua Prisma trong spec, cùng cách

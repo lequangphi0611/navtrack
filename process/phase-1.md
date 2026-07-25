@@ -21,9 +21,9 @@ Dựng nền tảng chạy được: đăng nhập Google (chỉ người đư�
 ## Tiêu chí hoàn thành
 - [x] Đăng nhập bằng Google; **chỉ email trong allowlist** vào được; thu hồi (`revokedAt` + xóa Session) mất quyền ngay — kiểm chứng bằng session giả lập cục bộ (chưa test round-trip Google OAuth thật, cần `GOOGLE_CLIENT_ID`/`SECRET` thật)
 - [x] User `canInvite` mời được người khác; đạt `MAX_MEMBERS` thì bị chặn; `resolveSetting` trả đúng giá trị theo ngày
-- [x] Nhập được vị thế + giao dịch cho **cả 4 loại** (`AssetType` không ràng buộc UI riêng theo loại — form dùng chung); số lượng & giá vốn bình quân tính đúng — kiểm chứng bằng `lib/cost-basis.test.ts` (đúng ví dụ FPT trong domain doc) + e2e `e2e/holdings.spec.ts`
-- [x] Mỗi user **chỉ thấy dữ liệu của mình** (kiểm chứng bằng 2 tài khoản) — kiểm chứng cho cả mời thành viên và Holdings (`e2e/holdings.spec.ts` "cách ly dữ liệu giữa hai tài khoản": tài khoản B không thấy vị thế của tài khoản A, truy cập trực tiếp URL trả 404)
-- [x] `pnpm lint` + `typecheck` pass; khung Vitest/Playwright dựng xong — `pnpm typecheck/lint/test/build` đều pass; `e2e/holdings.spec.ts` (3 test) + `e2e/smoke.spec.ts` chạy được cục bộ
+- [x] Nhập được vị thế + giao dịch cho **cả 4 loại** (`AssetType` không ràng buộc UI riêng theo loại — form dùng chung); số lượng & giá vốn bình quân tính đúng — kiểm chứng bằng `lib/cost-basis.test.ts` (đúng ví dụ FPT trong domain doc) + e2e `e2e/tests/holdings.spec.ts`
+- [x] Mỗi user **chỉ thấy dữ liệu của mình** (kiểm chứng bằng 2 tài khoản) — kiểm chứng cho cả mời thành viên và Holdings (`e2e/tests/holdings.spec.ts` "cách ly dữ liệu giữa hai tài khoản": tài khoản B không thấy vị thế của tài khoản A, truy cập trực tiếp URL trả 404)
+- [x] `pnpm lint` + `typecheck` pass; khung Vitest/Playwright dựng xong — `pnpm typecheck/lint/test/build` đều pass; `e2e/tests/holdings.spec.ts` (3 test) + `e2e/tests/smoke.spec.ts` chạy được cục bộ
 - [x] Cài được lên màn hình chính (Chrome/Android + Safari/iOS): manifest hợp lệ (`/manifest.webmanifest`, icon 192/512/maskable), service worker đăng ký + activate ở production build — kiểm chứng bằng Playwright (mở `/sign-in` qua `next start`, xác nhận `link[rel=manifest]` + `serviceWorker.ready` activated) và test offline (ngắt mạng → điều hướng trả về `offline.html`, không phải lỗi trình duyệt)
 - [x] Deploy được lên Vercel + Neon (hoặc chạy local qua docker/pnpm dev) — hướng dẫn deploy đầy đủ ở [`docs/05-deploy.md`](../docs/05-deploy.md); chạy local qua `docker compose up -d --wait` + `pnpm dev` đã kiểm chứng hoạt động.
 

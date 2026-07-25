@@ -1,13 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-import { HoldingsPage } from "./pages/holdings-page";
+import { HoldingsPage } from "../pages/holdings-page";
 import {
   cleanupTestUser,
   closeContext,
   createTestSession,
   disconnectTestDb,
   signInAs,
-} from "./support/test-session";
+} from "../support/test-session";
 
 test.afterAll(async () => {
   await disconnectTestDb();
