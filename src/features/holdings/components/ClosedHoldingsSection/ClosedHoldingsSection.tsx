@@ -29,6 +29,8 @@ import { ClosedHoldingsSummaryStrip } from "../ClosedHoldingsSummaryStrip";
 // mọi vị thế đã đóng, tính sẵn orders/vốn mua/tiền bán ra ngay ở Container để
 // ClosedPositionSheet (Presentational, client) không tự fetch khi mở (mirror
 // tiền lệ: mọi dữ liệu Sheet đều là props, xem component-architecture.md).
+// orders GHÉP THÊM cổ tức tiền mặt (row.cashDividends, đã batch sẵn ở
+// getClosedHoldingsDetail) — không round-trip DB riêng.
 async function ClosedHoldingsSection() {
   const [{ rows, summary }, hidden] = await Promise.all([
     getClosedHoldingsDetail(),
@@ -57,24 +59,67 @@ async function ClosedHoldingsSection() {
 
     const totalInvested = ascending
       .filter((cf) => cf.type === "BUY")
-      .reduce((sum, cf) => sum.plus(cf.amount.replace("-", "")), new Decimal(0))
+      .reduce(
+        (sum, cf) => sum.plus(new Decimal(cf.amount).abs()),
+        new Decimal(0),
+      )
       .toString();
     const totalProceeds = ascending
       .filter((cf) => cf.type === "SELL")
       .reduce((sum, cf) => sum.plus(cf.amount), new Decimal(0))
       .toString();
 
-    const orders: CashflowTimelineRow[] = ascending.map((cf, cfIndex) => {
-      const isFinalSell =
-        cfIndex === ascending.length - 1 && cf.type === "SELL";
-      return {
-        id: cf.id,
-        kind: cf.type,
-        label: `${cf.type === "BUY" ? "Mua" : isFinalSell ? "Bán hết" : "Bán"} ${formatQuantity(cf.quantity, detail?.unit ?? "")}`,
-        dateNote: `${formatDate(cf.date)} · giá ${formatMoney(cf.pricePerUnit)}`,
-        amount: cf.amount,
-      };
-    });
+    // Cổ tức tiền mặt nhận được lúc vị thế còn mở — "Chênh lệch (đã chốt)"
+    // (row.realizedPnl, từ getClosedHoldingsDetail) CỘNG GỘP cả khoản này
+    // (buildXirrCashflows đưa dividend.netAmount vào chuỗi XIRR), nên phải
+    // hiện thành khoản riêng thì "Tổng mua/Tổng bán/Chênh lệch" mới khớp phép
+    // cộng trừ hiển thị (code review #3) — KHÔNG gộp ngầm vào "Tổng tiền bán
+    // ra" (label đó nói rõ "bán ra", không phải cổ tức).
+    const totalDividends = row.cashDividends
+      .reduce((sum, d) => sum.plus(d.netAmount), new Decimal(0))
+      .toString();
+
+    // Ghép dòng BUY/SELL + dòng cổ tức tiền mặt thành 1 timeline, sort theo
+    // ngày — cùng kỹ thuật buildCashflowTimeline() (build-cashflow-timeline.ts)
+    // nhưng KHÔNG tái dùng thẳng hàm đó: nhánh vị thế đã đóng cần label "Bán
+    // hết" riêng cho lệnh bán cuối (buildCashflowTimeline chỉ có "Mua"/"Bán").
+    const cashflowEntries: { row: CashflowTimelineRow; sortDate: number }[] =
+      ascending.map((cf, cfIndex) => {
+        const isFinalSell =
+          cfIndex === ascending.length - 1 && cf.type === "SELL";
+        return {
+          row: {
+            id: cf.id,
+            kind: cf.type,
+            label: `${cf.type === "BUY" ? "Mua" : isFinalSell ? "Bán hết" : "Bán"} ${formatQuantity(cf.quantity, detail?.unit ?? "")}`,
+            dateNote: `${formatDate(cf.date)} · giá ${formatMoney(cf.pricePerUnit)}`,
+            amount: cf.amount,
+          },
+          sortDate: new Date(cf.date).getTime(),
+        };
+      });
+
+    const dividendEntries: { row: CashflowTimelineRow; sortDate: number }[] =
+      row.cashDividends.map((d) => {
+        const displayDate = d.paymentDate ?? d.date;
+        return {
+          row: {
+            id: d.id,
+            kind: "DIVIDEND",
+            label: "Cổ tức tiền mặt",
+            dateNote: `${formatDate(displayDate)} · cổ tức tiền mặt`,
+            amount: d.netAmount,
+          },
+          sortDate: new Date(displayDate).getTime(),
+        };
+      });
+
+    const orders: CashflowTimelineRow[] = [
+      ...cashflowEntries,
+      ...dividendEntries,
+    ]
+      .sort((a, b) => a.sortDate - b.sortDate)
+      .map((entry) => entry.row);
 
     const firstDate = ascending[0]?.date;
     const lastDate = ascending[ascending.length - 1]?.date;
@@ -85,8 +130,10 @@ async function ClosedHoldingsSection() {
       endMonthLabel: lastDate ? formatMonthYear(lastDate) : "",
       totalInvested,
       totalProceeds,
+      totalDividends,
       orders,
       reopenHref: ROUTES.newTransaction(row.id),
+      detailHref: ROUTES.holdingDetail(row.id),
     };
   });
 

@@ -62,7 +62,9 @@ const BISECTION_CANDIDATE_RATES = [
 ] as const;
 const BISECTION_MAX_ITERATIONS = 100;
 const BISECTION_RATE_TOLERANCE = 1e-9;
-const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
+// Export — dùng chung với snapshots/queries.ts (getNavTrend, lọc khoảng ngày
+// MONTH/YEAR) thay vì định nghĩa lại hằng số y hệt (code review #11).
+export const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 const DAYS_PER_YEAR = 365;
 
 // docs/domain/05: "XIRR cần ít nhất một dòng tiền âm và một dòng tiền dương

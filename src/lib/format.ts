@@ -1,3 +1,5 @@
+import type { XirrResult } from "@/components/ReturnMetrics";
+
 const MONEY_FORMATTER = new Intl.NumberFormat("vi-VN", {
   style: "currency",
   currency: "VND",
@@ -19,6 +21,18 @@ const TIME_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
+});
+
+const MONTH_YEAR_PARTS_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  month: "2-digit",
+  year: "numeric",
+});
+
+const DAY_MONTH_PARTS_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  day: "2-digit",
+  month: "2-digit",
 });
 
 const PERCENT_FORMATTER = new Intl.NumberFormat("vi-VN", {
@@ -90,21 +104,31 @@ export function formatTime(value: string | Date): string {
 // "05/2024" — MM/yyyy giờ Việt Nam, dùng cho khoảng thời gian nắm giữ vị thế
 // đã đóng (ClosedPositionSheet, mục 12 phase-6.md: "tháng mua đầu -> tháng bán
 // hết cuối"), nơi năm QUAN TRỌNG (khác formatDayMonth) nhưng ngày cụ thể trong
-// tháng không cần thiết. Cắt từ formatDate() (dd/MM/yyyy) thay vì
-// Intl.DateTimeFormat riêng chỉ month/year: vi-VN đổi sang dấu "-" khi bỏ day
-// khỏi options, lệch định dạng MM/yyyy mong muốn (xem lý do tương tự ở
-// formatDayMonth phía dưới).
+// tháng không cần thiết. Tự ghép "/" từ formatToParts() (KHÔNG cắt chuỗi
+// formatDate()) — vi-VN đổi sang dấu "-" khi Intl.DateTimeFormat chỉ khai
+// month/year (thiếu day), nên phải tự lấy riêng từng phần rồi nối "/" tay.
+// Cách cũ (slice formatDate()) coupling ngầm vào ĐÚNG độ rộng/thứ tự output
+// "dd/MM/yyyy" — đổi format đó ở formatDate() sẽ âm thầm làm hàm này sai mà
+// compiler không báo (code review #12).
 export function formatMonthYear(value: string | Date): string {
-  return formatDate(value).slice(3);
+  const date = typeof value === "string" ? new Date(value) : value;
+  const parts = MONTH_YEAR_PARTS_FORMATTER.formatToParts(date);
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  const year = parts.find((p) => p.type === "year")?.value ?? "";
+  return `${month}/${year}`;
 }
 
 // Ngắn gọn hơn formatDate (không năm) — dùng cho ghi chú kiểu "EOD 10/07" nơi
 // năm không quan trọng (vd priceFreshnessNote ở Dashboard, luôn nói về mốc gần
-// đây). Cắt từ formatDate thay vì Intl.DateTimeFormat riêng chỉ day/month: vi-VN
-// đổi sang dấu "-" (thay vì "/") khi bỏ year khỏi options, lệch định dạng dd/MM/yyyy
-// dùng chung toàn app.
+// đây). Tự ghép "/" từ formatToParts() — cùng lý do formatMonthYear phía trên
+// (vi-VN đổi sang dấu "-" khi thiếu year trong options; slice formatDate()
+// coupling ngầm vào format "dd/MM/yyyy", code review #12).
 export function formatDayMonth(value: string | Date): string {
-  return formatDate(value).slice(0, 5);
+  const date = typeof value === "string" ? new Date(value) : value;
+  const parts = DAY_MONTH_PARTS_FORMATTER.formatToParts(date);
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  return `${day}/${month}`;
 }
 
 // Phần trăm có dấu +/− tường minh (vd "+12.3%", "−4.5%", "0.0%" không dấu),
@@ -147,6 +171,16 @@ export function formatCostDragPercent(value: number): string {
 // nên không dùng được formatSignedPercent (đã tự kèm "%" + dấu +/−).
 export function formatXirrBarePercent(value: number): string {
   return PERCENT_FORMATTER.format(value);
+}
+
+// "Chưa tính được" khi status !== "OK", ngược lại formatSignedPercent + suffix
+// "/năm" — nguồn sự thật DUY NHẤT cho câu "XIRR chưa tính được", dùng chung ở
+// CutoffPicker (qua settings/queries.ts), ClosedHoldingRow, ClosedPositionSheet,
+// ClosedHoldingsSummaryStrip. Trước đây re-implement rải rác, lệch chữ hoa/
+// thường ("Chưa tính được" vs "chưa tính được", code review #10).
+export function formatXirrLabel(xirr: XirrResult): string {
+  if (xirr.status !== "OK") return "Chưa tính được";
+  return formatSignedPercent(xirr.percentPerYear, { suffix: "/năm" });
 }
 
 // Màu theo dấu giá trị (dùng cho XIRR, lãi/lỗ, chênh lệch NAV...) — 0 trung

@@ -17,6 +17,7 @@ const ROWS: ClosedHoldingWithSheetData[] = [
     endMonthLabel: "07/2025",
     totalInvested: "215000000",
     totalProceeds: "263250000",
+    totalDividends: "0",
     orders: [
       {
         id: "o1",
@@ -41,20 +42,25 @@ const ROWS: ClosedHoldingWithSheetData[] = [
       },
     ],
     reopenHref: "#",
+    detailHref: "#",
   },
   {
+    // Có cổ tức tiền mặt lúc còn mở (code review #3, PR #81) — Tổng mua/Tổng
+    // bán/Cổ tức/Chênh lệch phải khớp phép cộng trừ: 132.400.000 + 3.200.000
+    // − 141.000.000 = −5.400.000.
     id: "2",
     symbol: "VNM",
     name: "Vinamilk",
     type: "STOCK",
     holdingPeriodLabel: "6 tháng 12 ngày",
-    realizedPnl: "-8600000",
-    realizedPnlPercent: -6.1,
+    realizedPnl: "-5400000",
+    realizedPnlPercent: -3.8,
     xirrRealized: { status: "NO_CONVERGE" },
     startMonthLabel: "01/2026",
     endMonthLabel: "07/2026",
     totalInvested: "141000000",
     totalProceeds: "132400000",
+    totalDividends: "3200000",
     orders: [
       {
         id: "o4",
@@ -62,6 +68,13 @@ const ROWS: ClosedHoldingWithSheetData[] = [
         label: "Mua 2.000 CP",
         dateNote: "09/01/2026 · giá 70.500",
         amount: "-141000000",
+      },
+      {
+        id: "o4d",
+        kind: "DIVIDEND",
+        label: "Cổ tức tiền mặt",
+        dateNote: "15/04/2026 · cổ tức tiền mặt",
+        amount: "3200000",
       },
       {
         id: "o5",
@@ -72,6 +85,7 @@ const ROWS: ClosedHoldingWithSheetData[] = [
       },
     ],
     reopenHref: "#",
+    detailHref: "#",
   },
 ];
 

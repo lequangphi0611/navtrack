@@ -12,8 +12,8 @@ import { getSession } from "@/lib/auth";
 import { resolveCutoffDate, todayIctDateOnly } from "@/lib/cutoff";
 import { db } from "@/lib/db";
 import { formatDate, formatDayMonth, formatTime } from "@/lib/format";
-import { getPortfolioValuation } from "@/lib/portfolio-valuation";
 import { ROUTES } from "@/lib/routes";
+import { MILLIS_PER_DAY } from "@/lib/xirr";
 import {
   buildSnapshotHistoryView,
   paginateWithCursor,
@@ -352,7 +352,6 @@ export type NavTrendPoint = {
   changePercentFromStart: number; // % so với điểm đầu danh sách đã lọc (kỳ đang chọn)
 };
 
-const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 const NAV_TREND_PERIOD_DAYS: Record<Exclude<NavTrendPeriod, "ALL">, number> = {
   MONTH: 30,
   YEAR: 365,
@@ -361,11 +360,16 @@ const NAV_TREND_PERIOD_DAYS: Record<Exclude<NavTrendPeriod, "ALL">, number> = {
 // Chuỗi NAV toàn danh mục theo thời gian, đọc THUẦN từ Snapshot{holdingId:
 // null, frozen: true} đã đóng băng (Phase 3, docs/domain/06-snapshots.md) —
 // KHÔNG tạo snapshot mới, KHÔNG tính lại giá lịch sử ngoài những gì đã chốt.
-// Nối thêm 1 điểm "hôm nay" ĐỘNG = NAV hiện tại (tái dùng getPortfolioValuation()
-// để nhất quán tuyệt đối với NAV hero card trên cùng Dashboard) — điểm này
-// KHÔNG lưu DB. Nếu đã có snapshot đóng băng đúng NGÀY hôm nay (vd vừa bấm
-// "Chốt số liệu hôm nay"), KHÔNG nối thêm điểm động trùng ngày (tránh 2 điểm
-// cùng ngày gây nhiễu chart).
+// Nối thêm 1 điểm "hôm nay" ĐỘNG = `todayNavValue` do CALLER truyền vào (đã
+// tính sẵn bằng getPortfolioValuation(), PortfolioOverviewSection) — KHÔNG tự
+// gọi lại getPortfolioValuation() ở đây. Trước đây tự gọi riêng dẫn tới 2 vấn
+// đề (code review #2/#6): (1) hero card dùng `getPortfolioValuation(selection)`
+// còn điểm "hôm nay" hard-code `{key:"TODAY"}` — lệch số nếu selection khác
+// TODAY; (2) mỗi lần tải Dashboard chạy nguyên pipeline valuation tới 4 lần
+// (1 cho hero + 3 cho MONTH/YEAR/ALL). Truyền `todayNavValue` từ MỘT lần gọi
+// duy nhất giải quyết cả hai. Điểm này KHÔNG lưu DB. Nếu đã có snapshot đóng
+// băng đúng NGÀY hôm nay (vd vừa bấm "Chốt số liệu hôm nay"), KHÔNG nối thêm
+// điểm động trùng ngày (tránh 2 điểm cùng ngày gây nhiễu chart).
 //
 // `changePercentFromStart` so với điểm ĐẦU danh sách ĐÃ LỌC theo kỳ (KHÁC
 // `navDeltaPercent` ở NAV hero — đó là so với tổng vốn đã bỏ vào, không phải
@@ -373,6 +377,7 @@ const NAV_TREND_PERIOD_DAYS: Record<Exclude<NavTrendPeriod, "ALL">, number> = {
 // nhánh rỗng ở đây (UI tự vẽ biến thể "chưa vẽ được đường NAV", 6b).
 export async function getNavTrend(
   period: NavTrendPeriod,
+  todayNavValue: string,
 ): Promise<{ points: NavTrendPoint[]; changePercent: number }> {
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
@@ -410,8 +415,7 @@ export async function getNavTrend(
   }));
 
   if (!hasFrozenToday) {
-    const { navValue } = await getPortfolioValuation({ key: "TODAY" });
-    rawPoints.push({ date: today, value: new Decimal(navValue) });
+    rawPoints.push({ date: today, value: new Decimal(todayNavValue) });
   }
 
   const startValue = rawPoints[0]?.value;

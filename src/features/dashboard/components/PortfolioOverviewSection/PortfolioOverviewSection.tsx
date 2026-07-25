@@ -15,35 +15,34 @@ import { getPortfolioValuation } from "@/lib/portfolio-valuation";
 // stream độc lập (component-architecture.md checklist #2).
 //
 // GHI CHÚ KIẾN TRÚC (mục 9/11 phase-6.md): getNavTrend() KHÔNG được tách Suspense
-// riêng dù về nguyên tắc đây là 1 query độc lập với getPortfolioValuation() — lý do:
-// toàn bộ DashboardScreen giờ nằm sau DashboardScreenClient (client wrapper giữ state
-// `hidden` cho nút mắt header, mục 11). Nếu NavTrendChartSection tách Suspense riêng,
-// nội dung của nó sẽ là 1 subtree Server Component ĐÃ RENDER XONG truyền vào qua
-// `children`/props JSX — subtree đó "đông cứng" tại giá trị `hidden` lúc stream, KHÔNG
-// re-render khi user bấm nút mắt (React chỉ re-render Client Component khi state đổi,
-// không re-execute Server Component con đã render sẵn). Gộp cả 4 query vào 1
-// Promise.all vẫn giữ đúng tinh thần "không await tuần tự" (checklist #2 quan tâm hiệu
-// năng, không bắt buộc tách Suspense bằng mọi giá) — cái giá đánh đổi là NAV chart chờ
-// cùng lúc với valuation thay vì stream sớm hơn, chấp nhận được vì cùng là Snapshot/NAV
-// data, chi phí truy vấn nhỏ.
+// riêng — toàn bộ DashboardScreen nằm sau DashboardScreenClient (client wrapper giữ
+// state `hidden` cho nút mắt header, mục 11). Nếu NavTrendChartSection tách Suspense
+// riêng, nội dung của nó sẽ là 1 subtree Server Component ĐÃ RENDER XONG truyền vào
+// qua `children`/props JSX — subtree đó "đông cứng" tại giá trị `hidden` lúc stream,
+// KHÔNG re-render khi user bấm nút mắt.
+//
+// 2 batch Promise.all thay vì 1 (khác bản trước): getNavTrend() cần navValue ĐÃ TÍNH
+// của `valuation` (cùng cutoff selection với hero card, xem comment getNavTrend) nên
+// PHẢI đợi batch đầu xong — nhưng bên trong mỗi batch vẫn chạy song song, không await
+// tuần tự (checklist #2). Batch 2 giờ chỉ còn query Snapshot rẻ (không re-chạy cả
+// pipeline valuation 3 lần như trước, code review #6).
 async function PortfolioOverviewSection() {
   const selection = await getCutoffSelection();
-  const [
-    session,
-    valuation,
-    snapshotToday,
-    hideAmountsByDefault,
-    navMonth,
-    navYear,
-    navAll,
-  ] = await Promise.all([
-    getSession(),
-    getPortfolioValuation(selection),
-    getManualSnapshotToday(),
-    getHideAmountsByDefault(),
-    getNavTrend("MONTH"),
-    getNavTrend("YEAR"),
-    getNavTrend("ALL"),
+  const [session, valuation, snapshotToday, hideAmountsByDefault] =
+    await Promise.all([
+      getSession(),
+      getPortfolioValuation(selection),
+      getManualSnapshotToday(),
+      getHideAmountsByDefault(),
+    ]);
+
+  // 3 lời gọi này PHẢI đợi `valuation` xong trước (dùng lại navValue của nó
+  // cho điểm "hôm nay" — xem comment getNavTrend, code review #2/#6), nhưng
+  // vẫn chạy song song VỚI NHAU thay vì tuần tự.
+  const [navMonth, navYear, navAll] = await Promise.all([
+    getNavTrend("MONTH", valuation.navValue),
+    getNavTrend("YEAR", valuation.navValue),
+    getNavTrend("ALL", valuation.navValue),
   ]);
 
   return (

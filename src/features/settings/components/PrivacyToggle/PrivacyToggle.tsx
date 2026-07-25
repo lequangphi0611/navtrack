@@ -25,9 +25,20 @@ function PrivacyToggle({ initialHidden, className }: PrivacyToggleProps) {
   const [, startTransition] = useTransition();
 
   const handleCheckedChange = (checked: boolean) => {
+    const previous = hidden;
     setHidden(checked);
     startTransition(() => {
-      void setHideAmountsByDefault(checked);
+      // Ghi thất bại (chưa đăng nhập/DB lỗi) -> quay lại giá trị TRƯỚC đó thay
+      // vì để UI đứng yên ở trạng thái optimistic chưa lưu được — trước đây
+      // fire-and-forget, chỉ lộ ra khi user load lại trang thấy "nhảy" về giá
+      // trị cũ (code review #14).
+      void setHideAmountsByDefault(checked)
+        .then((result) => {
+          if (!result.ok) setHidden(previous);
+        })
+        .catch(() => {
+          setHidden(previous);
+        });
     });
   };
 

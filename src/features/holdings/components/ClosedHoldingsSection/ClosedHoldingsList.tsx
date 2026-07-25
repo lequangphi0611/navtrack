@@ -16,8 +16,10 @@ type ClosedHoldingWithSheetData = ClosedHoldingRowData & {
   endMonthLabel: string;
   totalInvested: string;
   totalProceeds: string;
+  totalDividends: string;
   orders: ClosedPositionSheetProps["orders"];
   reopenHref: string;
+  detailHref: string;
 };
 
 type ClosedHoldingsListProps = {
@@ -61,8 +63,10 @@ function ClosedHoldingsList({ rows, hidden = false }: ClosedHoldingsListProps) {
           endMonthLabel={selected.endMonthLabel}
           totalInvested={selected.totalInvested}
           totalProceeds={selected.totalProceeds}
+          totalDividends={selected.totalDividends}
           orders={selected.orders}
           reopenHref={selected.reopenHref}
+          detailHref={selected.detailHref}
           hidden={hidden}
         />
       ) : null}

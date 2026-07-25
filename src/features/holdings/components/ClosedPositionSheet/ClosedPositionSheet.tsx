@@ -1,6 +1,6 @@
 "use client";
 
-import { ShoppingCart } from "lucide-react";
+import { Pencil, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 
 import { type AssetType, AssetTypeBadge } from "@/components/AssetTypeBadge";
@@ -13,7 +13,12 @@ import {
   CashflowTimeline,
   type CashflowTimelineRow,
 } from "@/features/holdings/components/CashflowTimeline";
-import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
+import {
+  formatMoney,
+  formatSignedPercent,
+  formatXirrLabel,
+  signColorClass,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Bottom sheet chi tiết vị thế ĐÃ ĐÓNG (mockup 6i) — mirror atom Sheet (tiền
@@ -33,8 +38,13 @@ type ClosedPositionSheetProps = {
   endMonthLabel: string; // "12/2025"
   totalInvested: string; // gồm phí mua
   totalProceeds: string; // thực nhận (đã trừ phí/thuế bán)
+  // Cổ tức tiền mặt nhận được lúc vị thế còn mở — "0" khi không có. Đã gộp
+  // sẵn trong `realizedPnl` (Chênh lệch), hiện thành dòng riêng để "Tổng mua/
+  // Tổng bán/Cổ tức/Chênh lệch" khớp phép cộng trừ hiển thị (code review #3).
+  totalDividends: string;
   orders: CashflowTimelineRow[];
   reopenHref: string; // ROUTES.newTransaction(holdingId)
+  detailHref: string; // ROUTES.holdingDetail(holdingId) — sửa/xoá giao dịch đã ghi
   hidden?: boolean;
 };
 
@@ -52,12 +62,15 @@ function ClosedPositionSheet({
   endMonthLabel,
   totalInvested,
   totalProceeds,
+  totalDividends,
   orders,
   reopenHref,
+  detailHref,
   hidden = false,
 }: ClosedPositionSheetProps) {
   const pnlNumber = Number(realizedPnl);
   const isGain = pnlNumber >= 0;
+  const hasDividends = Number(totalDividends) !== 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -125,7 +138,7 @@ function ClosedPositionSheet({
               </span>
             ) : (
               <span className="rounded-full bg-warning/14 px-2.5 py-0.5 text-[11px] font-semibold text-warning">
-                XIRR chưa tính được
+                XIRR {formatXirrLabel(xirrRealized)}
               </span>
             )}
           </div>
@@ -162,6 +175,16 @@ function ClosedPositionSheet({
               {formatMoney(totalProceeds, { hidden })}
             </span>
           </div>
+          {hasDividends ? (
+            <div className="flex items-center justify-between border-b border-white/5 p-3">
+              <span className="text-[12px] text-muted-foreground">
+                Cổ tức tiền mặt đã nhận
+              </span>
+              <span className="font-mono text-[12.5px] font-semibold text-foreground tabular-nums">
+                {formatMoney(totalDividends, { hidden })}
+              </span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between bg-white/3 p-3">
             <span className="text-[12px] font-semibold text-foreground">
               Chênh lệch (đã chốt)
@@ -187,9 +210,17 @@ function ClosedPositionSheet({
             <ShoppingCart className="size-4" />
             Mở lại vị thế
           </Link>
+          <Link
+            href={detailHref}
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            <Pencil className="size-4" />
+            Sửa / xoá giao dịch đã ghi
+          </Link>
           <div className="text-center text-[10.5px] leading-relaxed text-muted-faint">
             Mở lại vị thế chỉ mở form Mua điền sẵn mã này — không đụng tới lịch
-            sử đã chốt.
+            sử đã chốt. Cần sửa/xoá giao dịch cũ (vd ghi nhầm) thì vào chi tiết
+            vị thế.
           </div>
         </div>
       </SheetPopup>

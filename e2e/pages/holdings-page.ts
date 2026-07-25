@@ -36,11 +36,29 @@ export class HoldingsPage {
 
   // Dòng vị thế ĐÃ ĐÓNG (ClosedHoldingRow, tab "Đã đóng") — KHÁC holdingLink()
   // ở trên: đây là <button> mở ClosedPositionSheet (client state), không phải
-  // <Link> điều hướng. Sheet chỉ có "Mở lại vị thế" (ROUTES.newTransaction),
-  // không có link nào về thẳng /holdings/[id] — cần `.goto()` trực tiếp nếu
-  // muốn tới trang chi tiết vị thế đã đóng (xem HoldingDetailPage.goto()).
+  // <Link> điều hướng thẳng.
   closedHoldingButton(symbol: string): Locator {
     return this.page.getByRole("button", { name: new RegExp(symbol) });
+  }
+
+  // Link "Sửa / xoá giao dịch đã ghi" trong ClosedPositionSheet (mở sau khi
+  // bấm closedHoldingButton) — quay lại /holdings/[id] đầy đủ (lịch sử giao
+  // dịch, nút xoá) cho vị thế đã đóng (code review #1, PR #81).
+  get closedPositionSheetDetailLink(): Locator {
+    return this.page.getByRole("link", { name: /Sửa \/ xoá giao dịch/ });
+  }
+
+  // Bấm dòng vị thế đã đóng để mở ClosedPositionSheet, rồi bấm link trong
+  // sheet để tới trang chi tiết đầy đủ — cùng tinh thần openHolding() (pin
+  // đúng URL đã biết trước, tránh router-cache issue #77).
+  async openClosedHolding(
+    symbol: string,
+    holdingUrl: string,
+  ): Promise<HoldingDetailPage> {
+    await this.closedHoldingButton(symbol).click();
+    await this.closedPositionSheetDetailLink.click();
+    await this.page.waitForURL(holdingUrl);
+    return new HoldingDetailPage(this.page, holdingUrl);
   }
 
   // HoldingsGroupCard ghép SL + giá chung 1 dòng ("100 cổ phần · giá 150k")

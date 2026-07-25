@@ -90,6 +90,15 @@ function NavTrendChart({
 }: NavTrendChartProps) {
   const [period, setPeriod] = useState<NavTrendPeriod>("YEAR");
   const { points, changePercent } = data[period];
+  // `value` là Decimal serialize (string) — so sánh </> giữa string không tự
+  // coerce sang số (khác Math.min/max), nên Recharts/d3 tính domain trục Y có
+  // thể xếp sai thứ tự khi số chữ số đổi (vd "9000000" vs "10500000"). Recharts
+  // đọc `dataKey` riêng cho scale, giữ nguyên `value` (string) trong data để
+  // ChartTooltip/formatMoney dùng như cũ (code review #5).
+  const chartPoints = points.map((p) => ({
+    ...p,
+    valueNumber: Number(p.value),
+  }));
 
   return (
     <div
@@ -164,7 +173,7 @@ function NavTrendChart({
             )}
             <ResponsiveContainer width="100%" height={160}>
               <AreaChart
-                data={points}
+                data={chartPoints}
                 margin={{ top: 14, right: 0, bottom: 0, left: 0 }}
               >
                 <defs>
@@ -196,7 +205,7 @@ function NavTrendChart({
                 />
                 <Area
                   type="monotone"
-                  dataKey="value"
+                  dataKey="valueNumber"
                   stroke="var(--color-primary)"
                   strokeWidth={2}
                   fill="url(#navTrendFill)"

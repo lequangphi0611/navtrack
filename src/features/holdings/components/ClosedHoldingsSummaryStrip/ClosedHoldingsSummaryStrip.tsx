@@ -1,5 +1,10 @@
 import type { XirrResult } from "@/components/ReturnMetrics";
-import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
+import {
+  formatMoney,
+  formatSignedPercent,
+  formatXirrLabel,
+  signColorClass,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Strip 2 card ngang đầu tab "Đã đóng" (mockup 6g) — tổng lãi/lỗ ĐÃ CHỐT của
@@ -52,7 +57,13 @@ function ClosedHoldingsSummaryStrip({
           </div>
         ) : (
           <div className="text-[15px] font-bold text-warning">
-            Chưa tính được
+            {/* formatXirrLabel nhận XirrResult (không nhận null) — averageXirrRealized
+                null nghĩa là KHÔNG vị thế nào tính được XIRR (khác NO_CONVERGE/
+                NO_POSITIVE_FLOW của 1 vị thế cụ thể), nên fallback literal riêng cho
+                ca đó, tái dùng formatXirrLabel cho ca còn lại (code review #10). */}
+            {averageXirrRealized
+              ? formatXirrLabel(averageXirrRealized)
+              : "Chưa tính được"}
           </div>
         )}
       </div>

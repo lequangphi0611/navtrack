@@ -793,8 +793,16 @@ export type ConcentrationBadgesResult = {
 // cutoffDate mặc định đọc cookie mốc chốt user đang chọn (cùng pattern
 // getOpenHoldingsWithValuation) — badge cảnh báo phải nhất quán với NAV đang
 // hiển thị trên cùng màn, không luôn luôn là "hôm nay".
+//
+// `precomputedValuations` — caller ĐÃ tự gọi valuateHoldings() cho CÙNG tập
+// `open`/cutoffDate (vd getAllocationDetail() dùng kết quả cho buildAllocation)
+// thì truyền vào đây thay vì để hàm này tự valuate lại lần nữa — valuateHoldings
+// không cache(), gọi 2 lần với input giống hệt nhau tốn 2 round-trip DB giống
+// hệt nhau (code review #8). getOpenHoldings() vẫn tự gọi lại bình thường (đã
+// cache() theo request, rẻ).
 export async function getConcentrationBadges(
   cutoffDate?: Date,
+  precomputedValuations?: Map<string, HoldingValuation>,
 ): Promise<ConcentrationBadgesResult> {
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
@@ -807,14 +815,15 @@ export async function getConcentrationBadges(
   const openIds = open.map((h) => h.id);
 
   const [valuations, stateRows, thresholdPercentDecimal] = await Promise.all([
-    valuateHoldings(
-      open.map((h) => ({
-        id: h.id,
-        symbol: h.symbol,
-        quantity: new Decimal(h.quantity),
-      })),
-      resolvedCutoffDate,
-    ),
+    precomputedValuations ??
+      valuateHoldings(
+        open.map((h) => ({
+          id: h.id,
+          symbol: h.symbol,
+          quantity: new Decimal(h.quantity),
+        })),
+        resolvedCutoffDate,
+      ),
     openIds.length > 0
       ? db.holding.findMany({
           where: { id: { in: openIds } },
@@ -923,6 +932,13 @@ export type AllocationDetail = {
 // Tái dùng buildAllocation() (đã có, không viết lại) + getConcentrationBadges()
 // (đếm N mã cảnh báo) — dùng cho /allocation (route riêng, design-implementer
 // dựng ở mục 10 phase-6.md).
+//
+// valuateHoldings() gọi 1 LẦN DUY NHẤT, truyền kết quả vào getConcentrationBadges()
+// qua `precomputedValuations` thay vì để hàm đó tự valuate lại (2 round-trip DB
+// giống hệt nhau mỗi lần tải /allocation — code review #8). Đánh đổi: getConcentrationBadges()
+// giờ đợi valuateHoldings() xong trước khi chạy 2 query còn lại (stateRows/threshold)
+// thay vì cả 3 chạy song song như trước — chấp nhận được, tổng round-trip DB giảm
+// nhiều hơn phần latency tuần tự thêm vào.
 export async function getAllocationDetail(): Promise<AllocationDetail> {
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
@@ -930,17 +946,15 @@ export async function getAllocationDetail(): Promise<AllocationDetail> {
   const cutoffDate = resolveCutoffDate(await getCutoffSelection());
   const open = await getOpenHoldings();
 
-  const [valuations, concentration] = await Promise.all([
-    valuateHoldings(
-      open.map((h) => ({
-        id: h.id,
-        symbol: h.symbol,
-        quantity: new Decimal(h.quantity),
-      })),
-      cutoffDate,
-    ),
-    getConcentrationBadges(cutoffDate),
-  ]);
+  const valuations = await valuateHoldings(
+    open.map((h) => ({
+      id: h.id,
+      symbol: h.symbol,
+      quantity: new Decimal(h.quantity),
+    })),
+    cutoffDate,
+  );
+  const concentration = await getConcentrationBadges(cutoffDate, valuations);
 
   const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
   const navSum = validNavs.reduce((sum, nav) => sum.plus(nav), new Decimal(0));

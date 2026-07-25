@@ -117,10 +117,10 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
     await holdingsPage.openClosed();
     await expect(holdingsPage.closedHoldingButton("VNM")).toBeVisible();
 
-    // Tới chi tiết vị thế đã đóng để thao tác xóa giao dịch — ClosedPositionSheet
-    // chỉ có "Mở lại vị thế" (tạo giao dịch mua mới), không có link nào về thẳng
-    // /holdings/[id], nên điều hướng trực tiếp qua URL đã biết từ lúc tạo.
-    await detail.goto();
+    // Tới chi tiết vị thế đã đóng để thao tác xóa giao dịch — qua đúng UI:
+    // bấm dòng vị thế mở ClosedPositionSheet, rồi bấm link "Sửa / xoá giao
+    // dịch đã ghi" trong sheet (code review #1, PR #81).
+    await holdingsPage.openClosedHolding("VNM", detail.url);
 
     // Xóa BUY khi vẫn còn SELL phụ thuộc -> bị chặn
     await detail.deleteTransaction("80.000");

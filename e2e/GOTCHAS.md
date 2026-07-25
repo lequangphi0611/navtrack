@@ -183,14 +183,17 @@ commit** (kèm trỏ file/spec gốc). Cách viết e2e chung ở
   UI (thấy trong page snapshot lúc fail).
 - **Nguyên nhân:** phase-6 vẽ lại tab "Đã đóng" (`ClosedHoldingRow`) thành `<button>` mở
   `ClosedPositionSheet` (client state, mockup 6i) thay vì `<Link>` điều hướng thẳng
-  `/holdings/[id]` như trước — spec viết TRƯỚC phase-6 giả định sai role. Sheet mới chỉ có
-  action "Mở lại vị thế" (`ROUTES.newTransaction`, tạo giao dịch mua mới), **không có** link
-  nào quay lại trang chi tiết đầy đủ (lịch sử giao dịch, nút xóa) của vị thế đã đóng.
+  `/holdings/[id]` như trước — spec viết TRƯỚC phase-6 giả định sai role.
 - **Cách né:** `HoldingsPage.closedHoldingButton(symbol)` (role `"button"`, riêng cho tab "Đã
-  đóng") thay vì `holdingLink()` (chỉ đúng cho tab "Đang mở"). Muốn tới trang chi tiết vị thế
-  đã đóng để thao tác tiếp (vd xóa giao dịch) — không còn cách nào qua UI — dùng thẳng
-  `detail.goto()` với URL đã biết trước đó (từ lúc tạo vị thế), đúng tinh thần "ca cần điều
-  hướng trực tiếp không qua UI" đã ghi ở docstring `HoldingDetailPage.goto()`.
+  đóng") thay vì `holdingLink()` (chỉ đúng cho tab "Đang mở").
+- **Cập nhật (code review PR #81):** bản đầu của phase-6 khiến `ClosedPositionSheet` chỉ có
+  action "Mở lại vị thế" (tạo giao dịch mua mới), **mất hẳn** đường quay lại trang chi tiết
+  đầy đủ (lịch sử giao dịch, nút xóa) — người dùng ghi nhầm giao dịch khiến vị thế đóng thì
+  không còn cách sửa/xóa qua UI. Đã thêm lại link "Sửa / xoá giao dịch đã ghi"
+  (`ROUTES.holdingDetail`) trong sheet. Dùng `HoldingsPage.openClosedHolding(symbol,
+holdingUrl)` (bấm dòng vị thế mở sheet → bấm link → pin đúng URL, cùng tinh thần
+  `openHolding()`) thay vì `detail.goto()` trực tiếp — bài học: một fix quay lại UI phải đi
+  kèm spec exercise LẠI qua UI đó, không chỉ né bằng điều hướng thẳng URL.
 - **Bài học chung:** một UI redesign đổi loại phần tử tương tác (Link ↔ button/Sheet) cho MÀN
   ĐÃ CÓ SPEC TỪ TRƯỚC vẫn có thể lọt qua review nếu spec cũ không được chạy lại — luôn `pnpm
 e2e` toàn bộ spec chạm route bị đổi UI trước khi merge, không chỉ spec của feature mới.

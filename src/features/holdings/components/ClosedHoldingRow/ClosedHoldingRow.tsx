@@ -2,7 +2,12 @@ import { type AssetType, AssetTypeBadge } from "@/components/AssetTypeBadge";
 import type { XirrResult } from "@/components/ReturnMetrics";
 import { SymbolAvatar } from "@/components/SymbolAvatar";
 import { Badge } from "@/components/ui/badge";
-import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
+import {
+  formatMoney,
+  formatSignedPercent,
+  formatXirrLabel,
+  signColorClass,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Dòng vị thế ĐÃ ĐÓNG (mockup 6g) — khác HoldingListItem/HoldingsGroupCard (vị
@@ -89,7 +94,11 @@ function ClosedHoldingRow({
           {formatSignedPercent(holding.realizedPnlPercent)}
           {holding.xirrRealized.status === "OK"
             ? ` · XIRR ${formatSignedPercent(holding.xirrRealized.percentPerYear)}`
-            : " · XIRR chưa tính được"}
+            : // formatXirrLabel tự trả "Chưa tính được" khi status !== "OK" —
+              // nguồn sự thật duy nhất cho câu chữ (code review #10), OK-case
+              // GIỮ NGUYÊN format riêng ở trên (không có suffix "/năm", khác
+              // formatXirrLabel) để không đổi UI đã đúng theo mockup 6g.
+              ` · XIRR ${formatXirrLabel(holding.xirrRealized)}`}
         </span>
       </div>
     </button>

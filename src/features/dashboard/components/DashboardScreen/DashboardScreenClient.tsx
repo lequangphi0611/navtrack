@@ -35,7 +35,16 @@ function DashboardScreenClient({
     setHidden((previous) => {
       const next = !previous;
       startTransition(() => {
-        void setHideAmountsByDefault(next);
+        // Ghi thất bại -> quay lại giá trị TRƯỚC đó thay vì để UI đứng yên ở
+        // trạng thái optimistic chưa lưu được (code review #14, cùng fix
+        // PrivacyToggle).
+        void setHideAmountsByDefault(next)
+          .then((result) => {
+            if (!result.ok) setHidden(previous);
+          })
+          .catch(() => {
+            setHidden(previous);
+          });
       });
       return next;
     });
