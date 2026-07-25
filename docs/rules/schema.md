@@ -30,6 +30,9 @@ enum AssetType { STOCK FUND BOND GOLD }
 model Holding { type String } // "stock"/"Stock"/"STOCK"... loạn
 ```
 
+- **Schema là nguồn sự thật duy nhất của enum** — TS dẫn xuất từ `@prisma/client`, không khai lại union literal song song. Xem `typescript-style.md` mục "Enum".
+- **Thêm một giá trị vào enum đang dùng là thay đổi lan rộng, không phải sửa một dòng.** Trước khi thêm, rà mọi điểm rẽ nhánh theo enum đó (`switch`, ternary, `if/else`, `where` filter Prisma, `Record` nhãn UI, `z.enum`) — chỗ nào phân nhánh nhị phân sẽ **không** được compiler bắt và giá trị mới sẽ âm thầm kế thừa nhánh `else`. Kèm việc chuyển các điểm đó sang `switch` + `assertNever` trong cùng thay đổi.
+
 ## Quan hệ (relation)
 - Luôn khai **`onDelete` rõ ràng**; index cột khóa ngoại.
 - Cột FK + `@relation` tường minh.

@@ -51,14 +51,16 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
 - **Chế độ ẩn số tiền:** nút mắt bật/tắt nhanh trên dashboard + mặc định trong Settings (`User.hideAmountsByDefault`, lưu theo user). Chỉ che giá trị tiền tuyệt đối, giữ nguyên XIRR và các phần trăm.
 - **Cảnh báo tập trung (2026-07-17, tinh chỉnh 2026-07-21):** badge cảnh báo khi một `Holding` vượt `Setting{CONCENTRATION_WARNING_THRESHOLD}` (seed mặc định 30%), có materiality khi thiếu giá, ghi chú khi tập trung do ít mã, và hysteresis chống nhấp nháy — xem `docs/domain/04-pricing-and-valuation.md` mục "Cảnh báo tập trung".
 
-## Phase 7 — Trái tức (lãi trái phiếu)
+## Phase 7 — Trái tức (lãi trái phiếu) & đáo hạn
 - Ghi nhận lãi định kỳ (trái tức) cho `Holding{type: BOND}` — khác công thức % cổ tức cổ phiếu hiện có (Phase 4 chỉ scope cho cổ tức cổ phiếu/tiền mặt).
-- Mở rộng `DividendType`/`Dividend` (hoặc model tương đương) cho loại lãi trái phiếu; **mệnh giá/coupon rate lưu cố định trên `Holding`** (đã chốt 2026-07-17, đảo hướng đề xuất ban đầu "nhập tay mỗi lần" — cần cho Phase 8 dự đoán kỳ tới), thêm 5 field mới trên `Holding` (xem `docs/domain/10-cashflow-calendar.md`).
-- Thuế lãi trái phiếu: xác nhận dùng chung `DIVIDEND_TAX_RATE` hay cần `Setting` key riêng — điểm còn mở, xem `docs/domain/07-tax.md`.
-- UI ghi nhận trái tức: mở rộng `DividendForm` hiện có (Phase 4), không dựng màn mới.
+- `DividendType += BOND_COUPON`, `CashflowType += MATURITY`; điều khoản trái phiếu để ở **bảng riêng `BondTerms`** (1-1 với `Holding`), mệnh giá/coupon rate lưu cố định — không hỏi lại mỗi lần ghi. "Kỳ trả lãi tới" **suy runtime** từ `firstCouponDate`, không lưu giá trị cộng tay.
+- Thuế lãi trái phiếu: **2 key riêng** `BOND_INTEREST_TAX_RATE_CORPORATE` (5%) / `_GOVERNMENT` (0% — miễn theo NĐ 253/2026/NĐ-CP), chọn theo `BondTerms.issuerType`. Đáo hạn không chịu thuế chuyển nhượng 0.1%, chỉ phần lợi tức chịu thuế lãi. Xem `docs/domain/07-tax.md`.
+- Trái tức **không** bù pha loãng NAV (clean price trái phiếu không giảm theo coupon) — khác hẳn cổ tức, xem `docs/domain/03-dividends.md`.
+- Trả nợ kỹ thuật enum trước khi thêm giá trị: `switch` exhaustive + `assertNever` (xem `docs/rules/typescript-style.md` mục "Enum").
+- UI ghi nhận trái tức: mở rộng `DividendForm` hiện có (Phase 4); thêm luồng "Tất toán đáo hạn".
 
 ## Phase 8 — Lịch dòng tiền sắp tới (mới, 2026-07-17)
-- Danh sách trái phiếu sắp **đáo hạn** + **coupon kỳ tới** trong 90 ngày, ước tính từ `parValue`/`couponRatePercent`/`couponFrequencyMonths`/`maturityDate`/`nextCouponDate` (5 field Phase 7 thêm trên `Holding`).
+- Danh sách trái phiếu sắp **đáo hạn** + **coupon kỳ tới** trong 90 ngày, ước tính từ `BondTerms` (bảng Phase 7 thêm) và hàm suy kỳ trả lãi tới do Phase 7 viết.
 - Chỉ áp dụng `BOND` — không dự đoán cổ tức STOCK/FUND (ngày/mức không cố định theo hợp đồng, không đủ tin cậy).
 - Phụ thuộc chặt Phase 7 (đọc field đã thêm, không tự thêm schema). Xem `docs/domain/10-cashflow-calendar.md`, `process/phase-8.md`.
 

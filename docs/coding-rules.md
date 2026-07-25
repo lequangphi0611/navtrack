@@ -5,6 +5,7 @@ Bộ quy tắc coding cho Navtrack, tách theo từng mảng. File này là **ch
 | Khi làm việc với... | Tham chiếu |
 |---|---|
 | Đặt tên, style TypeScript, format, ngôn ngữ code | [`rules/typescript-style.md`](./rules/typescript-style.md) |
+| Enum: một nguồn sự thật (Prisma → TS), `switch` exhaustive + `assertNever`, nhãn qua `Record` | [`rules/typescript-style.md`](./rules/typescript-style.md) (mục "Enum") |
 | Cấu trúc thư mục, App Router, ranh giới Python↔TS | [`rules/project-structure.md`](./rules/project-structure.md) |
 | Component: Atomic Design, Server Component/Presentational, shadcn | [`rules/component-architecture.md`](./rules/component-architecture.md) |
 | Màu sắc, typography, icon, kho atoms/molecules đã có | [`rules/ui-ux-design.md`](./rules/ui-ux-design.md) |

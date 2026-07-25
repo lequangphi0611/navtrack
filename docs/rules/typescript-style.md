@@ -138,6 +138,87 @@ cashflows.push({ date: today, amount: currentNav });
 
 - Không để biến/import thừa (lint chặn).
 
+## Enum: một nguồn sự thật + phân nhánh exhaustive
+
+Bối cảnh: rule này ra đời sau khi rà Phase 7 phát hiện việc thêm **một giá trị** vào `DividendType` sẽ làm sai âm thầm ở nhiều chỗ mà TypeScript **không** báo lỗi — vì code phân nhánh nhị phân và tự khai lại union literal. Xem `process/DECISION.md` 2026-07-25 (2).
+
+### 1. Enum nghiệp vụ khai ở Prisma, TS **dẫn xuất** — không khai lại union song song
+
+- `prisma/schema.prisma` là nguồn sự thật cho mọi enum nghiệp vụ (`AssetType`, `CashflowType`, `DividendType`...).
+- Type ở TS **luôn** `import type { X } from "@prisma/client"`. **Cấm** khai lại union literal song song — bản sao sẽ lệch khi enum thêm giá trị, mà không có gì bắt được.
+- Cần **giá trị runtime** (mảng options cho form, `z.enum`, filter tab)? Khai một lần ở `src/lib/enums.ts` và ràng buộc lại với enum Prisma bằng `satisfies` + một check bắt **thiếu** giá trị. Dùng `import type` (không import runtime từ `@prisma/client` vào Client Component — kéo cả Prisma vào bundle).
+
+```ts
+// ❌ Bad — bản sao song song, thêm BOND_COUPON vào Prisma thì file này vẫn "hợp lệ"
+type DividendKind = "CASH" | "STOCK";
+const dividendTypeEnum = z.enum(["CASH", "STOCK"]);
+
+// ✅ Good — src/lib/enums.ts: một nguồn sự thật, sai lệch là lỗi compile
+import type { DividendType } from "@prisma/client";
+
+export const DIVIDEND_TYPES = [
+  "CASH",
+  "STOCK",
+  "BOND_COUPON",
+] as const satisfies readonly DividendType[]; // bắt tên sai
+
+// bắt THIẾU giá trị: đỏ ngay khi Prisma thêm một enum value chưa liệt kê ở trên
+type _AllDividendTypesCovered =
+  Exclude<DividendType, (typeof DIVIDEND_TYPES)[number]> extends never ? true : never;
+
+// ✅ zod dẫn xuất, không gõ lại danh sách
+export const dividendTypeSchema = z.enum(DIVIDEND_TYPES);
+```
+
+### 2. Phân nhánh theo enum: `switch` exhaustive, không `if/else` hay ternary nhị phân
+
+- Mọi chỗ **rẽ nhánh theo giá trị enum** dùng `switch` phủ hết case + `default` gọi `assertNever` (`src/lib/assert-never.ts`). Thêm giá trị enum → compile lỗi tại **mọi** điểm rẽ nhánh, không phải đi grep bằng trí nhớ.
+- **Cấm** `if (x === "A") {...} else { /* coi như B */ }` và `x === "A" ? ... : ...` khi nhánh `else` **mang giả định** về giá trị còn lại. Đây là lỗi nguy hiểm nhất: giá trị mới rơi vào `else` và kế thừa luôn giả định sai (kể cả `!`/non-null assertion dựa trên giả định đó).
+
+```ts
+// ❌ Bad — thêm BOND_COUPON: rơi vào else, stockQuantity là null -> sai/crash, TS im lặng
+if (dividend.type === "CASH") {
+  return { gross: dividend.grossAmount! };
+}
+// "stockQuantity luôn có giá trị khi type === STOCK"
+return { quantity: dividend.stockQuantity! };
+
+// ✅ Good — thêm giá trị enum là lỗi compile ngay tại đây
+switch (dividend.type) {
+  case "CASH":
+  case "BOND_COUPON":
+    return { gross: dividend.grossAmount! };
+  case "STOCK":
+    return { quantity: dividend.stockQuantity! };
+  default:
+    return assertNever(dividend.type);
+}
+```
+
+```ts
+// src/lib/assert-never.ts
+export function assertNever(value: never): never {
+  throw new Error(`Unhandled enum value: ${String(value)}`);
+}
+```
+
+- **Ngoại lệ hợp lệ:** so sánh dùng làm **predicate boolean** thuần, nơi nhánh còn lại không giả định gì (`cashflows.filter((cf) => cf.type === "BUY")`, `delta = cf.type === "BUY" ? qty : qty.neg()`). Nhưng khi thêm giá trị enum vẫn phải **rà lại** các predicate này — chúng không được compiler bảo vệ. Nếu ý nghĩa là "mọi loại trừ X", viết rõ trong comment tại chỗ.
+- **Nhãn hiển thị theo enum** (tiếng Việt trên UI) khai bằng `Record<EnumType, string>` — thiếu key là lỗi compile, khác hẳn chuỗi ternary lồng nhau.
+
+```ts
+// ❌ Bad — thêm loại mới sẽ hiện nhãn của loại khác
+const label = type === "CASH" ? "Tiền mặt" : "Cổ phiếu";
+
+// ✅ Good
+const DIVIDEND_TYPE_LABELS: Record<DividendType, string> = {
+  CASH: "Tiền mặt",
+  STOCK: "Cổ phiếu",
+  BOND_COUPON: "Trái tức",
+};
+```
+
+> ESLint hiện **không** bắt được lỗi này (`eslint.config.mjs` chưa bật type-aware linting; rule `@typescript-eslint/switch-exhaustiveness-check` cần type info). Cho tới khi bật, `assertNever` + `Record<EnumType, …>` là cơ chế thực thi — chúng chỉ cần compiler, không cần lint.
+
 ## Đường dẫn nội bộ (route) qua constants
 
 - Mọi route nội bộ (`Link href`, `redirect()`, `router.push()`, `revalidatePath()`, `backHref`...) phải lấy từ `ROUTES` (`src/lib/routes.ts`) — **không hardcode string route rải rác**. Route có tham số khai bằng hàm (`holdingDetail(id)`), route tĩnh khai string thường.

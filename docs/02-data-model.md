@@ -13,11 +13,20 @@ enum AssetType {
 enum CashflowType {
   BUY
   SELL
+  MATURITY // Phase 7: tất toán trái phiếu khi đáo hạn — nhận lại gốc từ tổ chức phát hành, KHÔNG phải chuyển nhượng nên không chịu thuế 0.1% (xem docs/domain/07-tax.md)
 }
 
 enum DividendType {
   CASH
   STOCK
+  BOND_COUPON // Phase 7: trái tức (lãi trái phiếu định kỳ) — dòng tiền dương như CASH, nhưng thuế khác key và KHÔNG bù pha loãng NAV
+}
+
+// Phase 7 — quyết định thuế lãi phụ thuộc tổ chức phát hành (Nghị định 253/2026/NĐ-CP):
+// lãi trái phiếu doanh nghiệp chịu 5%, lãi trái phiếu Chính phủ/chính quyền địa phương được MIỄN.
+enum BondIssuerType {
+  CORPORATE
+  GOVERNMENT // gồm cả trái phiếu chính quyền địa phương — cùng diện miễn thuế lãi
 }
 
 enum SnapshotSource {
@@ -113,19 +122,34 @@ model Holding {
   unit         String        // đơn vị số lượng theo loại tài sản — "cổ phần", "chỉ", "lượng", "trái phiếu"...; app phải set tường minh khi tạo Holding, không có default chung cho mọi loại
   quantity     Decimal       @default(0) @db.Decimal(20, 4) // materialized cache: SL đang giữ hiện tại (nguồn sự thật = Cashflow; recompute-in-transaction)
   avgCost      Decimal       @default(0) @db.Decimal(20, 4) // materialized cache: giá vốn bình quân di động hiện tại
-  parValue              Decimal?  @db.Decimal(20, 4) // Phase 8, chỉ BOND: mệnh giá trái phiếu
-  couponRatePercent     Decimal?  @db.Decimal(20, 4) // Phase 8, chỉ BOND: lãi suất coupon danh nghĩa (%/năm)
-  couponFrequencyMonths Int?                          // Phase 8, chỉ BOND: kỳ trả lãi (tháng), vd 6/12
-  maturityDate          DateTime?                     // Phase 8, chỉ BOND: ngày đáo hạn
-  nextCouponDate        DateTime?                     // Phase 8, chỉ BOND: ngày dự kiến trả lãi kỳ tới, tự cập nhật sau mỗi lần ghi trái tức
   cashflows    Cashflow[]
   dividends    Dividend[]
   snapshots    Snapshot[]
   navOverrides NavOverride[]
+  bondTerms    BondTerms?    // chỉ tồn tại khi type = BOND (xem model bên dưới)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
   @@unique([userId, symbol, type]) // một vị thế/user cho mỗi (mã, loại) — mua trùng mã tự gộp; cũng phục vụ lookup theo userId (leftmost prefix, không cần @@index([userId]) riêng)
+}
+
+// Phase 7 — ĐẶC TẢ CÔNG CỤ (instrument spec) của trái phiếu, tách khỏi Holding (vị thế).
+// Toàn bộ field ở đây là ĐIỀU KHOẢN PHÁT HÀNH: tĩnh, do hợp đồng quy định, không đổi theo
+// giao dịch. KHÔNG chứa trạng thái suy ra được (vd "kỳ trả lãi tới" — suy runtime từ
+// firstCouponDate + couponFrequencyMonths + lịch sử Dividend, xem docs/domain/10-cashflow-calendar.md).
+model BondTerms {
+  id                    String         @id @default(cuid())
+  holdingId             String         @unique // 1-1 với Holding; app PHẢI validate holding.type = BOND (quan hệ 1-1 không tự ràng buộc được điều đó)
+  holding               Holding        @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  issuerType            BondIssuerType // quyết định key thuế lãi áp dụng — xem docs/domain/07-tax.md
+  parValue              Decimal        @db.Decimal(20, 4) // mệnh giá MỘT trái phiếu (đ), không phải tổng giá trị lô
+  couponRatePercent     Decimal?       @db.Decimal(20, 4) // lãi suất coupon danh nghĩa (%/năm); null = zero-coupon/chiết khấu
+  couponFrequencyMonths Int? // kỳ trả lãi theo tháng (6 = nửa năm/lần, 12 = hàng năm); null = zero-coupon
+  firstCouponDate       DateTime? // MỐC NEO của lịch coupon (ngày trả lãi kỳ đầu theo hợp đồng) — KHÔNG bị ghi đè khi ghi trái tức
+  maturityDate          DateTime? // ngày đáo hạn
+  nextCouponDateOverride DateTime? // chỉ dùng khi tổ chức phát hành đổi lịch thực tế — thắng giá trị suy ra; cùng tinh thần NavOverride
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 }
 
 model Cashflow {
@@ -153,10 +177,15 @@ model Dividend {
   type          DividendType
   date          DateTime
   paymentDate   DateTime? // ngày tiền/CP thực về tài khoản — mốc dòng tiền XIRR cho cổ tức CASH (paymentDate ?? date), KHÔNG đổi mốc quantity timeline/NavOverride (vẫn `date`) — xem docs/domain/03-dividends.md
-  grossAmount   Decimal?      @db.Decimal(20, 4) // type = CASH: cổ tức gộp trước thuế
-  taxAmount     Decimal?      @db.Decimal(20, 4) // type = CASH: thuế TNCN tự khấu trừ (~5%)
-  netAmount     Decimal?      @db.Decimal(20, 4) // type = CASH: thực nhận sau thuế = dòng tiền dương cho XIRR
+  grossAmount   Decimal?      @db.Decimal(20, 4) // type = CASH | BOND_COUPON: số gộp trước thuế
+  taxAmount     Decimal?      @db.Decimal(20, 4) // type = CASH | BOND_COUPON: thuế TNCN tự khấu trừ (cổ tức 5%; trái tức theo issuerType — 5% doanh nghiệp, 0% Chính phủ)
+  netAmount     Decimal?      @db.Decimal(20, 4) // type = CASH | BOND_COUPON: thực nhận sau thuế = dòng tiền dương cho XIRR
   stockQuantity Decimal?      @db.Decimal(20, 4) // type = STOCK: cộng thêm số lượng nắm giữ (không phát sinh tiền)
+  // Phase 7, type = BOND_COUPON: ĐÓNG BĂNG thông số đã dùng để tính tại thời điểm ghi — cùng
+  // nguyên tắc "thuế/phí đã tính không hồi tố" (07-tax.md). Không đọc lại BondTerms khi hiển thị
+  // lịch sử, vì mệnh giá/coupon rate có thể được sửa về sau (nhập sai, trái phiếu thả nổi).
+  parValueApplied          Decimal? @db.Decimal(20, 4)
+  couponRatePercentApplied Decimal? @db.Decimal(20, 4)
   note          String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -247,7 +276,7 @@ model Setting {
 
 ## Ghi chú thiết kế
 
-- **Một bảng `Holding` cho cả 4 loại tài sản**, phân biệt bằng `AssetType` (STOCK/FUND/BOND/GOLD). Không tách bảng riêng theo loại — vì mục tiêu là phân tích *toàn danh mục* (tổng NAV, XIRR, phân bổ), tách bảng sẽ buộc `UNION` khắp nơi và quan hệ đa hình cho `Cashflow`/`Dividend`/`Snapshot`. Khác biệt giữa các loại xử lý bằng field, không bằng bảng: `unit` (vàng chỉ/lượng), `NavOverride` (nhập tay cho vàng/trái phiếu), và (nếu cần) vài cột nullable cho chi tiết trái phiếu — thêm sau khi thật cần.
+- **Một bảng `Holding` cho cả 4 loại tài sản**, phân biệt bằng `AssetType` (STOCK/FUND/BOND/GOLD). Không tách bảng riêng theo loại — vì mục tiêu là phân tích *toàn danh mục* (tổng NAV, XIRR, phân bổ), tách bảng sẽ buộc `UNION` khắp nơi và quan hệ đa hình cho `Cashflow`/`Dividend`/`Snapshot`. Khác biệt giữa các loại xử lý bằng field, không bằng bảng: `unit` (vàng chỉ/lượng), `NavOverride` (nhập tay cho vàng/trái phiếu). **Ngoại lệ duy nhất: `BondTerms`** — xem ghi chú riêng bên dưới.
 - **CCQ (chứng chỉ quỹ) đều là `AssetType = FUND`** bất kể là quỹ cổ phiếu hay quỹ trái phiếu — phân loại "theo vỏ" sản phẩm, không theo phơi nhiễm kinh tế. Biểu đồ phân bổ giữ 4 nhóm; không có field `fundKind`.
 - **Một vị thế cho mỗi `(userId, symbol, type)`** — ràng buộc `@@unique([userId, symbol, type])`. Khi mua mã đã giữ, hệ thống **find-or-create**: gắn `Cashflow` BUY vào `Holding` sẵn có (không tạo Holding trùng) → giá vốn bình quân gia quyền luôn đúng. Cùng `symbol` khác `type` vẫn là hai Holding (được phép). Bán hết rồi mua lại dùng lại chính Holding đó (SL về 0 rồi tăng).
 - **`Holding.quantity`/`avgCost` là materialized cache của vị thế**, không phải nguồn sự thật (vẫn là `Cashflow`). Lý do: màn Danh mục chỉ cần vài con số/holding nhưng để suy ra `avgCost` (bình quân di động có reset) phải replay **toàn bộ** cashflow — kể cả `select` hẹp vẫn phình theo lịch sử giao dịch. Materialize để đọc thuần 2 cột. **Bất biến chống lệch:** chỉ ghi lại bằng `derivePosition(toàn bộ cashflow)` trong cùng transaction với mọi thay đổi cashflow (4 action mua/bán → `persistPosition`), không cộng/trừ tay. Backfill dữ liệu cũ chạy tự động 1 lần/DB qua data migration `20260711092933_backfill_holding_position` (cùng `migrate deploy`). Xem `process/DECISION.md` (2026-07-11) — quyết định này **đảo** ghi chú "giá vốn không lưu cứng" ban đầu.
@@ -260,9 +289,15 @@ model Setting {
 - **`Snapshot.holdingId = null`** dùng cho snapshot tổng danh mục (tổng NAV mọi tài sản tại 1 mốc) — cần cho biểu đồ NAV theo thời gian ở mục 03-roadmap.
 - **Dedup snapshot đã đóng băng — 2 partial unique index, không phải `@@unique`.** Khóa duy nhất là `(userId, date, period)` cho snapshot tổng danh mục (`holdingId = null`) và `(holdingId, date, period)` cho snapshot theo từng vị thế. `period` **phải** nằm trong khóa vì cùng một `date` lịch (vd 31/12) có thể hợp lệ sinh ra **2 dòng khác nhau**: cron tháng (`PERIODIC`, fire 01/01 ghi cho 31/12 năm trước) và cron cuối năm (`YEAR_END`, cũng fire 01/01 ghi cho cùng 31/12) — không phải trùng lặp mà là 2 mốc báo cáo khác mục đích. Vì `holdingId` nullable và Postgres coi mỗi `NULL` là khác biệt trong unique index thường (không tự loại trùng khi `holdingId` đều null), một `@@unique([userId, date, period])` khai trong `schema.prisma` **không** chặn được nhiều dòng snapshot tổng danh mục trùng mốc. Prisma DSL cũng không hỗ trợ `WHERE` cho `@@unique` nên không thể tự thu hẹp bằng field. Giải pháp: 2 **partial unique index** viết tay bằng raw SQL (`CREATE UNIQUE INDEX ... WHERE "holdingId" IS NULL` / `WHERE "holdingId" IS NOT NULL`) trong migration `add_snapshot_unique_constraint`, chỉ đánh dấu bằng comment `// NOTE:` cạnh model `Snapshot` trong `schema.prisma` (không có block `@@unique` tương ứng). Vì đây không phải cấu trúc khai báo được ở DSL, các lần `prisma migrate dev` sau không diff/drop nhầm 2 index này. Xem `process/DECISION.md` (2026-07-14).
 - **`Snapshot.updatedAt` — riêng khác các `updatedAt` khác trong schema, có `@default(now())` cùng `@updatedAt`.** Thêm ở issue #37 để "Đã chốt lúc HH:mm" (`MANUAL`) phản ánh đúng lần chốt **gần nhất** khi user bấm "Chốt số liệu hôm nay" nhiều lần trong ngày (upsert idempotent, không phải `createdAt` — chỉ set lúc INSERT đầu tiên, không đổi khi UPDATE đè giá trị). `@default(now())` cần thiết vì cột được thêm vào bảng `Snapshot` **đã có dữ liệu** (cron #36 đã chạy trước đó) — bảng không rỗng cần backfill NOT NULL, khác các `updatedAt` khác trong schema chỉ được tạo cùng lúc với bảng nên không cần default. Prisma Client vẫn luôn set giá trị tường minh qua `create`/`update`/`upsert`, hiếm khi thật sự rơi vào nhánh dùng DB default. `jobs/snapshot-cron/main.py` ghi trực tiếp qua raw SQL (không qua Prisma Client) nên phải tự set `"updatedAt" = now()` ở cả `INSERT` lẫn `DO UPDATE SET` (mirror `save_price` ở `jobs/price-fetcher/main.py`). Xem `process/DECISION.md` (2026-07-15, issue #37).
+- **`BondTerms` tách bảng riêng, không phải cột nullable trên `Holding` (Phase 7, đã chốt — xem `process/DECISION.md` 2026-07-25 (2)).** Đây là ngoại lệ có chủ đích với nguyên tắc "một bảng `Holding` cho cả 4 loại" ở trên, vì 3 lý do — **không** phải để tiết kiệm dung lượng (cột NULL trong Postgres gần như miễn phí nhờ null bitmap, và bảng chỉ có vài chục dòng):
+  1. **Nhóm field này không dừng lại ở một vài cột:** ngoài mệnh giá/coupon còn `issuerType` (quyết định thuế lãi), `firstCouponDate` (mốc neo lịch coupon), và sẽ còn nữa nếu mở rộng (ngày phát hành, day-count convention cho lãi dồn tích) — để trên `Holding` thì bảng dùng chung cho 4 loại tài sản phình dần thành god-table.
+  2. **Ngữ nghĩa khác hẳn:** `Holding` là **vị thế** (position) + cache vị thế; `BondTerms` là **đặc tả công cụ** (instrument spec) do hợp đồng phát hành quy định. Với STOCK/FUND đặc tả nhẹ (chỉ `symbol`/`name`) nên gộp được; với BOND thì đặc tả nặng hơn cả vị thế.
+  3. **Tách bảng làm lộ ra field không thuộc về đó:** thiết kế cũ có `nextCouponDate` nằm chung 4 field tĩnh và bị ghi đè mỗi lần ghi trái tức — tức là **derived state trộn vào reference data**. Xem ghi chú kế tiếp.
+- **`BondTerms` KHÔNG lưu "ngày trả lãi kỳ tới" như một giá trị cộng tay.** Thiết kế ban đầu (`nextCouponDate`, cộng thêm `couponFrequencyMonths` vào ngày vừa ghi trái tức) đã bị bác vì tái phạm đúng thứ mà bất biến của `Holding.quantity`/`avgCost` cấm — cộng/trừ tay trên một giá trị suy ra được — và gây 2 lỗi nghiệp vụ cụ thể: (a) **lịch coupon trôi dần** khi tổ chức phát hành trả trễ (mỗi kỳ cộng từ ngày nhận thực tế thay vì từ lịch hợp đồng, sai số tích lũy); (b) **nhảy ngược về kỳ đã nhận** khi user ghi bù một kỳ cũ bị bỏ sót. Thay bằng `firstCouponDate` (mốc neo tĩnh) + suy runtime; `nextCouponDateOverride` chỉ dùng khi tổ chức phát hành thực sự đổi lịch. Suy runtime rẻ (vài phép cộng tháng), không có lý do materialize như `quantity`/`avgCost` (vốn phải replay toàn bộ lịch sử). Xem `docs/domain/10-cashflow-calendar.md`.
+- **`CashflowType.MATURITY` (Phase 7)** tách khỏi `SELL` vì đáo hạn **không phải chuyển nhượng**: nhận lại gốc từ chính tổ chức phát hành nên không chịu thuế chuyển nhượng 0.1% (`SALE_TAX_BOND`), chỉ phần lợi tức (nếu mua chiết khấu) chịu thuế lãi. Chọn giá trị enum mới thay vì "ghi `SELL` rồi tự sửa thuế về 0" vì với người dùng Navtrack, **giữ tới đáo hạn mới là ca thường xuyên**, bán thứ cấp mới là ngoại lệ — luồng thường xuyên không nên phải đi mượn hình thức của luồng hiếm rồi sửa tay mỗi lần. Chi phí thấp: code hiện có phân nhánh theo `=== "BUY"` nên `MATURITY` tự hành xử đúng ở `derivePosition`/cost basis/cost drag. Xem `docs/domain/07-tax.md`.
 - **`NavOverride`** tách bảng riêng thay vì 1 field `nav_override` trên `Holding`, vì giá override có thể thay đổi theo từng ngày (không chỉ 1 giá cố định) — quan trọng với vàng/trái phiếu nhập tay thường xuyên. `date` là **`@db.Date`** (không có giờ, khớp `PriceQuote.date`) và có **`@@unique([holdingId, date])`** — 1 giá nhập tay/vị thế/ngày, làm đích `upsert` idempotent cho Server Action `saveNavOverride` (sửa giá cùng ngày ghi đè, không tạo dòng trùng). Xem `process/DECISION.md` (2026-07-12).
 - **`PriceQuote` (giá tự động):** job Python ghi giá EOD từ vnstock vào đây, app **chỉ đọc**. Là bảng **dùng chung theo `symbol`** (không theo user, không gắn `Holding`) — nhiều user giữ cùng mã chia sẻ một giá. Định giá một `Holding` tại ngày D: ưu tiên `NavOverride` (nhập tay), nếu không có thì tra `PriceQuote` của mã đó (giá có `date` gần nhất ≤ D — cho ngày nghỉ/lễ). `@@unique([symbol, date])` là đích upsert idempotent của job. `symbol` ở đây là mã vnstock; nếu sau này cần phân biệt trùng mã khác loại, thêm cột thị trường/loại.
-- **`Setting` (bảng master cấu hình):** thay `TaxRule`, gom mọi tham số chính sách chỉnh được mà không sửa code. Thuế bán để theo key mỗi loại (`SALE_TAX_STOCK`, `SALE_TAX_FUND`, `SALE_TAX_BOND`, `SALE_TAX_GOLD`), thuế cổ tức `DIVIDEND_TAX_RATE`, và **phí giao dịch** (`TRANSACTION_FEE_BUY_<LOẠI>`/`TRANSACTION_FEE_SELL_<LOẠI>`, 8 key — mới, xem `process/DECISION.md` 2026-07-18 (4)).
+- **`Setting` (bảng master cấu hình):** thay `TaxRule`, gom mọi tham số chính sách chỉnh được mà không sửa code. Thuế bán để theo key mỗi loại (`SALE_TAX_STOCK`, `SALE_TAX_FUND`, `SALE_TAX_BOND`, `SALE_TAX_GOLD`), thuế cổ tức `DIVIDEND_TAX_RATE`, **thuế lãi trái phiếu** (`BOND_INTEREST_TAX_RATE_CORPORATE`/`_GOVERNMENT` — 2 key riêng vì mức phụ thuộc tổ chức phát hành, xem `process/DECISION.md` 2026-07-25 (2)), và **phí giao dịch** (`TRANSACTION_FEE_BUY_<LOẠI>`/`TRANSACTION_FEE_SELL_<LOẠI>`, 8 key — xem `process/DECISION.md` 2026-07-18 (4)).
   - **Effective dating:** mỗi `key` có thể có nhiều dòng theo thời gian. **Giá trị áp dụng cho một ngày** = dòng cùng `key` có `effectiveFrom` lớn nhất mà `<= ngày` cần tra (không dùng `effectiveTo` để tránh lỗi chồng lấn khoảng). Nhờ vậy, nhập giao dịch lùi ngày vẫn áp đúng thuế suất của thời điểm đó.
   - `valueType` bắt buộc để parse an toàn (thuế là `DECIMAL`). `updatedBy`/`updatedAt` để audit thay đổi chính sách.
   - **Vẫn cần xác nhận mức % cụ thể** trước khi seed (điểm còn mở): bán ~0.1%, cổ tức ~5%, phí mua/bán `STOCK` = 0.3% (đã xác nhận, theo TPS) — `FUND`/`BOND`/`GOLD` chưa chốt, mặc định seed `0`.

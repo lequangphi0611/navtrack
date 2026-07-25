@@ -15,6 +15,12 @@ App **chỉ đọc / resolve** giá trị cấu hình (thuế bán, thuế cổ 
 | `TRANSACTION_FEE_SELL_STOCK` / `_FUND` / `_BOND` / `_GOLD` | FEE | DECIMAL | phí bán theo loại (%), effective-dated theo ngày giao dịch — cùng cơ chế với phí mua |
 | `DIVIDEND_TAX_RATE` | TAX | DECIMAL | thuế cổ tức tiền mặt (%), effective-dated theo ngày chia cổ tức — seed mặc định `5` từ 2020-01-01 |
 | `DIVIDEND_PAR_VALUE` | TAX | DECIMAL | mệnh giá dùng tính cổ tức tiền mặt theo % (đ/CP), effective-dated theo ngày chia cổ tức — seed mặc định `10000` từ 2020-01-01 |
+| `BOND_INTEREST_TAX_RATE_CORPORATE` | TAX | DECIMAL | thuế lãi trái phiếu **doanh nghiệp** (%), effective-dated theo ngày trả lãi — seed `5` (thu nhập từ đầu tư vốn). Chọn theo `BondTerms.issuerType`, xem `07-tax.md` |
+| `BOND_INTEREST_TAX_RATE_GOVERNMENT` | TAX | DECIMAL | thuế lãi trái phiếu **Chính phủ / chính quyền địa phương** (%) — seed `0`, miễn thuế theo NĐ 253/2026/NĐ-CP. Vẫn seed **tường minh**, không được thiếu dòng (cùng tiền lệ `SALE_TAX_GOLD`) |
+
+> **Không gộp thuế lãi trái phiếu vào `DIVIDEND_TAX_RATE`** dù hiện cùng mức 5%: khác căn cứ pháp lý, và mức lãi trái phiếu còn phụ thuộc **tổ chức phát hành** (0% với trái phiếu Chính phủ) — một key duy nhất không biểu diễn được. Xem `process/DECISION.md` 2026-07-25 (2).
+
+> **`DIVIDEND_PAR_VALUE` KHÔNG dùng cho trái tức.** Mệnh giá trái phiếu nằm ở `BondTerms.parValue` (mỗi trái phiếu một mức theo tổ chức phát hành), không phải một mặc định toàn hệ thống như mệnh giá cổ phiếu 10.000đ.
 | `MAX_MEMBERS` | ACCESS | INT | số thành viên tối đa (đếm `AllowedUser` chưa thu hồi); resolve với `atDate = hôm nay`, không cần effective dating — xem `08-users-access-and-privacy.md` |
 | `CONCENTRATION_WARNING_THRESHOLD` | RISK | DECIMAL | ngưỡng % NAV một `Holding` để cảnh báo tập trung; resolve với `atDate = hôm nay`, không cần effective dating — seed mặc định `30` — xem `04-pricing-and-valuation.md` mục "Cảnh báo tập trung" |
 
