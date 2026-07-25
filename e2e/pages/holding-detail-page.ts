@@ -66,6 +66,16 @@ export class HoldingDetailPage {
     return this.page.getByText("NAV danh mục sau giao dịch");
   }
 
+  // Nhánh "valued" của HoldingDetailScreen (đã có PriceQuote/valuation) —
+  // KHÔNG hiện dòng "Số lượng: N cổ phần" riêng như nhánh Phase-1-chưa-định-giá
+  // (chỉ quantityText ở trên), nên verify NAV gián tiếp qua khối "Giá trị hiện
+  // tại" thay vì số lượng.
+  get navBox(): Locator {
+    return this.page
+      .getByText("Giá trị hiện tại", { exact: true })
+      .locator("../..");
+  }
+
   async goBack(): Promise<HoldingsPage> {
     const holdingsPage = new HoldingsPage(this.page);
     await this.backLink.click();

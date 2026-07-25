@@ -83,6 +83,17 @@ export class DashboardPage {
     return this.page.getByText(/Đã chốt lúc \d{2}:\d{2}/);
   }
 
+  // CostDragSheet — breakdown "Chi phí ăn mòn" (thuế bán/phí/thuế cổ tức +
+  // % đóng góp mỗi nguồn), mở từ dòng "Chi phí ăn mòn" trên PnlCostDragCard.
+  get costDragTrigger(): Locator {
+    return this.page.getByText("Chi phí ăn mòn", { exact: true });
+  }
+
+  async openCostDragSheet(): Promise<Locator> {
+    await this.costDragTrigger.click();
+    return this.page.getByRole("dialog");
+  }
+
   private get quickMenuToggle(): Locator {
     return this.page.getByRole("button", { name: "Mở menu nhanh" });
   }
