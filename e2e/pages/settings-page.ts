@@ -28,6 +28,17 @@ export class SettingsPage {
     await this.page.waitForURL(this.url);
   }
 
+  // PrivacyToggle (mục 8/11 phase-6.md) — CÙNG một `User.hideAmountsByDefault`
+  // với nút mắt header Dashboard (không đồng bộ realtime, mỗi route tự đọc lại
+  // DB khi điều hướng/reload — xem PrivacyToggle.tsx).
+  get hideAmountsSwitch(): Locator {
+    return this.page.getByRole("switch", { name: "Chế độ ẩn số tiền" });
+  }
+
+  async toggleHideAmounts() {
+    await this.hideAmountsSwitch.click();
+  }
+
   async expectSelected(label: string) {
     await expect(this.cutoffOption(label)).toHaveClass(/border-primary\/40/);
   }
