@@ -12,16 +12,24 @@ import { SettingsPage } from "./settings-page";
 export class BottomNav {
   constructor(private readonly page: Page) {}
 
+  // Scope qua getByRole("navigation") — DashboardScreen có 1 link header
+  // KHÁC (chip mốc chốt, aria-label="Cài đặt", cùng trỏ /settings) trùng tên
+  // accessible với tab này; không scope sẽ khớp cả 2, Playwright strict mode
+  // ném lỗi (phát hiện lúc verify PR #81, e2e/tests/privacy-mode.spec.ts).
+  private get nav(): Locator {
+    return this.page.getByRole("navigation");
+  }
+
   get dashboardTab(): Locator {
-    return this.page.getByRole("link", { name: "Tổng quan" });
+    return this.nav.getByRole("link", { name: "Tổng quan" });
   }
 
   get holdingsTab(): Locator {
-    return this.page.getByRole("link", { name: "Danh mục" });
+    return this.nav.getByRole("link", { name: "Danh mục" });
   }
 
   get settingsTab(): Locator {
-    return this.page.getByRole("link", { name: "Cài đặt" });
+    return this.nav.getByRole("link", { name: "Cài đặt" });
   }
 
   async goToDashboard(): Promise<DashboardPage> {

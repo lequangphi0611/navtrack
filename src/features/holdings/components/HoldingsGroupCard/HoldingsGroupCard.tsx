@@ -10,12 +10,14 @@ import {
   ASSET_TYPE_LABEL,
   ASSET_TYPE_TINT_CLASS,
 } from "@/components/AssetTypeBadge";
+import { ConcentrationBadge } from "@/components/ConcentrationBadge";
 import { PercentChange } from "@/components/PercentChange";
 import {
   type PriceSource,
   PriceSourceBadge,
 } from "@/components/PriceSourceBadge";
 import { SymbolAvatar } from "@/components/SymbolAvatar";
+import type { ConcentrationBadgeState } from "@/lib/concentration";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -38,7 +40,14 @@ type HoldingValuationExtras = {
   annualReturnPercent: number;
 };
 
-type HoldingWithValuation = HoldingSummary & Partial<HoldingValuationExtras>;
+// concentrationBadge (mục 13 phase-6.md, 6j UI_phase_6.md): vắng mặt = Holding
+// dưới ngưỡng cảnh báo (không hiện gì) — Container (HoldingsPositionsSection)
+// merge từ getConcentrationBadges() vào cùng tập holdings này, KHÔNG tính lại
+// công thức riêng ở đây.
+type HoldingWithValuation = HoldingSummary &
+  Partial<HoldingValuationExtras> & {
+    concentrationBadge?: ConcentrationBadgeState;
+  };
 
 type GroupValuation = {
   priceSource: PriceSource;
@@ -53,6 +62,8 @@ type HoldingsGroupCardProps = {
   // Có giá trị = bật chế độ hiển thị Phase 2 (NAV/nguồn giá/XIRR); vắng mặt = giữ
   // nguyên hiển thị Phase 1 (chỉ vốn đã bỏ vào) — Container chưa cấp đủ dữ liệu.
   groupValuation?: GroupValuation;
+  // Chế độ ẩn số tiền (mục 8/11 phase-6.md) — ẩn mọi VND tuyệt đối, GIỮ %/XIRR.
+  hidden?: boolean;
   className?: string;
 };
 
@@ -61,6 +72,7 @@ function HoldingsGroupCard({
   holdings,
   totalCostBasis,
   groupValuation,
+  hidden = false,
   className,
 }: HoldingsGroupCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -100,7 +112,7 @@ function HoldingsGroupCard({
           />
         ) : (
           <span className="font-mono text-[13.5px] font-semibold text-foreground tabular-nums">
-            {formatMoney(totalCostBasis, { compact: true })}
+            {formatMoney(totalCostBasis, { compact: true, hidden })}
           </span>
         )}
       </div>
@@ -125,14 +137,14 @@ function HoldingsGroupCard({
               <div className="mt-0.5 font-mono text-[11.5px] text-muted-faint">
                 {formatQuantity(holding.quantity, holding.unit)} ·{" "}
                 {hasValuation && holding.currentPricePerUnit !== undefined
-                  ? `giá ${formatMoney(holding.currentPricePerUnit, { compact: true })}`
-                  : `TB ${formatMoney(holding.avgCost, { compact: true })}`}
+                  ? `giá ${formatMoney(holding.currentPricePerUnit, { compact: true, hidden })}`
+                  : `TB ${formatMoney(holding.avgCost, { compact: true, hidden })}`}
               </div>
             </div>
             <div className="flex flex-col items-end gap-1">
               {hasValuation && holding.marketValue !== undefined ? (
                 <span className="font-mono text-[13px] font-semibold text-foreground tabular-nums">
-                  {formatMoney(holding.marketValue, { compact: true })}
+                  {formatMoney(holding.marketValue, { compact: true, hidden })}
                 </span>
               ) : groupValuation ? (
                 <span className="rounded-full bg-warning/14 px-2 py-0.5 text-[10.5px] font-semibold text-warning">
@@ -140,7 +152,10 @@ function HoldingsGroupCard({
                 </span>
               ) : (
                 <span className="font-mono text-[13.5px] font-semibold text-foreground tabular-nums">
-                  {formatMoney(holding.totalCostBasis, { compact: true })}
+                  {formatMoney(holding.totalCostBasis, {
+                    compact: true,
+                    hidden,
+                  })}
                 </span>
               )}
               {holding.annualReturnPercent !== undefined ? (
@@ -148,6 +163,12 @@ function HoldingsGroupCard({
                   value={holding.annualReturnPercent}
                   variant="xirr"
                   className="bg-transparent px-0 py-0 text-[11px]"
+                />
+              ) : null}
+              {holding.concentrationBadge ? (
+                <ConcentrationBadge
+                  state={holding.concentrationBadge}
+                  showNote={false}
                 />
               ) : null}
             </div>

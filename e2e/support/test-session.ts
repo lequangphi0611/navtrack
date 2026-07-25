@@ -7,6 +7,9 @@ const db = new PrismaClient();
 
 // Tạo một tài khoản test riêng biệt (email random) + Session hợp lệ trong DB, rồi
 // gắn cookie session vào context — bỏ qua luồng OAuth thật của Google cho mục đích e2e.
+// Mọi Setting toàn cục cần cho luồng chính (CONCENTRATION_WARNING_THRESHOLD,
+// DIVIDEND_TAX_RATE, SALE_TAX_*...) seed sẵn bởi `pnpm db:seed` (scripts/e2e.mjs,
+// chạy sau migrate) — không seed lại ở đây (xem e2e/GOTCHAS.md #15).
 export async function createTestSession(namePrefix: string) {
   const email = `${namePrefix}-${randomUUID()}@e2e.test`;
 

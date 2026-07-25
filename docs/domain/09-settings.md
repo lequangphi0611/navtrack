@@ -18,7 +18,7 @@ App **chỉ đọc / resolve** giá trị cấu hình (thuế bán, thuế cổ 
 | `MAX_MEMBERS` | ACCESS | INT | số thành viên tối đa (đếm `AllowedUser` chưa thu hồi); resolve với `atDate = hôm nay`, không cần effective dating — xem `08-users-access-and-privacy.md` |
 | `CONCENTRATION_WARNING_THRESHOLD` | RISK | DECIMAL | ngưỡng % NAV một `Holding` để cảnh báo tập trung; resolve với `atDate = hôm nay`, không cần effective dating — seed mặc định `30` — xem `04-pricing-and-valuation.md` mục "Cảnh báo tập trung" |
 
-> **Không đưa vào `Setting`:** tần suất/ngày chốt NAV — nằm ở **cron của GitHub Actions workflow** (committed config), không phải cấu hình runtime. Xem `06-snapshots.md`.
+> **Không đưa vào `Setting`:** tần suất/ngày chốt NAV — nằm ở **cron của GitHub Actions workflow** (committed config), không phải cấu hình runtime. Xem `06-snapshots.md`. Tương tự, ngưỡng materiality `MISSING_PRICE` (5%) và buffer hysteresis (3 điểm %) của cảnh báo tập trung (`04-pricing-and-valuation.md`) **cũng không phải `Setting`** — đây là tham số chống nhiễu hiển thị (kỹ thuật), khác `CONCENTRATION_WARNING_THRESHOLD` vốn là lựa chọn khẩu vị rủi ro của từng user.
 
 ## Resolution — cách app lấy giá trị
 

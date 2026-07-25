@@ -15,16 +15,14 @@ import {
   signInAs,
 } from "../support/test-session";
 
-// Phase 5 (docs/domain/07-tax.md) — thuế bán + phí giao dịch. Cùng lý do đã
-// ghi ở dividends.spec.ts: scripts/e2e.mjs chỉ `prisma migrate deploy`, KHÔNG
-// chạy `pnpm db:seed` cho DB e2e -> SALE_TAX_STOCK/TRANSACTION_FEE_*_STOCK
-// không có sẵn, phải seed trực tiếp qua Prisma ở đây. Seed thêm MỘT mốc
-// effectiveFrom thứ hai (khác giá trị) để bài test thật sự phủ "đổi thuế
-// suất áp đúng suất thời điểm" (phase-5.md mục tiêu chí) — không chỉ đổi
-// ngày mà số tiền vẫn y hệt (không phân biệt được recompute có chạy đúng
-// công thức mới hay chỉ copy nguyên giá trị cũ).
+// Phase 5 (docs/domain/07-tax.md) — thuế bán + phí giao dịch. Baseline
+// (SALE_TAX_STOCK/TRANSACTION_FEE_*_STOCK) seed sẵn bởi `pnpm db:seed`
+// (scripts/e2e.mjs, chạy sau migrate) — spec chỉ seed thêm MỘT mốc
+// effectiveFrom thứ hai (khác giá trị, db:seed không biết) để bài test thật
+// sự phủ "đổi thuế suất áp đúng suất thời điểm" (phase-5.md mục tiêu chí) —
+// không chỉ đổi ngày mà số tiền vẫn y hệt (không phân biệt được recompute có
+// chạy đúng công thức mới hay chỉ copy nguyên giá trị cũ). Xem e2e/GOTCHAS.md #15.
 const db = new PrismaClient();
-const BASELINE = new Date("2020-01-01");
 
 async function upsertSettingIgnoringRace(
   data: Prisma.SettingCreateInput & { key: string; effectiveFrom: Date },
@@ -61,39 +59,12 @@ const RATE_CHANGE_DATE = daysAgo(10);
 async function seedTaxAndFeeSettings() {
   await upsertSettingIgnoringRace({
     key: "SALE_TAX_STOCK",
-    value: "0.1",
-    valueType: "DECIMAL",
-    label: "Thuế bán cổ phiếu (%)",
-    group: "TAX",
-    unit: "%",
-    effectiveFrom: BASELINE,
-  });
-  await upsertSettingIgnoringRace({
-    key: "SALE_TAX_STOCK",
     value: "0.2",
     valueType: "DECIMAL",
     label: "Thuế bán cổ phiếu (%)",
     group: "TAX",
     unit: "%",
     effectiveFrom: RATE_CHANGE_DATE,
-  });
-  await upsertSettingIgnoringRace({
-    key: "TRANSACTION_FEE_BUY_STOCK",
-    value: "0.3",
-    valueType: "DECIMAL",
-    label: "Phí mua cổ phiếu (%)",
-    group: "FEE",
-    unit: "%",
-    effectiveFrom: BASELINE,
-  });
-  await upsertSettingIgnoringRace({
-    key: "TRANSACTION_FEE_SELL_STOCK",
-    value: "0.3",
-    valueType: "DECIMAL",
-    label: "Phí bán cổ phiếu (%)",
-    group: "FEE",
-    unit: "%",
-    effectiveFrom: BASELINE,
   });
   await upsertSettingIgnoringRace({
     key: "TRANSACTION_FEE_SELL_STOCK",

@@ -49,7 +49,7 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
 - Biểu đồ NAV theo thời gian (dựa trên snapshot đã lưu)
 - Biểu đồ phân bổ tài sản (% theo `AssetType` tại thời điểm hiện tại)
 - **Chế độ ẩn số tiền:** nút mắt bật/tắt nhanh trên dashboard + mặc định trong Settings (`User.hideAmountsByDefault`, lưu theo user). Chỉ che giá trị tiền tuyệt đối, giữ nguyên XIRR và các phần trăm.
-- **Cảnh báo tập trung (mới, 2026-07-17):** badge cảnh báo khi một `Holding` vượt `Setting{CONCENTRATION_WARNING_THRESHOLD}` (seed mặc định 30%) — xem `docs/domain/04-pricing-and-valuation.md` mục "Cảnh báo tập trung".
+- **Cảnh báo tập trung (2026-07-17, tinh chỉnh 2026-07-21):** badge cảnh báo khi một `Holding` vượt `Setting{CONCENTRATION_WARNING_THRESHOLD}` (seed mặc định 30%), có materiality khi thiếu giá, ghi chú khi tập trung do ít mã, và hysteresis chống nhấp nháy — xem `docs/domain/04-pricing-and-valuation.md` mục "Cảnh báo tập trung".
 
 ## Phase 7 — Trái tức (lãi trái phiếu)
 - Ghi nhận lãi định kỳ (trái tức) cho `Holding{type: BOND}` — khác công thức % cổ tức cổ phiếu hiện có (Phase 4 chỉ scope cho cổ tức cổ phiếu/tiền mặt).

@@ -43,17 +43,21 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     // Mở lại chi tiết vị thế để tiếp tục ghi giao dịch
     detail = await holdingsPage.openHolding("FPT", detail.url);
 
-    // Mua thêm 100 @ 120k -> giá vốn bình quân recompute thành 110k
+    // Mua thêm 100 @ 120k qua TransactionForm (auto-prefill phí mua
+    // TRANSACTION_FEE_BUY_STOCK = 0.3%, seed sẵn bởi `pnpm db:seed` — khác
+    // NewHoldingPage ở trên, không có field phí) -> giá vốn bình quân =
+    // (100×100.000 + 100×120.000 + phí 36.000) / 200 = 110.180.
     let form = await detail.goToNewTransaction();
     await form.submitBuy({ quantity: 100, pricePerUnit: 120_000 });
     await expect(detail.quantityText).toHaveText("200 cổ phần");
-    await expect(detail.avgCost).toContainText("110k");
+    await expect(detail.avgCost).toContainText("110,18k");
 
-    // Bán một phần 50 @ 130k -> giá vốn bình quân giữ nguyên, SL giảm
+    // Bán một phần 50 @ 130k -> giá vốn bình quân giữ nguyên (chỉ BUY đổi
+    // avgCost), SL giảm
     form = await detail.goToNewTransaction();
     await form.submitSell({ quantity: 50, pricePerUnit: 130_000 });
     await expect(detail.quantityText).toHaveText("150 cổ phần");
-    await expect(detail.avgCost).toContainText("110k");
+    await expect(detail.avgCost).toContainText("110,18k");
 
     // Bán vượt số lượng đang giữ -> bị chặn
     form = await detail.goToNewTransaction();
@@ -92,7 +96,7 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
     let holdingsPage = new HoldingsPage(page);
     await holdingsPage.goto();
     const newHoldingPage = await holdingsPage.goToNewHolding();
-    let detail = await newHoldingPage.create({
+    const detail = await newHoldingPage.create({
       symbol: "VNM",
       quantity: 50,
       pricePerUnit: 80_000,
@@ -108,11 +112,15 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
     await expect(holdingsPage.holdingLink("VNM")).toHaveCount(0);
 
     // Vị thế đóng xuất hiện đúng ở route "Đã đóng" (điều hướng qua segmented nav)
+    // — dòng vị thế đóng là <button> mở ClosedPositionSheet (phase-6), không
+    // phải <Link>, xem closedHoldingButton().
     await holdingsPage.openClosed();
-    await expect(holdingsPage.holdingLink("VNM")).toBeVisible();
+    await expect(holdingsPage.closedHoldingButton("VNM")).toBeVisible();
 
-    // Mở lại chi tiết vị thế đã đóng để thao tác xóa giao dịch
-    detail = await holdingsPage.openHolding("VNM", detail.url);
+    // Tới chi tiết vị thế đã đóng để thao tác xóa giao dịch — qua đúng UI:
+    // bấm dòng vị thế mở ClosedPositionSheet, rồi bấm link "Sửa / xoá giao
+    // dịch đã ghi" trong sheet (code review #1, PR #81).
+    await holdingsPage.openClosedHolding("VNM", detail.url);
 
     // Xóa BUY khi vẫn còn SELL phụ thuộc -> bị chặn
     await detail.deleteTransaction("80.000");

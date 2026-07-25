@@ -109,11 +109,19 @@ Seed ([`prisma/seed.ts`](../prisma/seed.ts)) **idempotent** (dùng `upsert`), t�
 
 - **`AllowedUser` admin đầu tiên** (`canInvite = true`) từ `SEED_ADMIN_EMAIL`. App có allowlist —
   **không seed thì không ai đăng nhập được**, kể cả bạn.
-- **Setting `MAX_MEMBERS = 10`**.
+- **Mọi `Setting` app cần để chạy đúng** (`MAX_MEMBERS`, ngưỡng cảnh báo tập trung, thuế/phí giao
+  dịch, thuế cổ tức...) — xem danh sách đầy đủ trong chính `prisma/seed.ts`. **Không có migration
+  nào insert `Setting`** (toàn bộ 14 key hiện tại đều seed-only, cố ý — xem
+  [`docs/domain/09-settings.md`](./domain/09-settings.md)); thiếu dòng nào, tính năng đọc đúng key
+  đó sẽ throw `SETTING_NOT_FOUND` ngay lần đầu chạy (docs/rules/error-handling.md — "thiếu cấu hình
+  -> báo lỗi", cố ý không fallback ngầm).
 
-Sau lần đầu, thêm thành viên bằng chức năng **mời thành viên** trong app (admin `canInvite`), không
-chạy seed lại. Đừng đưa seed vào Build Command Vercel (chạy lại vô ích + phải lộ `SEED_ADMIN_EMAIL`
-trong env production).
+**Re-seed BẮT BUỘC mỗi khi `prisma/seed.ts` có thêm `Setting` key mới** (vd phase sau thêm ngưỡng/
+loại phí mới) — chạy lại đúng lệnh `db:seed` ở trên sau khi deploy migration mới, **không phải chỉ
+1 lần duy nhất lúc khởi tạo**. `upsert` khiến việc chạy lại an toàn (dữ liệu cũ giữ nguyên, chỉ thêm
+key thiếu) — khác thêm thành viên (dùng chức năng **mời thành viên** trong app, không qua seed).
+Đừng đưa seed vào Build Command Vercel (chạy lại vô ích mỗi lần deploy + phải lộ
+`SEED_ADMIN_EMAIL` trong env production) — vẫn phải nhớ chạy tay khi seed.ts đổi.
 
 ## 6. Google OAuth redirect URI
 
@@ -133,7 +141,8 @@ deployments cần đăng nhập, thêm cả domain preview tương ứng.
 - [ ] Vercel: khai báo `DATABASE_URL` (pooled), `DIRECT_URL` (direct), `AUTH_SECRET`,
       `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`.
 - [ ] `schema.prisma` có `directUrl`; Build Command = `prisma migrate deploy && next build`.
-- [ ] Chạy tay 1 lần: `db:migrate:deploy` → `db:seed` (kèm `SEED_ADMIN_EMAIL`) trỏ vào Neon.
+- [ ] Chạy tay: `db:migrate:deploy` → `db:seed` (kèm `SEED_ADMIN_EMAIL`) trỏ vào Neon — lặp lại
+      `db:seed` mỗi lần `prisma/seed.ts` có thêm `Setting` key mới, không chỉ lần đầu.
 - [ ] Google OAuth redirect URI khớp domain production.
 - [ ] Đăng nhập thử bằng email admin → vào được app.
 - [ ] Không có secret nào lọt vào git (`.env`, commit, log).

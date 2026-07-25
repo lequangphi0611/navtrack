@@ -42,6 +42,14 @@ export const SETTING_KEYS = {
   TRANSACTION_FEE_SELL_FUND: "TRANSACTION_FEE_SELL_FUND",
   TRANSACTION_FEE_SELL_BOND: "TRANSACTION_FEE_SELL_BOND",
   TRANSACTION_FEE_SELL_GOLD: "TRANSACTION_FEE_SELL_GOLD",
+  // docs/domain/04-pricing-and-valuation.md mục "Cảnh báo tập trung" — ngưỡng %
+  // NAV một Holding chiếm trên tổng danh mục để gắn cờ cảnh báo tập trung.
+  // Resolve theo `atDate = hôm nay` (KHÔNG effective-dated theo giao dịch,
+  // giống MAX_MEMBERS) — xem lib/concentration.ts. `5%` (materiality
+  // MISSING_PRICE) và `3 điểm %` (hysteresis buffer) là hằng số code trong
+  // lib/concentration.ts, KHÔNG phải Setting (tham số chống nhiễu hiển thị,
+  // khác khẩu vị rủi ro của user).
+  CONCENTRATION_WARNING_THRESHOLD: "CONCENTRATION_WARNING_THRESHOLD",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

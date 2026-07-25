@@ -149,3 +149,51 @@ commit** (kèm trỏ file/spec gốc). Cách viết e2e chung ở
   **Muốn nâng `workers` về sau:** trước hết phải làm mọi ghi vào record dùng chung chịu được
   đồng thời (upsert nuốt `P2002` như #8, hoặc tách khoá theo test) — không nâng workers trước
   khi isolate xong, sẽ tái hiện đúng lỗi này.
+
+## 15. Thiếu `Setting` toàn cục mới thêm → lỗi render "thoáng qua" ở NHIỀU spec không liên quan, dễ tưởng nhầm là flake
+
+- **Triệu chứng:** merge phase-6 (Concentration warning) vào — 3 test ở `holdings.spec.ts`/
+  `dividends.spec.ts` fail cứng (không phải flaky, fail y hệt mọi lần) với
+  `SETTING_NOT_FOUND: "CONCENTRATION_WARNING_THRESHOLD"`; nhiều spec KHÁC cũng gọi cùng
+  component (`HoldingsPositionsSection`) và cũng log lỗi này ở webServer nhưng lại **pass** —
+  dễ tưởng đây là nhiễu môi trường thay vì bug thật.
+- **Nguyên nhân:** `getConcentrationBadges()` (`lib/portfolio-valuation.ts`) đọc `Setting`
+  toàn cục `CONCENTRATION_WARNING_THRESHOLD` mỗi lần render section danh sách vị thế — tức
+  GẦN NHƯ MỌI spec chạm `/holdings`, không riêng feature vừa thêm. `scripts/e2e.mjs` khi đó
+  chỉ `prisma migrate deploy`, không chạy seed nào nên `Setting` này (và các key tương tự như
+  `DIVIDEND_TAX_RATE`, trước đó phải tự seed rải rác ở `dividends.spec.ts`/
+  `tax-and-fee.spec.ts`) không tự có trên DB e2e. Lỗi throw ở một Suspense boundary con nên
+  KHÔNG sập cả trang — chỉ test nào có assertion chạm đúng khu vực/thời điểm đó mới lộ fail,
+  phần lớn test khác "tình cờ" qua dù webServer vẫn log lỗi.
+- **Cách né (giải pháp cuối, sau khi cân nhắc cả seed riêng theo spec):** `scripts/e2e.mjs`
+  giờ chạy `pnpm exec prisma db seed` (dùng CHUNG `prisma/seed.ts` với DB dev) ngay sau
+  `migrate deploy` — mọi `Setting` toàn cục có sẵn từ đầu, không cần đoán key nào "đủ rộng"
+  để đáng seed tập trung. `.env.test` cần thêm `SEED_ADMIN_EMAIL` (giả, `seed.ts` throw nếu
+  thiếu). Spec **chỉ còn seed thêm giá trị RIÊNG cho kịch bản đang test** mà `db:seed` không
+  biết — vd `tax-and-fee.spec.ts` seed thêm 1 mốc `effectiveFrom` thứ hai (thuế suất mới) để
+  test "đổi thuế áp đúng theo ngày", KHÔNG seed lại giá trị baseline nữa (đã trùng `db:seed`,
+  dễ lệch âm thầm nếu sau này 2 nơi update khác nhau — xoá hẳn phần trùng thay vì giữ "cho
+  chắc"). **Thêm `Setting` mới mà code đọc nó ở path chạy qua nhiều/mọi spec** → thêm vào
+  `prisma/seed.ts`, không tự seed rải rác trong spec hay `test-session.ts`.
+
+## 16. UI redesign đổi dòng danh sách từ `<Link>` sang `<button>` mở Sheet → spec cũ dùng `getByRole("link")` fail
+
+- **Triệu chứng:** merge phase-6 vào — `holdings.spec.ts` fail ở bước "mở lại chi tiết vị thế
+  đã đóng": `getByRole('link', { name: /VNM/ })` không tìm thấy dù dòng vị thế hiện rõ trên
+  UI (thấy trong page snapshot lúc fail).
+- **Nguyên nhân:** phase-6 vẽ lại tab "Đã đóng" (`ClosedHoldingRow`) thành `<button>` mở
+  `ClosedPositionSheet` (client state, mockup 6i) thay vì `<Link>` điều hướng thẳng
+  `/holdings/[id]` như trước — spec viết TRƯỚC phase-6 giả định sai role.
+- **Cách né:** `HoldingsPage.closedHoldingButton(symbol)` (role `"button"`, riêng cho tab "Đã
+  đóng") thay vì `holdingLink()` (chỉ đúng cho tab "Đang mở").
+- **Cập nhật (code review PR #81):** bản đầu của phase-6 khiến `ClosedPositionSheet` chỉ có
+  action "Mở lại vị thế" (tạo giao dịch mua mới), **mất hẳn** đường quay lại trang chi tiết
+  đầy đủ (lịch sử giao dịch, nút xóa) — người dùng ghi nhầm giao dịch khiến vị thế đóng thì
+  không còn cách sửa/xóa qua UI. Đã thêm lại link "Sửa / xoá giao dịch đã ghi"
+  (`ROUTES.holdingDetail`) trong sheet. Dùng `HoldingsPage.openClosedHolding(symbol,
+holdingUrl)` (bấm dòng vị thế mở sheet → bấm link → pin đúng URL, cùng tinh thần
+  `openHolding()`) thay vì `detail.goto()` trực tiếp — bài học: một fix quay lại UI phải đi
+  kèm spec exercise LẠI qua UI đó, không chỉ né bằng điều hướng thẳng URL.
+- **Bài học chung:** một UI redesign đổi loại phần tử tương tác (Link ↔ button/Sheet) cho MÀN
+  ĐÃ CÓ SPEC TỪ TRƯỚC vẫn có thể lọt qua review nếu spec cũ không được chạy lại — luôn `pnpm
+e2e` toàn bộ spec chạm route bị đổi UI trước khi merge, không chỉ spec của feature mới.
