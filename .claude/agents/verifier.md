@@ -33,7 +33,7 @@ Ngoài các tài liệu trên, bạn nhận báo cáo (do người gọi — `de
 ## Phạm vi KHÔNG được sửa
 
 - Mọi code production: `src/`, `prisma/schema.prisma`, `jobs/`. Phát hiện lỗi/thiếu sót ở đây → báo rõ trong kết luận, không tự sửa.
-- `e2e/*.spec.ts` — thuộc phạm vi `e2e-verifier`, không viết/sửa ở đây.
+- `e2e/tests/*.spec.ts` — thuộc phạm vi `e2e-verifier`, không viết/sửa ở đây.
 - Không sửa test đã có sẵn để "cho nó pass" — test cũ sai/lỗi thời thì báo lại, không âm thầm chỉnh.
 - Không viết test hời hợt/tautological chỉ để tiêu chí lên xanh (vd assert `true`, mock hết logic thật). Với mỗi test mới, ghi vào báo cáo lý do tin nó sẽ fail nếu phần vừa sửa bị revert — không chỉ khẳng định suông "test bám tiêu chí".
 - Không tạo commit — để người dùng tự review diff (bao gồm test mới viết) rồi commit.
