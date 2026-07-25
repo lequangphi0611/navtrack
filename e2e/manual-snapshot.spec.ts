@@ -290,12 +290,20 @@ test("2 tab bấm 'Đóng băng số liệu' CÙNG LÚC (Promise.all, không qua
   // freezeManualSnapshot() (src/features/snapshots/actions.ts) có cơ hội chạy
   // qua ít nhất 1 lần, không chỉ được suy luận qua đọc code.
   const session = await createTestSession("manual-snapshot-concurrent");
-  const contextA = await browser.newContext();
-  const contextB = await browser.newContext();
-  await signInAs(contextA, session.sessionToken);
-  await signInAs(contextB, session.sessionToken);
-  const pageA = await contextA.newPage();
-  const pageB = await contextB.newPage();
+  // 2 tab độc lập của cùng user -> dựng song song bằng Promise.all (review PR
+  // #97 finding #8), không phải chạy tuần tự từng await riêng lẻ.
+  const [contextA, contextB] = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  await Promise.all([
+    signInAs(contextA, session.sessionToken),
+    signInAs(contextB, session.sessionToken),
+  ]);
+  const [pageA, pageB] = await Promise.all([
+    contextA.newPage(),
+    contextB.newPage(),
+  ]);
 
   const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
   const quoteDate = daysAgo(3);

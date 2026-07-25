@@ -137,8 +137,15 @@ export class HoldingDetailPage {
   // bám class Tailwind (`div.rounded-2xl.border-border`), giòn với đổi style
   // (GOTCHAS #10). Component không có role list/listitem sẵn nên đây là ngoại
   // lệ có kiểm soát theo rule mục 5, không phải mặc định.
+  //
+  // Neo biên không-phải-số quanh `amount` (thay vì substring tự do) — tránh
+  // khớp nhầm khi 2 giao dịch có số tiền chứa nhau (vd "80.000" là substring
+  // của "180.000", review PR #97 finding #4).
   transactionRow(amount: string): Locator {
-    return this.page.getByTestId("transaction-row").filter({ hasText: amount });
+    const escaped = amount.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return this.page
+      .getByTestId("transaction-row")
+      .filter({ hasText: new RegExp(`(?<!\\d)${escaped}(?!\\d)`) });
   }
 
   // Bấm "Xóa" trên dòng giao dịch khớp `amount`. Gọi listener dialog ngay

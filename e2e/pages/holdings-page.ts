@@ -1,12 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { stripQuery } from "../support/urls";
 import { HoldingDetailPage } from "./holding-detail-page";
 import { NewHoldingPage } from "./new-holding-page";
-
-// Khớp cả khi bấm vào 1 vị thế từ tab "Mở" lẫn "Đã đóng" — không kèm cashflowId
-// (khác redirect sau tạo/ghi giao dịch), chỉ điều hướng thường qua link.
-const HOLDING_DETAIL_URL = /\/holdings\/(?!new$|closed$)[a-z0-9]+$/;
 
 // Màn hình danh sách vị thế (/holdings, /holdings/closed) — hai tab cùng route
 // gốc, xem HoldingsSegmentedNav.
@@ -52,10 +47,19 @@ export class HoldingsPage {
     return newHoldingPage;
   }
 
-  async openHolding(symbol: string): Promise<HoldingDetailPage> {
+  // Nhận `holdingUrl` đã biết trước (từ NewHoldingPage.create() hoặc
+  // HoldingDetailPage.url của cùng vị thế) để `waitForURL` pin ĐÚNG URL đó —
+  // không dùng regex khớp bất kỳ holding nào. Bug router-cache (issue #77)
+  // khiến điều hướng dừng ở URL cũ vẫn khớp regex lỏng, chỉ pin đúng URL mới
+  // bắt được sai lệch ngay tại điểm điều hướng (thay vì trôi xuống assertion
+  // nghiệp vụ phía sau mới lộ ra, nếu lộ ra).
+  async openHolding(
+    symbol: string,
+    holdingUrl: string,
+  ): Promise<HoldingDetailPage> {
     await this.holdingLink(symbol).click();
-    await this.page.waitForURL(HOLDING_DETAIL_URL);
-    return new HoldingDetailPage(this.page, stripQuery(this.page.url()));
+    await this.page.waitForURL(holdingUrl);
+    return new HoldingDetailPage(this.page, holdingUrl);
   }
 
   async openClosed() {

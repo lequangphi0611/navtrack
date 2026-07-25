@@ -174,30 +174,34 @@ export class TransactionForm {
   }
 
   async submitBuy({ quantity, pricePerUnit }: TransactionInput) {
-    await this.quantityInput.fill(String(quantity));
-    await this.priceInput.fill(String(pricePerUnit));
+    await this.fillQuantity(quantity);
+    await this.fillPricePerUnit(pricePerUnit);
     await this.submitBuyButton.click();
     await this.page.waitForURL(afterTransactionUrl(this.holdingUrl));
   }
 
-  async submitSell({ quantity, pricePerUnit }: TransactionInput) {
-    await this.sellToggle.click();
-    await this.quantityInput.fill(String(quantity));
-    await this.priceInput.fill(String(pricePerUnit));
+  // Fill + bấm "Ghi nhận giao dịch bán" — dùng chung cho submitSell() (ca
+  // hợp lệ, có redirect) và submitSellExceedingQuantity() (ca bị chặn, không
+  // redirect) để không lặp 2 lần cùng chuỗi toggle/fill (review PR #97 finding #6).
+  private async fillAndSubmitSell({
+    quantity,
+    pricePerUnit,
+  }: TransactionInput) {
+    await this.toggleSell();
+    await this.fillQuantity(quantity);
+    await this.fillPricePerUnit(pricePerUnit);
     await this.submitSellButton.click();
+  }
+
+  async submitSell(input: TransactionInput) {
+    await this.fillAndSubmitSell(input);
     await this.page.waitForURL(afterTransactionUrl(this.holdingUrl));
   }
 
   // Bán vượt số lượng đang giữ bị chặn -> không redirect, spec tự expect lỗi
   // qua HoldingDetailPage.sellExceedsQuantityError. Không dùng chung
   // submitSell() (vốn chờ waitForURL) vì ca này cố ý không điều hướng.
-  async submitSellExceedingQuantity({
-    quantity,
-    pricePerUnit,
-  }: TransactionInput) {
-    await this.sellToggle.click();
-    await this.quantityInput.fill(String(quantity));
-    await this.priceInput.fill(String(pricePerUnit));
-    await this.submitSellButton.click();
+  async submitSellExceedingQuantity(input: TransactionInput) {
+    await this.fillAndSubmitSell(input);
   }
 }

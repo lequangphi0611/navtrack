@@ -41,7 +41,7 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     await expect(holdingsPage.holdingLink("FPT")).toBeVisible();
 
     // Mở lại chi tiết vị thế để tiếp tục ghi giao dịch
-    detail = await holdingsPage.openHolding("FPT");
+    detail = await holdingsPage.openHolding("FPT", detail.url);
 
     // Mua thêm 100 @ 120k -> giá vốn bình quân recompute thành 110k
     let form = await detail.goToNewTransaction();
@@ -112,7 +112,7 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
     await expect(holdingsPage.holdingLink("VNM")).toBeVisible();
 
     // Mở lại chi tiết vị thế đã đóng để thao tác xóa giao dịch
-    detail = await holdingsPage.openHolding("VNM");
+    detail = await holdingsPage.openHolding("VNM", detail.url);
 
     // Xóa BUY khi vẫn còn SELL phụ thuộc -> bị chặn
     await detail.deleteTransaction("80.000");
@@ -128,14 +128,24 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
 });
 
 test("cách ly dữ liệu giữa hai tài khoản", async ({ browser }) => {
-  const sessionA = await createTestSession("isolation-a");
-  const sessionB = await createTestSession("isolation-b");
-  const contextA = await browser.newContext();
-  const contextB = await browser.newContext();
-  await signInAs(contextA, sessionA.sessionToken);
-  await signInAs(contextB, sessionB.sessionToken);
-  const pageA = await contextA.newPage();
-  const pageB = await contextB.newPage();
+  // 2 tài khoản độc lập -> dựng song song bằng Promise.all (review PR #97
+  // finding #8), không phải chạy tuần tự từng await riêng lẻ.
+  const [sessionA, sessionB] = await Promise.all([
+    createTestSession("isolation-a"),
+    createTestSession("isolation-b"),
+  ]);
+  const [contextA, contextB] = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  await Promise.all([
+    signInAs(contextA, sessionA.sessionToken),
+    signInAs(contextB, sessionB.sessionToken),
+  ]);
+  const [pageA, pageB] = await Promise.all([
+    contextA.newPage(),
+    contextB.newPage(),
+  ]);
 
   try {
     const holdingsPageA = new HoldingsPage(pageA);

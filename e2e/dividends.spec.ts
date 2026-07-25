@@ -206,7 +206,7 @@ test("Ghi cổ tức cổ phiếu: soft-nav quay lại /holdings và Dashboard v
     // Quay lại holding qua toàn Link click (Danh mục -> chọn mã -> Ghi cổ tức),
     // không page.goto — giữ nguyên Router Cache đã ghim ở trên.
     holdingsPage = await bottomNav.goToHoldings();
-    detail = await holdingsPage.openHolding(symbol);
+    detail = await holdingsPage.openHolding(symbol, detail.url);
     const form = await detail.goToNewDividend();
 
     await form.selectStockType();
@@ -286,6 +286,9 @@ test("Ghi cổ tức cổ phiếu: số lẻ tự làm tròn xuống, báo rõ +
     await detail.goto();
     await expect(detail.quantityText).toHaveText("117 cổ phần");
 
+    // goto() trực tiếp (không qua form.goToHistory()) — cố ý, cùng lý do hard
+    // nav ở trên: "CẢ 2 kênh" nghĩa là cả kênh lịch sử cũng phải loại trừ
+    // cache client-side, không phải quên gọi flow (review PR #97 finding #10).
     const historyPage = new DividendHistoryPage(page, detail.url);
     await historyPage.goto();
     await expect(historyPage.entry("Cổ phiếu 11%")).toBeVisible();
@@ -1016,12 +1019,14 @@ test("Cổ tức tiền mặt hiện đúng vị trí trong timeline dòng tiề
     // client-side, chỉ còn lại đúng dữ liệu server-side thật.
     await detail.goto();
 
+    // Neo regex vào ĐẦU text (label luôn là node đầu tiên của dòng, xem
+    // build-cashflow-timeline.ts) thay vì substring match tự do — tránh
+    // findIndex trả sai lặng lẽ nếu 2 label vô tình chung substring
+    // (review PR #97 finding #2).
     const rowTexts = await detail.cashflowTimelineRows.allTextContents();
-    const buyIndex = rowTexts.findIndex((t) => t.includes("Mua"));
-    const sellIndex = rowTexts.findIndex((t) => t.includes("Bán"));
-    const dividendIndex = rowTexts.findIndex((t) =>
-      t.includes("Cổ tức tiền mặt"),
-    );
+    const buyIndex = rowTexts.findIndex((t) => /^Mua /.test(t));
+    const sellIndex = rowTexts.findIndex((t) => /^Bán /.test(t));
+    const dividendIndex = rowTexts.findIndex((t) => /^Cổ tức tiền mặt/.test(t));
 
     expect(buyIndex).toBeGreaterThanOrEqual(0);
     expect(sellIndex).toBeGreaterThan(buyIndex);

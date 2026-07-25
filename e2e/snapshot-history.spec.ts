@@ -157,14 +157,24 @@ test("mở /snapshots thấy đúng lịch sử thật (không phải sample cũ
 test("cách ly quyền: user khác cố mở URL /snapshots/[id] của snapshot thuộc user A -> 404, không lộ dữ liệu", async ({
   browser,
 }) => {
-  const sessionA = await createTestSession("snapshot-detail-isolation-a");
-  const sessionB = await createTestSession("snapshot-detail-isolation-b");
-  const contextA = await browser.newContext();
-  const contextB = await browser.newContext();
-  await signInAs(contextA, sessionA.sessionToken);
-  await signInAs(contextB, sessionB.sessionToken);
-  const pageA = await contextA.newPage();
-  const pageB = await contextB.newPage();
+  // 2 tài khoản độc lập -> dựng song song bằng Promise.all (review PR #97
+  // finding #8), không phải chạy tuần tự từng await riêng lẻ.
+  const [sessionA, sessionB] = await Promise.all([
+    createTestSession("snapshot-detail-isolation-a"),
+    createTestSession("snapshot-detail-isolation-b"),
+  ]);
+  const [contextA, contextB] = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  await Promise.all([
+    signInAs(contextA, sessionA.sessionToken),
+    signInAs(contextB, sessionB.sessionToken),
+  ]);
+  const [pageA, pageB] = await Promise.all([
+    contextA.newPage(),
+    contextB.newPage(),
+  ]);
 
   try {
     const snapshotA = await db.snapshot.create({

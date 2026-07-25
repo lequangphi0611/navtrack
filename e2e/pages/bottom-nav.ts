@@ -2,6 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { DashboardPage } from "./dashboard-page";
 import { HoldingsPage } from "./holdings-page";
+import { SettingsPage } from "./settings-page";
 
 // BottomNav — thanh điều hướng cố định dùng chung 3 màn gốc (Tổng quan/Danh
 // mục/Cài đặt), KHÔNG có ở màn con/form (component object vì xuất hiện nhiều
@@ -19,6 +20,10 @@ export class BottomNav {
     return this.page.getByRole("link", { name: "Danh mục" });
   }
 
+  get settingsTab(): Locator {
+    return this.page.getByRole("link", { name: "Cài đặt" });
+  }
+
   async goToDashboard(): Promise<DashboardPage> {
     const dashboardPage = new DashboardPage(this.page);
     await this.dashboardTab.click();
@@ -31,5 +36,12 @@ export class BottomNav {
     await this.holdingsTab.click();
     await this.page.waitForURL(holdingsPage.url);
     return holdingsPage;
+  }
+
+  async goToSettings(): Promise<SettingsPage> {
+    const settingsPage = new SettingsPage(this.page);
+    await this.settingsTab.click();
+    await this.page.waitForURL(settingsPage.url);
+    return settingsPage;
   }
 }
