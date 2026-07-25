@@ -16,7 +16,8 @@ dưới, đọc **trước khi viết/sửa/chạy** bất kỳ e2e nào — đ�
 
 - **Claude Local:** `pnpm e2e` (hoặc `pnpm e2e <file>`). Script `scripts/e2e.mjs` tự dựng
   Postgres ephemeral (`docker-compose.test.yml`, cổng 5434, `.env.test`), `prisma migrate
-  deploy`, chạy test, rồi `down` — kể cả khi fail. **Không bao giờ** nhắm e2e vào DB dev.
+  deploy` + `prisma db seed` (seed toàn bộ `Setting` toàn cục — xem GOTCHAS #15), chạy test,
+  rồi `down` — kể cả khi fail. **Không bao giờ** nhắm e2e vào DB dev.
 - **Claude Cloud:** **skip** — cần Docker, không có ở Cloud. Báo rõ "chưa verify e2e được
   trong Claude Cloud", **không báo pass giả** (xem [`../TOOLS.md`](../TOOLS.md)).
 

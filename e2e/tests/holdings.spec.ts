@@ -43,17 +43,21 @@ test("nhập vị thế ban đầu, ghi giao dịch mua/bán, tính giá vốn b
     // Mở lại chi tiết vị thế để tiếp tục ghi giao dịch
     detail = await holdingsPage.openHolding("FPT", detail.url);
 
-    // Mua thêm 100 @ 120k -> giá vốn bình quân recompute thành 110k
+    // Mua thêm 100 @ 120k qua TransactionForm (auto-prefill phí mua
+    // TRANSACTION_FEE_BUY_STOCK = 0.3%, seed sẵn bởi `pnpm db:seed` — khác
+    // NewHoldingPage ở trên, không có field phí) -> giá vốn bình quân =
+    // (100×100.000 + 100×120.000 + phí 36.000) / 200 = 110.180.
     let form = await detail.goToNewTransaction();
     await form.submitBuy({ quantity: 100, pricePerUnit: 120_000 });
     await expect(detail.quantityText).toHaveText("200 cổ phần");
-    await expect(detail.avgCost).toContainText("110k");
+    await expect(detail.avgCost).toContainText("110,18k");
 
-    // Bán một phần 50 @ 130k -> giá vốn bình quân giữ nguyên, SL giảm
+    // Bán một phần 50 @ 130k -> giá vốn bình quân giữ nguyên (chỉ BUY đổi
+    // avgCost), SL giảm
     form = await detail.goToNewTransaction();
     await form.submitSell({ quantity: 50, pricePerUnit: 130_000 });
     await expect(detail.quantityText).toHaveText("150 cổ phần");
-    await expect(detail.avgCost).toContainText("110k");
+    await expect(detail.avgCost).toContainText("110,18k");
 
     // Bán vượt số lượng đang giữ -> bị chặn
     form = await detail.goToNewTransaction();

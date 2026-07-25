@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
-import { Prisma, PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import Decimal from "decimal.js";
 
 import { BottomNav } from "../pages/bottom-nav";
@@ -18,72 +18,11 @@ import {
   signInAs,
 } from "../support/test-session";
 
-// `DIVIDEND_TAX_RATE`/`DIVIDEND_PAR_VALUE` (Setting, docs/domain/03-dividends.md)
-// KHÔNG được seed tự động cho DB e2e — scripts/e2e.mjs chỉ `prisma migrate
-// deploy`, không chạy `pnpm db:seed` (khác DB dev). Thiếu 2 key này,
-// resolveDecimalSetting() (features/dividends/actions.ts + page.tsx) throw
-// AppError ngay lúc render -> trang /dividends/new sập. Seed trực tiếp qua
-// Prisma trước cả file — không cleanup vì Setting không scoped theo user, giữ
-// lại vô hại cho lần chạy sau (idempotent upsert, giống PriceQuote ở
-// nav-override.spec.ts).
+// PrismaClient riêng (không export từ test-session.ts) vì dùng ở nhiều spec —
+// seed/dọn PriceQuote, tra NavOverride. `DIVIDEND_TAX_RATE`/`DIVIDEND_PAR_VALUE`
+// (docs/domain/03-dividends.md) seed sẵn bởi `pnpm db:seed` (scripts/e2e.mjs,
+// chạy sau migrate) — không cần tự seed ở đây nữa (xem e2e/GOTCHAS.md #15).
 const db = new PrismaClient();
-const DIVIDEND_SETTING_BASELINE = new Date("2020-01-01");
-
-// `fullyParallel: true` (playwright.config.ts) có thể phân test của file này
-// ra NHIỀU worker -> test.beforeAll chạy một lần MỖI worker, không phải một
-// lần duy nhất cho cả file. Nhiều worker cùng upsert() một dòng chưa tồn tại
-// đua nhau INSERT -> P2002 (unique constraint) dù dùng upsert (không atomic
-// tuyệt đối dưới race thật). Coi P2002 là "đã có worker khác seed xong" — bỏ
-// qua, không phải lỗi.
-async function upsertSettingIgnoringRace(
-  data: Prisma.SettingCreateInput & { key: string; effectiveFrom: Date },
-) {
-  try {
-    await db.setting.upsert({
-      where: {
-        key_effectiveFrom: {
-          key: data.key,
-          effectiveFrom: data.effectiveFrom,
-        },
-      },
-      update: {},
-      create: data,
-    });
-  } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
-      return;
-    }
-    throw err;
-  }
-}
-
-async function seedDividendSettings() {
-  await upsertSettingIgnoringRace({
-    key: "DIVIDEND_TAX_RATE",
-    value: "5",
-    valueType: "DECIMAL",
-    label: "Thuế cổ tức tiền mặt (%)",
-    group: "TAX",
-    unit: "%",
-    effectiveFrom: DIVIDEND_SETTING_BASELINE,
-  });
-  await upsertSettingIgnoringRace({
-    key: "DIVIDEND_PAR_VALUE",
-    value: "10000",
-    valueType: "DECIMAL",
-    label: "Mệnh giá cổ tức (đ/CP)",
-    group: "TAX",
-    unit: "đ/CP",
-    effectiveFrom: DIVIDEND_SETTING_BASELINE,
-  });
-}
-
-test.beforeAll(async () => {
-  await seedDividendSettings();
-});
 
 test.afterAll(async () => {
   await db.$disconnect();

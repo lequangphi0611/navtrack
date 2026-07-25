@@ -159,17 +159,22 @@ commit** (kèm trỏ file/spec gốc). Cách viết e2e chung ở
   dễ tưởng đây là nhiễu môi trường thay vì bug thật.
 - **Nguyên nhân:** `getConcentrationBadges()` (`lib/portfolio-valuation.ts`) đọc `Setting`
   toàn cục `CONCENTRATION_WARNING_THRESHOLD` mỗi lần render section danh sách vị thế — tức
-  GẦN NHƯ MỌI spec chạm `/holdings`, không riêng feature vừa thêm. `scripts/e2e.mjs` chỉ
-  `prisma migrate deploy`, không chạy `pnpm db:seed` (khác DB dev) nên `Setting` này (và các
-  key tương tự như `DIVIDEND_TAX_RATE`) không tự có trên DB e2e. Lỗi throw ở one Suspense
-  boundary con nên KHÔNG sập cả trang — chỉ test nào có assertion chạm đúng khu vực/thời điểm
-  đó mới lộ fail, phần lớn test khác "tình cờ" qua dù webServer vẫn log lỗi.
-- **Cách né:** seed idempotent (`upsert`) ngay trong `createTestSession()`
-  (`support/test-session.ts`, gọi bởi MỌI spec) thay vì rải lại per-spec như
-  `DIVIDEND_TAX_RATE`/`DIVIDEND_PAR_VALUE` đang làm ở `dividends.spec.ts` — key này cross-
-  cutting quá rộng để scoped theo 1 file. **Mỗi khi thêm `Setting` mới mà code đọc nó ở path
-  chạy qua nhiều/mọi spec** (không phải 1 feature hẹp), seed ở `test-session.ts`, không phải
-  từng spec riêng lẻ.
+  GẦN NHƯ MỌI spec chạm `/holdings`, không riêng feature vừa thêm. `scripts/e2e.mjs` khi đó
+  chỉ `prisma migrate deploy`, không chạy seed nào nên `Setting` này (và các key tương tự như
+  `DIVIDEND_TAX_RATE`, trước đó phải tự seed rải rác ở `dividends.spec.ts`/
+  `tax-and-fee.spec.ts`) không tự có trên DB e2e. Lỗi throw ở một Suspense boundary con nên
+  KHÔNG sập cả trang — chỉ test nào có assertion chạm đúng khu vực/thời điểm đó mới lộ fail,
+  phần lớn test khác "tình cờ" qua dù webServer vẫn log lỗi.
+- **Cách né (giải pháp cuối, sau khi cân nhắc cả seed riêng theo spec):** `scripts/e2e.mjs`
+  giờ chạy `pnpm exec prisma db seed` (dùng CHUNG `prisma/seed.ts` với DB dev) ngay sau
+  `migrate deploy` — mọi `Setting` toàn cục có sẵn từ đầu, không cần đoán key nào "đủ rộng"
+  để đáng seed tập trung. `.env.test` cần thêm `SEED_ADMIN_EMAIL` (giả, `seed.ts` throw nếu
+  thiếu). Spec **chỉ còn seed thêm giá trị RIÊNG cho kịch bản đang test** mà `db:seed` không
+  biết — vd `tax-and-fee.spec.ts` seed thêm 1 mốc `effectiveFrom` thứ hai (thuế suất mới) để
+  test "đổi thuế áp đúng theo ngày", KHÔNG seed lại giá trị baseline nữa (đã trùng `db:seed`,
+  dễ lệch âm thầm nếu sau này 2 nơi update khác nhau — xoá hẳn phần trùng thay vì giữ "cho
+  chắc"). **Thêm `Setting` mới mà code đọc nó ở path chạy qua nhiều/mọi spec** → thêm vào
+  `prisma/seed.ts`, không tự seed rải rác trong spec hay `test-session.ts`.
 
 ## 16. UI redesign đổi dòng danh sách từ `<Link>` sang `<button>` mở Sheet → spec cũ dùng `getByRole("link")` fail
 
