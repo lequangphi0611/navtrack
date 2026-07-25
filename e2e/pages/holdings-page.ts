@@ -26,6 +26,14 @@ export class HoldingsPage {
     return this.page.getByRole("link", { name: new RegExp(symbol) });
   }
 
+  // ConcentrationBadge (mục 6/13 phase-6.md) — pill "X% danh mục" / "Tạm ẩn"
+  // nằm bên trong CHÍNH dòng <Link> của holding (HoldingsGroupCard.tsx), không
+  // phải phần tử tách rời — scope qua holdingLink() để phân biệt đúng mã khi
+  // có nhiều holding cùng hiện badge.
+  concentrationBadge(symbol: string): Locator {
+    return this.holdingLink(symbol).getByText(/danh mục|Tạm ẩn/);
+  }
+
   // Dòng vị thế ĐÃ ĐÓNG (ClosedHoldingRow, tab "Đã đóng") — KHÁC holdingLink()
   // ở trên: đây là <button> mở ClosedPositionSheet (client state), không phải
   // <Link> điều hướng. Sheet chỉ có "Mở lại vị thế" (ROUTES.newTransaction),

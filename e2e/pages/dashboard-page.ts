@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
+import { AllocationPage } from "./allocation-page";
 import { TransactionHoldingPicker } from "./transaction-holding-picker";
 
 // "/" — Dashboard tổng quan (mockup 2a/2f).
@@ -92,6 +93,54 @@ export class DashboardPage {
   async openCostDragSheet(): Promise<Locator> {
     await this.costDragTrigger.click();
     return this.page.getByRole("dialog");
+  }
+
+  // MoneyValueToggleButton (mục 8/11 phase-6.md) — aria-label đổi theo trạng
+  // thái hiện tại: "Ẩn số tiền" khi đang HIỆN (bấm để ẩn), "Hiện số tiền" khi
+  // đang ẨN (bấm để hiện lại). Gộp cả 2 vào 1 locator theo NGHĨA "nút mắt",
+  // action bên dưới tự bấm bất kể nhãn nào đang hiện.
+  get hideAmountsToggle(): Locator {
+    return this.page.getByRole("button", { name: /^(Ẩn|Hiện) số tiền$/ });
+  }
+
+  async toggleHideAmounts() {
+    await this.hideAmountsToggle.click();
+  }
+
+  // "•••••• " thay số tiền khi chế độ ẩn bật (formatMoney({hidden: true}),
+  // lib/format.ts) — có thể khớp nhiều phần tử cùng lúc trên Dashboard, spec
+  // tự scope theo card cha khi cần phân biệt.
+  get maskedAmounts(): Locator {
+    return this.page.getByText("••••••");
+  }
+
+  get navTrendChartHeading(): Locator {
+    return this.page.getByText("Giá trị tài sản", { exact: true });
+  }
+
+  get navTrendEmptyState(): Locator {
+    return this.page.getByText("Chưa vẽ được đường NAV");
+  }
+
+  // Chỉ render ở nhánh "đủ điểm" (points.length >= 2) của NavTrendChart —
+  // bằng chứng gián tiếp đường NAV đã vẽ khi không thể assert trực tiếp SVG.
+  get navTrendPointerHint(): Locator {
+    return this.page.getByText("Chạm giữ vào đường để xem NAV tại từng ngày.");
+  }
+
+  // Điểm vào /allocation (mục 10 phase-6.md) — bấm AllocationBar (donut rút
+  // gọn) trên Dashboard, không goto() thẳng (rule mục 4).
+  private get allocationLink(): Locator {
+    return this.page.getByRole("link", {
+      name: "Xem phân bổ tài sản chi tiết",
+    });
+  }
+
+  async goToAllocation(): Promise<AllocationPage> {
+    const allocationPage = new AllocationPage(this.page);
+    await this.allocationLink.click();
+    await this.page.waitForURL(allocationPage.url);
+    return allocationPage;
   }
 
   private get quickMenuToggle(): Locator {
