@@ -31,6 +31,13 @@ export class HoldingsPage {
     return this.page.getByRole("link", { name: new RegExp(symbol) });
   }
 
+  // HoldingsGroupCard ghép SL + giá chung 1 dòng ("100 cổ phần · giá 150k")
+  // — không exact:true (khác HoldingDetailPage.quantityText, nơi SL đứng
+  // riêng 1 dòng).
+  quantityNote(text: string): Locator {
+    return this.page.getByText(text);
+  }
+
   // CTA "Khai báo vị thế đầu tiên" (rỗng) hoặc FAB "Khai báo vị thế mới" (đã
   // có holding) — cùng đích /holdings/new, gộp 1 locator theo nghĩa chung
   // thay vì rẽ nhánh theo trạng thái rỗng/không rỗng trong page object.

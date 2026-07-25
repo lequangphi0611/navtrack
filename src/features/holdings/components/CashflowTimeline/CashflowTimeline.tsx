@@ -62,6 +62,7 @@ function CashflowTimeline({
           return (
             <div
               key={row.id}
+              data-testid="cashflow-row"
               className={cn(
                 "flex items-center gap-2.75 p-3.25",
                 index > 0 && "border-t border-white/5",

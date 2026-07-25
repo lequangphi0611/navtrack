@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
+import { DividendForm } from "./dividend-form";
 import { HoldingsPage } from "./holdings-page";
 import { TransactionForm } from "./transaction-form";
 
@@ -64,6 +65,44 @@ export class HoldingDetailPage {
 
   get navAfterTransactionNote(): Locator {
     return this.page.getByText("NAV danh mục sau giao dịch");
+  }
+
+  get newDividendLink(): Locator {
+    return this.page.getByRole("link", { name: "Ghi cổ tức" });
+  }
+
+  async goToNewDividend(): Promise<DividendForm> {
+    await this.newDividendLink.click();
+    await this.page.waitForURL(`${this.holdingUrl}/dividends/new`);
+    return new DividendForm(this.page, this.holdingUrl);
+  }
+
+  // Badge nguồn giá "Tự động"/"Nhập tay" (PriceSourceBadge) — chỉ check case
+  // "Nhập tay" xuất hiện đúng lúc, không cần locator riêng cho "Tự động".
+  get manualPriceBadge(): Locator {
+    return this.page.getByText("Nhập tay", { exact: true });
+  }
+
+  // CashflowTimeline — mỗi dòng gắn data-testid="cashflow-row" (thêm ở
+  // CashflowTimeline.tsx, ngoại lệ có kiểm soát theo rule mục 5, thay cho
+  // selector cũ bám class Tailwind `.rounded-2xl.border.border-border.bg-card
+  // > div`, GOTCHAS #10). Component không có role list/listitem sẵn.
+  get cashflowTimelineRows(): Locator {
+    return this.page.getByTestId("cashflow-row");
+  }
+
+  // Card XIRR (ReturnMetrics.tsx) — dùng ở test đối chiếu XIRR trước/sau đổi
+  // paymentDate cổ tức (issue #65). "XIRR" (nhãn) -> cha (row label+badge) ->
+  // cha (card) -> giá trị nằm SIBLING của row, cùng trong card.
+  get xirrCard(): Locator {
+    return this.page
+      .getByText("XIRR", { exact: true })
+      .locator("..")
+      .locator("..");
+  }
+
+  get xirrValue(): Locator {
+    return this.xirrCard.getByText(/^[+−]\d+,\d%$/);
   }
 
   // Nhánh "valued" của HoldingDetailScreen (đã có PriceQuote/valuation) —

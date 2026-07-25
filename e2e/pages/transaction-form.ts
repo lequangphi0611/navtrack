@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { selectDateOnCalendar } from "../support/date-picker";
+import { fillDatePicker, selectDateOnCalendar } from "../support/date-picker";
 import { afterTransactionUrl } from "../support/urls";
 import { HoldingDetailPage } from "./holding-detail-page";
 
@@ -148,6 +148,14 @@ export class TransactionForm {
   // nhánh phụ thuộc `date` (GOTCHAS #2).
   async changeDate(date: Date) {
     await selectDateOnCalendar(this.page, date);
+  }
+
+  // Ghi thẳng DOM (KHÔNG qua UI thật) — chỉ dùng khi spec KHÔNG cần preview
+  // thuế/phí phản ứng theo ngày (vd chỉ dựng data test, không assert số tiền
+  // tính lại). Bước CUỐI trước submit (GOTCHAS #2). Cần vậy thì dùng
+  // changeDate() (selectDateOnCalendar) thay vì hàm này.
+  async fillDate(isoDate: string) {
+    await fillDatePicker(this.page, "date", isoDate);
   }
 
   // Submit khi field đã tự fill riêng qua fillQuantity/fillPricePerUnit/

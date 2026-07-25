@@ -4,8 +4,12 @@ import { expect, test } from "@playwright/test";
 import { Prisma, PrismaClient } from "@prisma/client";
 import Decimal from "decimal.js";
 
+import { BottomNav } from "./pages/bottom-nav";
+import { DividendForm } from "./pages/dividend-form";
+import { DividendHistoryPage } from "./pages/dividend-history-page";
+import { HoldingDetailPage } from "./pages/holding-detail-page";
+import { NewHoldingPage } from "./pages/new-holding-page";
 import { daysAgo, isoDate } from "./support/dates";
-import { fillDatePicker } from "./support/date-picker";
 import {
   cleanupTestUser,
   closeContext,
@@ -13,7 +17,6 @@ import {
   disconnectTestDb,
   signInAs,
 } from "./support/test-session";
-import { afterTransactionUrl, stripQuery } from "./support/urls";
 
 // `DIVIDEND_TAX_RATE`/`DIVIDEND_PAR_VALUE` (Setting, docs/domain/03-dividends.md)
 // KHÔNG được seed tự động cho DB e2e — scripts/e2e.mjs chỉ `prisma migrate
@@ -87,24 +90,12 @@ test.afterAll(async () => {
   await disconnectTestDb();
 });
 
-// Tạo Holding STOCK qua UI (form /holdings/new mặc định type STOCK, unit "cổ
-// phần" đã điền sẵn — cùng pattern holdings.spec.ts) rồi trả về URL chi tiết
-// đã bỏ query `?cashflowId=...`.
-async function createStockHolding(
-  page: import("@playwright/test").Page,
-  symbol: string,
-  quantity: string,
-) {
-  await page.goto("/holdings/new");
-  await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-  await page.locator('input[name="quantity"]').fill(quantity);
-  await page.locator('input[name="pricePerUnit"]').fill("50000");
-  await page.getByRole("button", { name: "Xong", exact: true }).click();
-  // waitForURL cần base URL trước khi biết nó — chờ pattern chung rồi mới
-  // stripQuery ra base thật (afterTransactionUrl cần base URL làm input).
-  await page.waitForURL(/\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/);
-  const holdingUrl = stripQuery(page.url());
-  return holdingUrl;
+// holdingId thật (uuid) nằm ở segment cuối của URL chi tiết vị thế sạch (không
+// query) — dùng để tra thẳng NavOverride/Snapshot qua Prisma (không tin UI).
+function holdingIdFromUrl(holdingUrl: string): string {
+  const id = new URL(holdingUrl).pathname.split("/").pop();
+  if (!id) throw new Error(`Không lấy được holdingId từ URL: ${holdingUrl}`);
+  return id;
 }
 
 test("Ghi cổ tức tiền mặt: tự tính gộp/thuế/thực nhận, hiện đúng trong lịch sử", async ({
@@ -118,24 +109,30 @@ test("Ghi cổ tức tiền mặt: tự tính gộp/thuế/thực nhận, hiện
   try {
     // 100 CP, mệnh giá 10.000đ, tỷ lệ 10% -> gộp = 10.000 × 10% × 100 =
     // 100.000; thuế 5% = 5.000; net = 95.000 (docs/domain/03-dividends.md).
-    const holdingUrl = await createStockHolding(page, "FPT", "100");
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol: "FPT",
+      quantity: 100,
+      pricePerUnit: 50_000,
+    });
 
-    await page.goto(`${holdingUrl}/dividends/new`);
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
     // "Tiền mặt" là lựa chọn mặc định của SegmentedControl -> không cần bấm.
-    await page.locator('input[name="percent"]').fill("10");
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    await form.setPercent("10");
+    await form.submit();
 
-    await expect(page.getByText(/Đã ghi cổ tức FPT/)).toBeVisible();
+    await expect(form.successHeading("FPT")).toBeVisible();
     await expect(page.getByText(/gộp 100\.000/)).toBeVisible();
     await expect(page.getByText(/thuế 5\.000/)).toBeVisible();
     await expect(page.getByText(/95\.000/)).toBeVisible();
 
     // Lịch sử: percentLabel suy ngược từ grossAmount/mệnh giá (Dividend không
     // lưu percent trực tiếp) -> phải khớp lại đúng 10% đã nhập.
-    await page.getByRole("link", { name: "Xem lịch sử cổ tức" }).click();
-    await page.waitForURL(`${holdingUrl}/dividends`);
-    await expect(page.getByText("Tiền mặt 10%")).toBeVisible();
-    await expect(page.getByText("+95k", { exact: true })).toBeVisible();
+    const historyPage = await form.goToHistory();
+    await expect(historyPage.entry("Tiền mặt 10%")).toBeVisible();
+    await expect(historyPage.entry("+95k", { exact: true })).toBeVisible();
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -187,39 +184,35 @@ test("Ghi cổ tức cổ phiếu: soft-nav quay lại /holdings và Dashboard v
       update: { price: "150000", source: "vnstock" },
     });
 
-    const holdingUrl = await createStockHolding(page, symbol, "100");
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    let detail = await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 50_000,
+    });
 
     // Ghé /holdings rồi Dashboard TRƯỚC khi ghi cổ tức, toàn bộ qua Link click
     // (PageHeader "Quay lại" -> BottomNav "Tổng quan") -> ghim Router Cache với
     // trạng thái CŨ (100 cổ phần, toàn bộ giá AUTO — chưa có "mã dùng giá nhập tay").
-    // HoldingsGroupCard ghép SL + giá chung 1 dòng ("100 cổ phần · giá 150k")
-    // -> không dùng exact:true (khác holding detail, nơi SL đứng riêng 1 dòng).
-    await page.getByRole("link", { name: "Quay lại" }).click();
-    await page.waitForURL(/\/holdings$/);
-    await expect(page.getByText("100 cổ phần")).toBeVisible();
+    const bottomNav = new BottomNav(page);
+    let holdingsPage = await detail.goBack();
+    await expect(holdingsPage.quantityNote("100 cổ phần")).toBeVisible();
 
-    await page.getByRole("link", { name: "Tổng quan" }).click();
-    await page.waitForURL(/\/$/);
-    await expect(
-      page.getByText("Giá trị thị trường (NAV)").locator("..").locator(".."),
-    ).toContainText("15.000.000");
-    await expect(page.getByText(/mã dùng giá nhập tay/)).toHaveCount(0);
+    let dashboardPage = await bottomNav.goToDashboard();
+    await expect(dashboardPage.navValueBlock).toContainText("15.000.000");
+    await expect(dashboardPage.manualPriceNote).toHaveCount(0);
 
     // Quay lại holding qua toàn Link click (Danh mục -> chọn mã -> Ghi cổ tức),
     // không page.goto — giữ nguyên Router Cache đã ghim ở trên.
-    await page.getByRole("link", { name: "Danh mục" }).click();
-    await page.waitForURL(/\/holdings$/);
-    await page.getByText(symbol, { exact: true }).click();
-    await page.waitForURL(holdingUrl);
-    await page.getByRole("link", { name: "Ghi cổ tức" }).click();
-    await page.waitForURL(`${holdingUrl}/dividends/new`);
+    holdingsPage = await bottomNav.goToHoldings();
+    detail = await holdingsPage.openHolding(symbol);
+    const form = await detail.goToNewDividend();
 
-    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
-    await page.locator('input[name="percent"]').fill("10");
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    await form.selectStockType();
+    await form.setPercent("10");
+    await form.submit();
+    await expect(form.successHeading(symbol)).toBeVisible();
     await expect(
       page.getByText("+10 cổ phần thưởng", { exact: true }),
     ).toBeVisible();
@@ -227,23 +220,18 @@ test("Ghi cổ tức cổ phiếu: soft-nav quay lại /holdings và Dashboard v
     // Soft-nav "Về chi tiết" -> holding detail: PHẢI thấy badge nguồn giá đổi
     // "Tự động" -> "Nhập tay" (NavOverride bù pha loãng vừa tạo cùng ngày, thắng
     // PriceQuote 7 ngày trước theo resolvePrice()) — không phải page.goto/reload.
-    await page
-      .getByRole("link", { name: new RegExp(`Về chi tiết ${symbol}`) })
-      .click();
-    await page.waitForURL(holdingUrl);
-    await expect(page.getByText("Nhập tay", { exact: true })).toBeVisible();
+    detail = await form.goToHoldingDetail(symbol);
+    await expect(detail.manualPriceBadge).toBeVisible();
 
     // "Quay lại" -> /holdings: PHẢI thấy 110 cổ phần (không phải 100 cũ đã ghim
     // Router Cache ở trên) dù không hề page.goto/reload.
-    await page.getByRole("link", { name: "Quay lại" }).click();
-    await page.waitForURL(/\/holdings$/);
-    await expect(page.getByText("110 cổ phần")).toBeVisible();
-    await expect(page.getByText("100 cổ phần")).toHaveCount(0);
+    holdingsPage = await detail.goBack();
+    await expect(holdingsPage.quantityNote("110 cổ phần")).toBeVisible();
+    await expect(holdingsPage.quantityNote("100 cổ phần")).toHaveCount(0);
 
     // Soft-nav sang Dashboard: PHẢI thấy ghi chú nguồn giá cập nhật "1 mã dùng
     // giá nhập tay" (không còn 0 như đã ghim Router Cache ở trên).
-    await page.getByRole("link", { name: "Tổng quan" }).click();
-    await page.waitForURL(/\/$/);
+    dashboardPage = await bottomNav.goToDashboard();
     await expect(page.getByText("1 mã dùng giá nhập tay")).toBeVisible();
   } finally {
     await closeContext(context);
@@ -264,27 +252,30 @@ test("Ghi cổ tức cổ phiếu: số lẻ tự làm tròn xuống, báo rõ +
 
   try {
     // 105 CP × 12% = 12,6 -> floor 12 (ví dụ đúng của docs/domain/03-dividends.md).
-    const holdingUrl = await createStockHolding(page, "MSN", "105");
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol: "MSN",
+      quantity: 105,
+      pricePerUnit: 50_000,
+    });
 
-    await page.goto(`${holdingUrl}/dividends/new`);
-    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
-    await page.locator('input[name="percent"]').fill("12");
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
+    await form.selectStockType();
+    await form.setPercent("12");
 
     // Preview (trước khi ghi) đã báo làm tròn ngay khi gõ %.
-    await expect(
-      page.getByText(/Đã làm tròn xuống từ 12,6 cổ phần/),
-    ).toBeVisible();
+    await expect(form.roundedDownNote("12,6 cổ phần")).toBeVisible();
 
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    await form.submit();
 
-    await expect(page.getByText(/Đã ghi cổ tức MSN/)).toBeVisible();
+    await expect(form.successHeading("MSN")).toBeVisible();
     await expect(
       page.getByText("+12 cổ phần thưởng", { exact: true }),
     ).toBeVisible();
     await expect(page.getByText("117 cổ phần", { exact: true })).toBeVisible();
-    await expect(
-      page.getByText(/Đã làm tròn xuống từ 12,6 cổ phần/),
-    ).toBeVisible();
+    await expect(form.roundedDownNote("12,6 cổ phần")).toBeVisible();
 
     // Xác nhận cache Holding.quantity đã cộng đúng số ĐÃ LÀM TRÒN (12, không
     // phải 12,6) qua CẢ 2 kênh: trang chi tiết vị thế (hard nav, loại trừ
@@ -292,12 +283,13 @@ test("Ghi cổ tức cổ phiếu: số lẻ tự làm tròn xuống, báo rõ +
     // dùng một cài đặt chỉ biết Cashflow nên hiện SAI SL sau khi nhận cổ tức
     // cổ phiếu; giờ dùng derivePosition() (đã gộp xử lý cổ tức cổ phiếu) nên
     // phải khớp đúng cache.
-    await page.goto(holdingUrl);
-    await expect(page.getByText("117 cổ phần", { exact: true })).toBeVisible();
+    await detail.goto();
+    await expect(detail.quantityText).toHaveText("117 cổ phần");
 
-    await page.goto(`${holdingUrl}/dividends`);
-    await expect(page.getByText("Cổ phiếu 11%")).toBeVisible();
-    await expect(page.getByText(/105 cổ phần → 117 cổ phần/)).toBeVisible();
+    const historyPage = new DividendHistoryPage(page, detail.url);
+    await historyPage.goto();
+    await expect(historyPage.entry("Cổ phiếu 11%")).toBeVisible();
+    await expect(historyPage.entry(/105 cổ phần → 117 cổ phần/)).toBeVisible();
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -317,36 +309,33 @@ test("Ghi cổ tức cổ phiếu: cho phép chỉnh tay số lượng, chặn k
 
   try {
     // 105 CP × 12% = raw 12,6 -> tolerance cho phép override trong [10,6; 14,6].
-    const holdingUrl = await createStockHolding(page, "VNM", "105");
-
-    await page.goto(`${holdingUrl}/dividends/new`);
-    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
-    await page.locator('input[name="percent"]').fill("12");
-    await page
-      .getByRole("button", { name: "Sửa số lượng nếu công ty làm tròn khác" })
-      .click();
-
-    const submitButton = page.getByRole("button", {
-      name: "Ghi cổ tức",
-      exact: true,
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol: "VNM",
+      quantity: 105,
+      pricePerUnit: 50_000,
     });
-    const overrideInput = page.locator('input[name="stockQuantityOverride"]');
+
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
+    await form.selectStockType();
+    await form.setPercent("12");
+    await form.showOverride();
 
     // Lệch 7,4 đơn vị so với raw 12,6 -> vượt tolerance 2, chặn submit.
-    await overrideInput.fill("20");
-    await expect(page.getByText(/Chỉ được lệch tối đa 2 đơn vị/)).toBeVisible();
-    await expect(submitButton).toBeDisabled();
+    await form.setOverrideQuantity("20");
+    await expect(form.toleranceError).toBeVisible();
+    await expect(form.submitButton).toBeDisabled();
 
     // Lệch 1,4 đơn vị -> trong tolerance, submit được, dùng ĐÚNG số user nhập
     // (không phải số hệ thống floor 12).
-    await overrideInput.fill("14");
-    await expect(page.getByText(/Chỉ được lệch tối đa 2 đơn vị/)).toHaveCount(
-      0,
-    );
-    await expect(submitButton).toBeEnabled();
-    await submitButton.click();
+    await form.setOverrideQuantity("14");
+    await expect(form.toleranceError).toHaveCount(0);
+    await expect(form.submitButton).toBeEnabled();
+    await form.submit();
 
-    await expect(page.getByText(/Đã ghi cổ tức VNM/)).toBeVisible();
+    await expect(form.successHeading("VNM")).toBeVisible();
     await expect(
       page.getByText("+14 cổ phần thưởng", { exact: true }),
     ).toBeVisible();
@@ -357,10 +346,9 @@ test("Ghi cổ tức cổ phiếu: cho phép chỉnh tay số lượng, chặn k
 
     // Lịch sử: percentLabel suy ngược từ SỐ ĐÃ LƯU (14/105 ≈ 13%), không phải
     // % gốc đã nhập (12%) — đúng thiết kế "Dividend không lưu percent trực tiếp".
-    await page.getByRole("link", { name: "Xem lịch sử cổ tức" }).click();
-    await page.waitForURL(`${holdingUrl}/dividends`);
-    await expect(page.getByText("Cổ phiếu 13%")).toBeVisible();
-    await expect(page.getByText(/105 cổ phần → 119 cổ phần/)).toBeVisible();
+    const historyPage = await form.goToHistory();
+    await expect(historyPage.entry("Cổ phiếu 13%")).toBeVisible();
+    await expect(historyPage.entry(/105 cổ phần → 119 cổ phần/)).toBeVisible();
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);
@@ -384,42 +372,42 @@ test("Cổ tức cổ phiếu: SL hiện đúng ngay sau khi ghi, không bị gi
 
   try {
     // 100 CP × 10% = 10 CP thưởng (số tròn, không lẫn chủ đề làm tròn của 2 test trên).
-    const holdingUrl = await createStockHolding(page, "HPG", "100");
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol: "HPG",
+      quantity: 100,
+      pricePerUnit: 50_000,
+    });
 
-    await page.goto(`${holdingUrl}/dividends/new`);
-    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
-    await page.locator('input[name="percent"]').fill("10");
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
-    await expect(page.getByText(/Đã ghi cổ tức HPG/)).toBeVisible();
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
+    await form.selectStockType();
+    await form.setPercent("10");
+    await form.submit();
+    await expect(form.successHeading("HPG")).toBeVisible();
 
     // (1) Trang chi tiết vị thế phải hiện ĐÚNG 110 CP ngay sau khi ghi — hard
     // navigation (page.goto, không phải click Link) để loại trừ mọi nghi ngờ
     // về cache client-side, chỉ còn lại đúng phép tính server-side.
-    await page.goto(holdingUrl);
-    await expect(page.getByText("110 cổ phần", { exact: true })).toBeVisible();
+    await detail.goto();
+    await expect(detail.quantityText).toHaveText("110 cổ phần");
 
     // (2) Bán 105 CP — CHỈ hợp lệ nếu tính cả 10 CP cổ tức (100 mua-only
     // không đủ). Trước fix: derivePosition() cashflow-only sẽ SAI báo "bán
     // vượt quá số lượng đang giữ" cho lệnh bán hợp lệ này.
-    await page.goto(`${holdingUrl}/transactions/new`);
-    await page.getByRole("button", { name: "Bán" }).click();
-    await page.locator('input[name="quantity"]').fill("105");
-    await page.locator('input[name="pricePerUnit"]').fill("60000");
-    await page.getByRole("button", { name: "Ghi nhận giao dịch bán" }).click();
-    await page.waitForURL(afterTransactionUrl(holdingUrl));
+    const transactionForm = await detail.goToNewTransaction();
+    await transactionForm.submitSell({ quantity: 105, pricePerUnit: 60_000 });
 
     // Bán thành công (không bị chặn nhầm) VÀ cache không bị ghi đè mất 10 CP
     // cổ tức: 100 + 10 − 105 = 5 CP — KHÔNG PHẢI 0 (nếu cache bị ghi đè mất
     // phần cổ tức trước khi trừ) hay bị chặn hoàn toàn (nếu wentNegative sai).
-    await expect(page.getByText("5 cổ phần", { exact: true })).toBeVisible();
+    await expect(detail.quantityText).toHaveText("5 cổ phần");
 
     // avgCost không đổi qua cả cổ tức (miễn phí, không có giá) lẫn SELL
     // (phương pháp bình quân di động, chỉ BUY mới recompute) — vẫn đúng 50k
-    // (giá mua duy nhất, từ createStockHolding).
-    const avgCostAfterSell = await page
-      .locator("text=/Giá vốn bình quân/")
-      .locator("..")
-      .innerText();
+    // (giá mua duy nhất, từ NewHoldingPage.create() ở trên).
+    const avgCostAfterSell = await detail.avgCost.innerText();
     expect(avgCostAfterSell).toContain("50k");
   } finally {
     await closeContext(context);
@@ -459,16 +447,14 @@ test("Ghi cổ tức tiền mặt: hiện khối XIRR danh mục trước/sau + 
     // giả định NAV (ghép tại cutoffDate = hôm nay) hội tụ được, tránh ca biên
     // "kỳ rất ngắn" (docs/domain/05, cùng lý do dashboard.spec.ts).
     const buyDate = isoDate(daysAgo(730));
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("10");
-    await page.locator('input[name="pricePerUnit"]').fill("90000");
-    await fillDatePicker(page, "date", buyDate);
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
-    const holdingUrl = stripQuery(page.url());
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 90_000,
+      date: buyDate,
+    });
 
     // 100% × 10.000đ mệnh giá × 10 CP = gộp 100.000, thuế 5% = 5.000, net =
     // 95.000 (docs/domain/03-dividends.md) — lần đầu ghi cổ tức của holding
@@ -477,13 +463,12 @@ test("Ghi cổ tức tiền mặt: hiện khối XIRR danh mục trước/sau + 
     // 730 ngày, cổ tức phải đủ lớn so với vốn để phần "before != after" ở
     // dưới không bị trùng số do làm tròn 1 chữ số thập phân (100% dư margin
     // ~0.26pp so với ngưỡng làm tròn 0.05pp, ổn định bất kể ngày chạy test).
-    await page.goto(`${holdingUrl}/dividends/new`);
-    await page.locator('input[name="percent"]').fill("100");
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
+    await form.setPercent("100");
+    await form.submit();
 
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    await expect(form.successHeading(symbol)).toBeVisible();
 
     // Khối "Ảnh hưởng lên hiệu suất" (mockup 4d) — trước fix luôn ẩn.
     await expect(page.getByText("Ảnh hưởng lên hiệu suất")).toBeVisible();
@@ -539,22 +524,25 @@ test("Ghi cổ tức tiền mặt khi đã có giá cũ: tự tạo NavOverride 
     // 100 CP, tỷ lệ 10%, mệnh giá 10.000, thuế 5% (seedDividendSettings) ->
     // grossAmount = 10.000 × 10% × 100 = 100.000 -> 1.000/CP -> giá mới =
     // 50.000 − 1.000 = 49.000.
-    const holdingUrl = await createStockHolding(page, symbol, "100");
-    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
-    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 50_000,
+    });
+    const holdingId = holdingIdFromUrl(detail.url);
 
-    await page.goto(`${holdingUrl}/dividends/new`);
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
     // "Tiền mặt" là mặc định -> không cần bấm SegmentedControl.
-    // KHÔNG tick "giá đã phản ánh thị trường" (chưa có checkbox thật trong UI
-    // — design-implementer sẽ thêm; mặc định form submit
+    // KHÔNG tick "giá đã phản ánh thị trường" -> mặc định form submit
     // priceAlreadyReflectsMarket=undefined -> schema default "false", đúng
-    // hành vi "không tick").
-    await page.locator('input[name="percent"]').fill("10");
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    // hành vi "không tick".
+    await form.setPercent("10");
+    await form.submit();
 
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    await expect(form.successHeading(symbol)).toBeVisible();
 
     const override = await db.navOverride.findFirst({
       where: { holdingId },
@@ -571,11 +559,7 @@ test("Ghi cổ tức tiền mặt khi đã có giá cũ: tự tạo NavOverride 
 
 // Issue #61: user tick "giá đã phản ánh thị trường" (vd đã tự cập nhật giá
 // tay, hoặc job giá đã chạy lại) -> recordDividend bỏ qua HOÀN TOÀN bước tự
-// điều chỉnh, dù có giá cũ để tính. UI checkbox thật (DividendForm.tsx, submit
-// qua hidden input `priceAlreadyReflectsMarket` "true"/"false") giờ đã có —
-// tương tác checkbox thật thay vì page.evaluate() inject hidden input (cách
-// verifier tự cập nhật theo đúng comment DECISION.md 2026-07-17: "sẽ đổi sang
-// tương tác checkbox thật khi UI xong").
+// điều chỉnh, dù có giá cũ để tính.
 test("Ghi cổ tức cổ phiếu: tick “giá đã phản ánh thị trường” -> KHÔNG tự tạo NavOverride dù có giá cũ", async ({
   browser,
 }) => {
@@ -594,29 +578,23 @@ test("Ghi cổ tức cổ phiếu: tick “giá đã phản ánh thị trường
       update: { price: "50000", source: "vnstock" },
     });
 
-    const holdingUrl = await createStockHolding(page, symbol, "100");
-    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
-    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 50_000,
+    });
+    const holdingId = holdingIdFromUrl(detail.url);
 
-    await page.goto(`${holdingUrl}/dividends/new`);
-    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
-    await page.locator('input[name="percent"]').fill("10");
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
+    await form.selectStockType();
+    await form.setPercent("10");
+    await form.checkPriceReflectsMarket();
+    await form.submit();
 
-    // Checkbox thật (DividendForm.tsx) — accessible name lấy từ text trong
-    // cùng <label> bao input. `force: true` vì input là "peer sr-only"
-    // (CSS ẩn, kích thước ~1px) — actionability check của Playwright coi
-    // chính <label> bao ngoài "che" input tại điểm hit-test, dù người dùng
-    // thật click vào label vẫn toggle checkbox bình thường qua cơ chế native
-    // label-for (pattern chuẩn cho custom checkbox ẩn input + span trang trí).
-    await page
-      .getByRole("checkbox", { name: "Giá hiện tại đã phản ánh đợt chia này" })
-      .check({ force: true });
-
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
-
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    await expect(form.successHeading(symbol)).toBeVisible();
     // Tick checkbox -> Server Action bỏ qua bước tự điều chỉnh -> khối "Giá
     // đã tự động điều chỉnh" (DividendForm.tsx::DividendSuccessContent)
     // KHÔNG được render.
@@ -661,19 +639,23 @@ test("Ghi cổ tức cổ phiếu khi đã có giá cũ, không tick checkbox: t
     // 110 = 54.545,4545... — dùng Decimal.js (không round số nguyên) để khớp
     // đúng công thức thuần, không hardcode chuỗi làm tròn tay có thể sai lệch
     // độ chính xác so với dividend-math.ts.
-    const holdingUrl = await createStockHolding(page, symbol, "100");
-    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
-    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 50_000,
+    });
+    const holdingId = holdingIdFromUrl(detail.url);
 
-    await page.goto(`${holdingUrl}/dividends/new`);
-    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
-    await page.locator('input[name="percent"]').fill("10");
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
+    await form.selectStockType();
+    await form.setPercent("10");
     // KHÔNG tick checkbox — mặc định false, đúng hành vi "tự điều chỉnh".
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    await form.submit();
 
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    await expect(form.successHeading(symbol)).toBeVisible();
 
     const override = await db.navOverride.findFirst({
       where: { holdingId },
@@ -734,19 +716,23 @@ test("Ghi cổ tức cổ phiếu 2 lần cùng ngày chia trên cùng vị th�
       update: { price: "60000", source: "vnstock" },
     });
 
-    const holdingUrl = await createStockHolding(page, symbol, "100");
-    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
-    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 50_000,
+    });
+    const holdingId = holdingIdFromUrl(detail.url);
 
     // Lần 1: 100 CP, 10% -> SL_trước=100, SL_sau=110, giá mới = 60.000×100/110
     // (giống test STOCK không-tick ở trên).
-    await page.goto(`${holdingUrl}/dividends/new`);
-    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
-    await page.locator('input[name="percent"]').fill("10");
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
+    await form.selectStockType();
+    await form.setPercent("10");
+    await form.submit();
+    await expect(form.successHeading(symbol)).toBeVisible();
 
     const firstOverride = await db.navOverride.findFirst({
       where: { holdingId },
@@ -757,13 +743,11 @@ test("Ghi cổ tức cổ phiếu 2 lần cùng ngày chia trên cùng vị th�
     // (mới hơn PriceQuote gốc 30 ngày trước). SL_trước lần 2 = 110 (100 gốc +
     // 10 thưởng lần 1, đã cộng vào Holding.quantity) -> thưởng lần 2 = 11 ->
     // SL_sau = 121.
-    await page.goto(`${holdingUrl}/dividends/new`);
-    await page.getByRole("button", { name: "Cổ phiếu", exact: true }).click();
-    await page.locator('input[name="percent"]').fill("10");
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    await form.goto();
+    await form.selectStockType();
+    await form.setPercent("10");
+    await form.submit();
+    await expect(form.successHeading(symbol)).toBeVisible();
 
     const overridesAfterSecond = await db.navOverride.findMany({
       where: { holdingId },
@@ -802,17 +786,21 @@ test("Ghi cổ tức tiền mặt khi Holding chưa có giá nào: vẫn ghi đ�
 
   try {
     // Không seed PriceQuote nào cho symbol này -> MISSING_PRICE.
-    const holdingUrl = await createStockHolding(page, symbol, "100");
-    const holdingId = holdingUrl.split("/").filter(Boolean).pop();
-    if (!holdingId) throw new Error("Không lấy được holdingId từ URL");
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 50_000,
+    });
+    const holdingId = holdingIdFromUrl(detail.url);
 
-    await page.goto(`${holdingUrl}/dividends/new`);
-    await page.locator('input[name="percent"]').fill("10");
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
+    await form.setPercent("10");
+    await form.submit();
 
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    await expect(form.successHeading(symbol)).toBeVisible();
 
     const override = await db.navOverride.findFirst({ where: { holdingId } });
     expect(override).toBeNull();
@@ -859,56 +847,45 @@ test("Cổ tức tiền mặt có paymentDate trễ hơn ngày chia làm thay đ
   const latePaymentDate = isoDate(daysAgo(200)); // trễ 200 ngày so với ngày chia — CHỈ Holding B điền
 
   async function readHoldingXirrPercent(
-    p: import("@playwright/test").Page,
+    detail: HoldingDetailPage,
   ): Promise<string> {
-    // Cấu trúc ReturnMetrics.tsx: span "XIRR" -> cha (row label+badge) -> cha
-    // (card) -> giá trị formatSignedPercent nằm ở div SIBLING của row, cùng
-    // trong card — lên 2 cấp từ span "XIRR" để lấy đúng card rồi tìm giá trị
-    // theo định dạng "+x,x%"/"−x,x%" bên trong.
-    const card = p
-      .getByText("XIRR", { exact: true })
-      .locator("..")
-      .locator("..");
-    await expect(card).not.toContainText("Chưa tính được");
-    const value = card.getByText(/^[+−]\d+,\d%$/);
-    await expect(value).toBeVisible();
-    return value.innerText();
+    await expect(detail.xirrCard).not.toContainText("Chưa tính được");
+    await expect(detail.xirrValue).toBeVisible();
+    return detail.xirrValue.innerText();
   }
 
   async function createHoldingWithCashDividend(
     symbol: string,
     paymentDate: string | null,
-  ): Promise<string> {
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("100");
-    await page.locator('input[name="pricePerUnit"]').fill("90000");
-    await fillDatePicker(page, "date", buyDate);
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
-    const holdingUrl = stripQuery(page.url());
+  ): Promise<HoldingDetailPage> {
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 90_000,
+      date: buyDate,
+    });
 
-    await page.goto(`${holdingUrl}/dividends/new`);
     // "Tiền mặt" mặc định — không cần bấm SegmentedControl. 200% để chênh
     // lệch thời điểm 200 ngày tạo khác biệt XIRR đủ lớn, không lẫn vào sai số
     // làm tròn 1 chữ số thập phân của formatSignedPercent (đã tự verify bằng
     // công thức XIRR thuần trước khi viết test, xem assertion cuối).
-    await page.locator('input[name="percent"]').fill("200");
-    // fillDatePicker phải là bước CUỐI trước submit (ghi thẳng DOM, bỏ qua
-    // React state — field percent .fill() ở trên có thể trigger re-render
-    // ghi đè DOM nếu gọi SAU, xem comment fillDatePicker ở support/date-picker.ts).
-    await fillDatePicker(page, "date", dividendDate);
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
+    await form.setPercent("200");
+    // setDate/setPaymentDate ghi thẳng DOM (fillDatePicker) — phải là bước
+    // CUỐI trước submit (field percent .fill() ở trên có thể trigger
+    // re-render ghi đè DOM nếu gọi SAU, xem comment fillDatePicker ở
+    // support/date-picker.ts).
+    await form.setDate(dividendDate);
     if (paymentDate) {
-      await fillDatePicker(page, "paymentDate", paymentDate);
+      await form.setPaymentDate(paymentDate);
     }
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    await form.submit();
+    await expect(form.successHeading(symbol)).toBeVisible();
 
-    return holdingUrl;
+    return detail;
   }
 
   try {
@@ -920,17 +897,17 @@ test("Cổ tức tiền mặt có paymentDate trễ hơn ngày chia làm thay đ
       });
     }
 
-    const holdingUrlA = await createHoldingWithCashDividend(symbolA, null);
-    const holdingUrlB = await createHoldingWithCashDividend(
+    const detailA = await createHoldingWithCashDividend(symbolA, null);
+    const detailB = await createHoldingWithCashDividend(
       symbolB,
       latePaymentDate,
     );
 
-    await page.goto(holdingUrlA);
-    const xirrA = await readHoldingXirrPercent(page);
+    await detailA.goto();
+    const xirrA = await readHoldingXirrPercent(detailA);
 
-    await page.goto(holdingUrlB);
-    const xirrB = await readHoldingXirrPercent(page);
+    await detailB.goto();
+    const xirrB = await readHoldingXirrPercent(detailB);
 
     expect(xirrA).not.toBe(xirrB);
 
@@ -1001,60 +978,45 @@ test("Cổ tức tiền mặt hiện đúng vị trí trong timeline dòng tiề
     });
 
     // 1) Mua 100 CP, ngày mua xa nhất (-60 ngày).
-    await page.goto("/holdings/new");
-    await page.getByPlaceholder("VD: FPT", { exact: true }).fill(symbol);
-    await page.locator('input[name="quantity"]').fill("100");
-    await page.locator('input[name="pricePerUnit"]').fill("50000");
-    await fillDatePicker(page, "date", buyDate);
-    await page.getByRole("button", { name: "Xong", exact: true }).click();
-    await page.waitForURL(
-      /\/holdings\/(?!new)[a-z0-9]+\?cashflowId=[a-z0-9]+$/,
-    );
-    const holdingUrl = stripQuery(page.url());
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 100,
+      pricePerUnit: 50_000,
+      date: buyDate,
+    });
 
-    // 2) Bán 30 CP, ngày -20 (giữa ngày chia -50 và hôm nay).
-    await page.goto(`${holdingUrl}/transactions/new`);
-    await page.getByRole("button", { name: "Bán" }).click();
-    await page.locator('input[name="quantity"]').fill("30");
-    await page.locator('input[name="pricePerUnit"]').fill("60000");
-    await fillDatePicker(page, "date", sellDate);
-    await page.getByRole("button", { name: "Ghi nhận giao dịch bán" }).click();
-    await page.waitForURL(afterTransactionUrl(holdingUrl));
+    // 2) Bán 30 CP, ngày -20 (giữa ngày chia -50 và hôm nay). Dùng fillDate()
+    // (không phải changeDate()/selectDateOnCalendar) — spec này không assert
+    // thuế/phí recompute theo ngày, chỉ cần dựng data nhanh (GOTCHAS #2: vẫn
+    // an toàn miễn gọi CUỐI cùng trước submit, không có field nào phản ứng
+    // theo `date` mà spec này quan tâm).
+    const transactionForm = await detail.goToNewTransaction();
+    await transactionForm.toggleSell();
+    await transactionForm.fillQuantity(30);
+    await transactionForm.fillPricePerUnit(60_000);
+    await transactionForm.fillDate(sellDate);
+    await transactionForm.confirmSell();
 
     // 3) Ghi cổ tức tiền mặt: 10% × 10.000đ mệnh giá × 100 CP (quantityAtDate
     // tính TẠI ngày chia -50, TRƯỚC lệnh bán -20 -> vẫn 100 CP, không phải 70)
     // = gộp 100.000, thuế 5% = 5.000, net = 95.000 (docs/domain/03-dividends.md,
     // seedDividendSettings ở beforeAll). paymentDate = -5, TRỄ hơn cả sell.
-    await page.goto(`${holdingUrl}/dividends/new`);
+    const form = new DividendForm(page, detail.url);
+    await form.goto();
     // "Tiền mặt" là mặc định của SegmentedControl — không cần bấm.
-    await page.locator('input[name="percent"]').fill("10");
-    // fillDatePicker phải là bước CUỐI trước submit (ghi thẳng DOM, bỏ qua
-    // React state — xem comment trong support/date-picker.ts).
-    await fillDatePicker(page, "date", dividendDate);
-    await fillDatePicker(page, "paymentDate", paymentDate);
-    await page.getByRole("button", { name: "Ghi cổ tức", exact: true }).click();
-    await expect(
-      page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`)),
-    ).toBeVisible();
+    await form.setPercent("10");
+    await form.setDate(dividendDate);
+    await form.setPaymentDate(paymentDate);
+    await form.submit();
+    await expect(form.successHeading(symbol)).toBeVisible();
 
     // 4) Hard nav tới trang chi tiết vị thế — loại trừ mọi nghi ngờ cache
     // client-side, chỉ còn lại đúng dữ liệu server-side thật.
-    await page.goto(holdingUrl);
+    await detail.goto();
 
-    // Scope đúng khối "Dòng tiền" (CashflowTimeline), KHÔNG lẫn với
-    // "Lịch sử giao dịch" (TransactionHistoryList) bên dưới — 2 khối này dùng
-    // Badge/label "Mua"/"Bán" trùng chữ nên phải scope chặt bằng DOM, không
-    // thể chỉ getByText toàn trang (xem HoldingDetailScreen.tsx: h2 "Dòng
-    // tiền" -> cha 2 cấp là <div> bọc trực tiếp CashflowTimeline).
-    const timelineSection = page
-      .getByText("Dòng tiền", { exact: true })
-      .locator("..")
-      .locator("..");
-    const timelineRows = timelineSection.locator(
-      ".rounded-2xl.border.border-border.bg-card > div",
-    );
-
-    const rowTexts = await timelineRows.allTextContents();
+    const rowTexts = await detail.cashflowTimelineRows.allTextContents();
     const buyIndex = rowTexts.findIndex((t) => t.includes("Mua"));
     const sellIndex = rowTexts.findIndex((t) => t.includes("Bán"));
     const dividendIndex = rowTexts.findIndex((t) =>
