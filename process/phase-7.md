@@ -6,11 +6,11 @@ Ghi nhận lãi định kỳ (trái tức) và tất toán đáo hạn cho `Hold
 ## Công việc cần làm
 
 ### 1. Schema & Setting
-- [ ] Bảng mới **`BondTerms`** (1-1 với `Holding` qua `holdingId @unique`, `onDelete: Cascade`) — **không** thêm cột nullable vào `Holding`. Field: `issuerType` (enum `BondIssuerType`: `CORPORATE`/`GOVERNMENT`), `parValue`, `couponRatePercent?`, `couponFrequencyMonths?`, `firstCouponDate?`, `maturityDate?`, `nextCouponDateOverride?`. Xem `docs/02-data-model.md`.
-- [ ] Validate ở tầng app: chỉ tạo/sửa `BondTerms` cho `Holding{type: BOND}` (quan hệ 1-1 không tự ràng buộc được điều này).
-- [ ] Enum: `DividendType += BOND_COUPON`, `CashflowType += MATURITY`, thêm `BondIssuerType`.
-- [ ] `Dividend` thêm `parValueApplied?`/`couponRatePercentApplied?` — đóng băng thông số đã dùng để tính tại thời điểm ghi.
-- [ ] Seed `Setting`: `BOND_INTEREST_TAX_RATE_CORPORATE = 5`, `BOND_INTEREST_TAX_RATE_GOVERNMENT = 0` (seed tường minh cả giá trị 0). Migration cho toàn bộ thay đổi trên.
+- [x] Bảng mới **`BondTerms`** (1-1 với `Holding` qua `holdingId @unique`, `onDelete: Cascade`) — **không** thêm cột nullable vào `Holding`. Field: `issuerType` (enum `BondIssuerType`: `CORPORATE`/`GOVERNMENT`), `parValue`, `couponRatePercent?`, `couponFrequencyMonths?`, `firstCouponDate?`, `maturityDate?`, `nextCouponDateOverride?`. Xem `docs/02-data-model.md`. (issue #56)
+- [x] Validate ở tầng app: chỉ tạo/sửa `BondTerms` cho `Holding{type: BOND}` (quan hệ 1-1 không tự ràng buộc được điều này) — `src/lib/bond-terms.ts::assertBondHoldingType()`. (issue #56)
+- [x] Enum: `DividendType += BOND_COUPON`, `CashflowType += MATURITY`, thêm `BondIssuerType`. (issue #56)
+- [x] `Dividend` thêm `parValueApplied?`/`couponRatePercentApplied?` — đóng băng thông số đã dùng để tính tại thời điểm ghi. (issue #56)
+- [x] Seed `Setting`: `BOND_INTEREST_TAX_RATE_CORPORATE = 5`, `BOND_INTEREST_TAX_RATE_GOVERNMENT = 0` (seed tường minh cả giá trị 0). (issue #56) — **Migration thật (`prisma migrate dev`) CHƯA chạy được** trên Claude Cloud (thiếu Postgres/Docker, hạn chế hạ tầng đã biết); đã xác nhận `pnpm prisma generate`/`pnpm prisma validate` sạch và schema migration-ready. Cần chạy `prisma migrate dev` thật trên Claude Local trước khi coi phần DB là xong tuyệt đối.
 
 ### 2. Dọn nợ enum trước khi thêm giá trị (bắt buộc, làm TRƯỚC bước 3)
 Thêm giá trị vào `DividendType`/`CashflowType` sẽ **sai âm thầm** ở các điểm phân nhánh nhị phân hiện có — TypeScript không bắt được. Rule mới: `docs/rules/typescript-style.md` mục "Enum".

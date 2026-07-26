@@ -12,7 +12,7 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 4 | Cổ tức | ✅ | [phase-4.md](./phase-4.md) |
 | 5 | Thuế bán (áp dụng) | ✅ | [phase-5.md](./phase-5.md) |
 | 6 | Biểu đồ + hoàn thiện dashboard | ✅ | [phase-6.md](./phase-6.md) |
-| 7 | Trái tức (lãi trái phiếu) | ⬜ | [phase-7.md](./phase-7.md) |
+| 7 | Trái tức (lãi trái phiếu) | 🟨 | [phase-7.md](./phase-7.md) |
 | 8 | Lịch dòng tiền sắp tới | ⬜ | [phase-8.md](./phase-8.md) |
 
 ## Cách dùng
@@ -63,3 +63,4 @@ Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọ
 - 2026-07-24: fix code review PR #87 (issue #83/#82/#67): sửa `realizedPnl` sai khi holding có cổ tức cổ phiếu (2 bộ đếm song song, `lib/realized-pnl.ts`), thêm cờ `pnlSplitIsApproximate` cảnh báo cutoff-approximate, dọn trùng lặp `sortByPositionTrailOrder`/`paginateWithCursor`. Xem `DECISION.md` 2026-07-24 (2).
 - 2026-07-24: sửa lần 2 PR #87 — retrofit thiết kế "2 bộ đếm song song" thành "1 bộ đếm `realQuantity`" cho `computeRealizedGainForHolding` (ca bán một phần rồi mua tiếp trước đó tính sai) VÀ fix cùng họ bug ở write-path `derivePositionIncludingStockDividends` (`lib/cost-basis.ts`, chưa từng fix). Xem `DECISION.md` 2026-07-24 (3).
 - 2026-07-24: sửa lần 3 PR #87 — xoá `derivePosition()` cũ (chỉ-Cashflow, không còn production caller sau sửa lần 2), đổi tên `derivePositionIncludingStockDividends()` thành `derivePosition()` (chiếm lại tên, giờ là cài đặt DUY NHẤT), gộp 10 test case cũ vào test suite hàm mới với `stockDividends=[]`. Gộp test lộ ra bug thật (sửa lần 4): `avgCost` không reset về 0 khi đóng hết vị thế bằng SELL không có BUY sau đó — thêm reset tường minh dựa trên `quantity` thật. Xem `DECISION.md` 2026-07-24 (4).
+- 2026-07-26: Phase 7 — verify issue #56 (PR #102): `BondTerms`/`BondIssuerType`/`DividendType.BOND_COUPON`/`CashflowType.MATURITY`/`Dividend.parValueApplied`+`couponRatePercentApplied`/2 Setting `BOND_INTEREST_TAX_RATE_*` đúng như phase-7.md mục 1, docs domain đồng bộ, không sót duplicate declaration ở 11 file conflict cũ; bổ sung 4 unit test (MATURITY ở `computeCashflowAmount`/`derivePosition`/`computeRealizedGainForHolding`) vì phase-7.md yêu cầu tường minh "xác nhận bằng test, không sửa mù". Tick mục 1 "Schema & Setting" trong `phase-7.md`; Phase 7 vẫn 🟨 (còn #57/#58/#101) và migration thật (`prisma migrate dev`) còn chờ chạy trên Claude Local.

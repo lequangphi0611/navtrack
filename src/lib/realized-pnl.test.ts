@@ -317,6 +317,34 @@ describe("computeRealizedGainForHolding", () => {
 
     expect(forward.toString()).toBe(reversed.toString());
   });
+
+  // Phase 7 (process/phase-7.md mục 2, "Rà lại các predicate === 'BUY'"):
+  // MATURITY phải rơi cùng nhánh công thức với SELL ở computeRealizedGainForHolding
+  // (switch "case SELL: case MATURITY:") — xác nhận bằng test thay vì chỉ tin
+  // switch compile được (assertNever chỉ bắt THIẾU case, không bắt SAI công thức).
+  test("MATURITY (tất toán trái phiếu): lãi/lỗ chốt tính đúng theo công thức chung với SELL", () => {
+    const cashflows: RealizedGainCashflowInput[] = [
+      {
+        id: "cf1",
+        type: "BUY",
+        date: d("2023-01-01"),
+        createdAt: d("2023-01-01"),
+        quantity: new Decimal(100),
+        amount: new Decimal(-1_000_000),
+      },
+      {
+        id: "cf2",
+        type: "MATURITY",
+        date: d("2023-06-01"),
+        createdAt: d("2023-06-01"),
+        quantity: new Decimal(100),
+        amount: new Decimal(1_100_000),
+      },
+    ];
+
+    // avgCost = 1.000.000/100 = 10.000; realized = 1.100.000 - 100*10.000 = 100.000.
+    expect(computeRealizedGainForHolding(cashflows).toString()).toBe("100000");
+  });
 });
 
 describe("computeUnrealizedGain", () => {

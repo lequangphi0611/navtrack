@@ -47,6 +47,21 @@ describe("computeCashflowAmount", () => {
     });
     expect(amount.toString()).toBe("6483500");
   });
+
+  // Phase 7 (process/phase-7.md mục 2): xác nhận công thức chung SELL/MATURITY
+  // ở computeCashflowAmount() cũng đúng cho tất toán trái phiếu — không "sửa
+  // mù" chỉ vì switch compile được. gross=100*100.000=10.000.000; amount =
+  // gross - fee - tax = 10.000.000 - 10.000 - 6.500 = 9.983.500.
+  test("MATURITY: amount dương, trừ phí và thuế lãi — cùng công thức với SELL", () => {
+    const amount = computeCashflowAmount({
+      type: "MATURITY",
+      quantity: new Decimal(100),
+      pricePerUnit: new Decimal(100_000),
+      feeAmount: new Decimal(10_000),
+      taxAmount: new Decimal(6_500),
+    });
+    expect(amount.toString()).toBe("9983500");
+  });
 });
 
 // derivePosition() (lib/cost-basis.ts) là cài đặt DUY NHẤT của công thức bình
@@ -533,6 +548,83 @@ describe("derivePosition", () => {
     // avgCost = (15*10.000 + 85*200.000) / 100 = 171.500.
     expect(position.quantity.toString()).toBe("100");
     expect(position.avgCost.toString()).toBe("171500");
+    expect(position.wentNegative).toBe(false);
+  });
+
+  // Phase 7 (process/phase-7.md mục 2, "Rà lại các predicate === 'BUY'"):
+  // MATURITY phải rơi vào nhánh "không phải BUY" ở vòng lặp avgCost (chỉ trừ
+  // quantity, KHÔNG gộp giá đáo hạn vào giá vốn bình quân) — xác nhận bằng
+  // test thay vì chỉ tin switch compile được.
+  test("MATURITY (tất toán trái phiếu) hành xử như SELL: giảm SL về 0, avgCost reset về 0", () => {
+    const position = derivePosition(
+      [
+        {
+          id: "buy-1",
+          type: "BUY",
+          date: new Date("2026-01-01"),
+          createdAt: new Date("2026-01-01"),
+          quantity: new Decimal(100),
+          pricePerUnit: new Decimal(1_000_000),
+          feeAmount: new Decimal(0),
+        },
+        {
+          id: "maturity-1",
+          type: "MATURITY",
+          date: new Date("2026-06-01"),
+          createdAt: new Date("2026-06-01"),
+          quantity: new Decimal(100),
+          pricePerUnit: new Decimal(1_000_000),
+          feeAmount: new Decimal(0),
+        },
+      ],
+      [],
+    );
+
+    expect(position.quantity.toString()).toBe("0");
+    expect(position.avgCost.toString()).toBe("0");
+    expect(position.wentNegative).toBe(false);
+  });
+
+  test("MATURITY tất toán MỘT PHẦN rồi mua tiếp: avgCost chỉ theo SL thực còn lại, KHÔNG bị pricePerUnit đáo hạn (parValue) làm lệch", () => {
+    const position = derivePosition(
+      [
+        {
+          id: "buy-1",
+          type: "BUY",
+          date: new Date("2026-01-01"),
+          createdAt: new Date("2026-01-01"),
+          quantity: new Decimal(100),
+          pricePerUnit: new Decimal(100_000),
+          feeAmount: new Decimal(0),
+        },
+        {
+          id: "maturity-1",
+          type: "MATURITY",
+          date: new Date("2026-03-01"),
+          createdAt: new Date("2026-03-01"),
+          quantity: new Decimal(40),
+          // pricePerUnit cố tình lệch xa avgCost thật — nếu MATURITY bị tính
+          // nhầm vào avgCost (như BUY) thì kết quả sẽ sai rất lớn.
+          pricePerUnit: new Decimal(999_999_999),
+          feeAmount: new Decimal(0),
+        },
+        {
+          id: "buy-2",
+          type: "BUY",
+          date: new Date("2026-04-01"),
+          createdAt: new Date("2026-04-01"),
+          quantity: new Decimal(50),
+          pricePerUnit: new Decimal(200_000),
+          feeAmount: new Decimal(0),
+        },
+      ],
+      [],
+    );
+
+    // SL thực: 100 - 40 (MATURITY) + 50 = 110.
+    // avgCost = (60*100.000 + 50*200.000) / 110 = 16.000.000 / 110 = 145.454,545...
+    expect(position.quantity.toString()).toBe("110");
+    expect(position.avgCost.toFixed(2)).toBe("145454.55");
     expect(position.wentNegative).toBe(false);
   });
 });
