@@ -37,9 +37,10 @@ export function computeCashflowAmount(params: {
     case "BUY":
       return gross.neg().minus(params.feeAmount);
     case "SELL":
+    case "MATURITY":
       // Xác nhận (process/phase-7.md mục 3): công thức này cũng đúng cho
-      // MATURITY tương lai — dòng tiền dương trừ phí/thuế, cùng cấu trúc tất
-      // toán đáo hạn (quantity × parValue − fee − tax lãi).
+      // MATURITY — dòng tiền dương trừ phí/thuế, cùng cấu trúc tất toán đáo
+      // hạn (quantity × parValue − fee − tax lãi).
       return gross.minus(params.feeAmount).minus(params.taxAmount);
     default:
       return assertNever(params.type);

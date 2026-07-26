@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Coins, Layers } from "lucide-react";
+import { Coins, Landmark, Layers } from "lucide-react";
 import { useState } from "react";
 
 import type { DividendType } from "@prisma/client";
@@ -18,16 +18,22 @@ type DividendFilterValue = "ALL" | DividendType;
 const DIVIDEND_TYPE_LABEL: Record<DividendType, string> = {
   CASH: "Tiền mặt",
   STOCK: "Cổ phiếu",
+  BOND_COUPON: "Trái tức",
 };
 
 const DIVIDEND_TYPE_ICON: Record<DividendType, LucideIcon> = {
   CASH: Coins,
   STOCK: Layers,
+  BOND_COUPON: Landmark,
 };
 
 const DIVIDEND_TYPE_ICON_CLASS: Record<DividendType, string> = {
   CASH: "bg-gain/14 text-gain",
   STOCK: "bg-accent/14 text-accent",
+  // Khác CASH (gain) để phân biệt trực quan dù cùng cấu trúc dữ liệu
+  // gross/tax/net (getDividendHistory hiện throw NOT_IMPLEMENTED cho
+  // BOND_COUPON — issue #101 — nhưng Record phải đủ case để compile).
+  BOND_COUPON: "bg-warning/14 text-warning",
 };
 
 const FILTER_OPTIONS: { value: DividendFilterValue; label: string }[] = [
@@ -50,6 +56,8 @@ type DividendRowsFilterProps = {
 function dividendDetailLine(row: DividendHistoryRow): string {
   switch (row.type) {
     case "CASH":
+    case "BOND_COUPON":
+      // Cùng cấu trúc field (gross/tax) với CASH — không phải placeholder.
       return `${row.date} · gộp ${row.grossAmount ? formatMoney(row.grossAmount, { compact: true }) : "—"} − thuế ${row.taxAmount ? formatMoney(row.taxAmount, { compact: true }) : "—"}`;
     case "STOCK":
       return `${row.date} · ${row.quantityBefore && row.unit ? formatQuantity(row.quantityBefore, row.unit) : "—"} → ${row.quantityAfter && row.unit ? formatQuantity(row.quantityAfter, row.unit) : "—"}`;
@@ -69,6 +77,8 @@ function DividendRowAmount({
 }) {
   switch (row.type) {
     case "CASH":
+    case "BOND_COUPON":
+      // Cùng cấu trúc field (netAmount) với CASH — không phải placeholder.
       return (
         <>
           <div className="font-mono text-[13px] font-bold text-gain">

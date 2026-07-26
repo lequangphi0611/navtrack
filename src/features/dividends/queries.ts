@@ -284,6 +284,14 @@ export async function getDividendHistory(holdingId: string): Promise<{
           addedQuantity: stockQuantity.toString(),
         } satisfies DividendHistoryRow;
       }
+      case "BOND_COUPON":
+        // Chưa hỗ trợ hiển thị lịch sử trái tức — issue #101 sẽ triển khai
+        // đủ format/tổng hợp. Lỗi lường trước (AppError), không throw Error
+        // trần — cùng convention error-handling.md.
+        throw new AppError(
+          "NOT_IMPLEMENTED",
+          "Trái tức chưa được hỗ trợ ở lịch sử cổ tức — xem issue #101",
+        );
       default:
         return assertNever(dividend.type);
     }

@@ -1,5 +1,11 @@
 import type { LucideIcon } from "lucide-react";
-import { ArrowDownLeft, ArrowUpRight, Coins, Flag } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Coins,
+  Flag,
+  Landmark,
+} from "lucide-react";
 
 import type { CashflowType } from "@prisma/client";
 import { formatMoney } from "@/lib/format";
@@ -30,11 +36,14 @@ type CashflowTimelineProps = {
   className?: string;
 };
 
+// MATURITY: placeholder tạm (design-implementer sẽ polish ở #57) — tông primary
+// để phân biệt với BUY (đỏ)/SELL (xanh), khác CUTOFF_NAV (primary đậm hơn).
 const ICON_CLASS: Record<CashflowTimelineRow["kind"], string> = {
   BUY: "bg-destructive/12 text-destructive",
   SELL: "bg-gain/12 text-gain",
   DIVIDEND: "bg-accent/14 text-accent",
   CUTOFF_NAV: "bg-primary/18 text-primary",
+  MATURITY: "bg-primary/12 text-primary",
 };
 
 const KIND_ICON: Record<CashflowTimelineRow["kind"], LucideIcon> = {
@@ -42,6 +51,7 @@ const KIND_ICON: Record<CashflowTimelineRow["kind"], LucideIcon> = {
   SELL: ArrowUpRight,
   DIVIDEND: Coins,
   CUTOFF_NAV: Flag,
+  MATURITY: Landmark,
 };
 
 function CashflowTimeline({

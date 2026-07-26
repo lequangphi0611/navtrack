@@ -74,19 +74,26 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 // mục "Enum") thay cho ternary `isCash ? ... : ...` lặp lại nhiều lần: thiếu
 // một giá trị enum sẽ lỗi compile ngay thay vì âm thầm coi mọi giá trị khác
 // CASH là STOCK.
+// BOND_COUPON: placeholder tối giản — SegmentedControl bên dưới hard-code chỉ
+// "CASH"/"STOCK" (không đọc DIVIDEND_TYPES), nên `type` không thể thực sự
+// bằng "BOND_COUPON" qua UI hiện tại; giữ Record đủ case để compile, UI thật
+// (#101) sẽ thay các placeholder này.
 const PERCENT_FIELD_LABEL: Record<DividendType, string> = {
   CASH: "Tỷ lệ cổ tức (% mệnh giá)",
   STOCK: "Tỷ lệ cổ tức cổ phiếu (%)",
+  BOND_COUPON: "Trái tức",
 };
 
 const DIVIDEND_FORM_SUBTITLE: Record<DividendType, string> = {
   CASH: "Nhập % → tự tính tiền nhận về",
   STOCK: "Cổ phiếu → tăng số lượng nắm giữ",
+  BOND_COUPON: "Chưa hỗ trợ",
 };
 
 const SUBMIT_BUTTON_CLASS: Record<DividendType, string> = {
   CASH: "bg-gain text-primary-foreground hover:bg-gain/85",
   STOCK: "bg-accent text-accent-foreground hover:bg-accent/85",
+  BOND_COUPON: "bg-muted text-muted-foreground",
 };
 
 // Parse lenient — input "percent" gõ tay có thể rỗng/dở dang lúc user đang gõ;
@@ -158,6 +165,9 @@ function DividendForm({
       stockDividend = percentDecimal
         ? computeStockDividend({ percent: percentDecimal, quantity })
         : null;
+      break;
+    case "BOND_COUPON":
+      // Placeholder — không thể chạm tới qua UI (SegmentedControl chỉ CASH/STOCK).
       break;
     default:
       assertNever(type);
@@ -279,6 +289,8 @@ function DividendForm({
                         thưởng
                       </span>
                     );
+                  case "BOND_COUPON":
+                    return null;
                   default:
                     return assertNever(type);
                 }
@@ -288,6 +300,8 @@ function DividendForm({
             {(() => {
               switch (type) {
                 case "CASH":
+                  return null;
+                case "BOND_COUPON":
                   return null;
                 case "STOCK":
                   return (
@@ -415,6 +429,8 @@ function DividendForm({
                     />
                   </div>
                 );
+              case "BOND_COUPON":
+                return null;
               default:
                 return assertNever(type);
             }
@@ -452,6 +468,8 @@ function DividendForm({
                           chia.
                         </>
                       );
+                    case "BOND_COUPON":
+                      return null;
                     default:
                       return assertNever(type);
                   }
@@ -552,6 +570,8 @@ function DividendForm({
                     </div>
                   </div>
                 );
+              case "BOND_COUPON":
+                return null;
               default:
                 return assertNever(type);
             }
@@ -632,6 +652,8 @@ function DividendForm({
                     </div>
                   </div>
                 );
+              case "BOND_COUPON":
+                return null;
               default:
                 return assertNever(type);
             }
@@ -676,6 +698,8 @@ function dividendTypeLabel(type: DividendType): string {
       return "Cổ tức tiền mặt";
     case "STOCK":
       return "Cổ tức cổ phiếu";
+    case "BOND_COUPON":
+      return "Trái tức";
     default:
       return assertNever(type);
   }
@@ -688,6 +712,8 @@ function DividendReceivedIcon({ type }: { type: DividendType }) {
       return <Coins className="size-4.5 shrink-0 text-accent" />;
     case "STOCK":
       return <Layers className="size-4.5 shrink-0 text-accent" />;
+    case "BOND_COUPON":
+      return <Coins className="size-4.5 shrink-0 text-accent" />;
     default:
       return assertNever(type);
   }
@@ -739,6 +765,11 @@ function DividendMainCard({ result }: { result: DividendRecordedResult }) {
           ) : null}
         </div>
       );
+    case "BOND_COUPON":
+      // Placeholder — recordDividend() (actions.ts) trả lỗi lường trước cho
+      // BOND_COUPON trước khi tới DividendFormState.ok=true, nên nhánh này
+      // không thực sự render được ở UI hiện tại (issue #101 sẽ implement).
+      return null;
     default:
       return assertNever(result.type);
   }

@@ -225,6 +225,48 @@ async function main() {
       },
     });
   }
+
+  // Phase 7 — thuế lãi trái phiếu (docs/domain/07-tax.md), theo BondIssuerType
+  // (Nghị định 253/2026/NĐ-CP): doanh nghiệp 5%, Chính phủ/chính quyền địa
+  // phương MIỄN — seed tường minh cả giá trị 0% (cùng tiền lệ SALE_TAX_GOLD).
+  const bondInterestTaxSettings: {
+    key: (typeof SETTING_KEYS)[
+      "BOND_INTEREST_TAX_RATE_CORPORATE" | "BOND_INTEREST_TAX_RATE_GOVERNMENT"];
+    label: string;
+    value: string;
+  }[] = [
+    {
+      key: SETTING_KEYS.BOND_INTEREST_TAX_RATE_CORPORATE,
+      label: "Thuế lãi trái phiếu doanh nghiệp (%)",
+      value: "5",
+    },
+    {
+      key: SETTING_KEYS.BOND_INTEREST_TAX_RATE_GOVERNMENT,
+      label: "Thuế lãi trái phiếu Chính phủ (%)",
+      value: "0",
+    },
+  ];
+
+  for (const setting of bondInterestTaxSettings) {
+    await db.setting.upsert({
+      where: {
+        key_effectiveFrom: {
+          key: setting.key,
+          effectiveFrom: BASELINE_DATE,
+        },
+      },
+      update: {},
+      create: {
+        key: setting.key,
+        value: setting.value,
+        valueType: "DECIMAL",
+        label: setting.label,
+        group: "TAX",
+        unit: "%",
+        effectiveFrom: BASELINE_DATE,
+      },
+    });
+  }
 }
 
 main()

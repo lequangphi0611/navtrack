@@ -13,6 +13,8 @@ export function cashflowActionLabel(type: CashflowType): string {
       return "Mua";
     case "SELL":
       return "Bán";
+    case "MATURITY":
+      return "Đáo hạn";
     default:
       return assertNever(type);
   }

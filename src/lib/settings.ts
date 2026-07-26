@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-import type { AssetType } from "@prisma/client";
+import type { AssetType, BondIssuerType } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   AppError,
@@ -50,6 +50,11 @@ export const SETTING_KEYS = {
   // lib/concentration.ts, KHÔNG phải Setting (tham số chống nhiễu hiển thị,
   // khác khẩu vị rủi ro của user).
   CONCENTRATION_WARNING_THRESHOLD: "CONCENTRATION_WARNING_THRESHOLD",
+  // Phase 7 — docs/domain/07-tax.md: thuế TNCN trên lãi trái phiếu (%), theo
+  // BondIssuerType, effective-dated theo ngày trả lãi/đáo hạn. Doanh nghiệp
+  // 5%, Chính phủ/chính quyền địa phương miễn (0%, seed tường minh).
+  BOND_INTEREST_TAX_RATE_CORPORATE: "BOND_INTEREST_TAX_RATE_CORPORATE",
+  BOND_INTEREST_TAX_RATE_GOVERNMENT: "BOND_INTEREST_TAX_RATE_GOVERNMENT",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -98,6 +103,17 @@ export function transactionFeeKey(
       return SETTING_KEYS.TRANSACTION_FEE_SELL_BOND;
     case "GOLD":
       return SETTING_KEYS.TRANSACTION_FEE_SELL_GOLD;
+  }
+}
+
+// Tra key BOND_INTEREST_TAX_RATE_<LOẠI PHÁT HÀNH> theo BondIssuerType — cùng
+// lý do với saleTaxKey (docs/domain/07-tax.md mục "Thuế lãi trái phiếu").
+export function bondInterestTaxKey(issuerType: BondIssuerType): SettingKey {
+  switch (issuerType) {
+    case "CORPORATE":
+      return SETTING_KEYS.BOND_INTEREST_TAX_RATE_CORPORATE;
+    case "GOVERNMENT":
+      return SETTING_KEYS.BOND_INTEREST_TAX_RATE_GOVERNMENT;
   }
 }
 

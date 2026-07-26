@@ -23,11 +23,20 @@ enum AssetType {
 enum CashflowType {
   BUY
   SELL
+  MATURITY // Phase 7: tất toán trái phiếu khi đáo hạn — nhận lại gốc, KHÔNG chịu thuế 0.1% (docs/domain/07-tax.md)
 }
 
 enum DividendType {
   CASH
   STOCK
+  BOND_COUPON // Phase 7: trái tức (lãi trái phiếu định kỳ) — dòng tiền dương như CASH, thuế khác key, KHÔNG bù pha loãng NAV
+}
+
+// Phase 7 — thuế lãi trái phiếu phụ thuộc tổ chức phát hành (Nghị định 253/2026/NĐ-CP):
+// doanh nghiệp chịu 5%, Chính phủ/chính quyền địa phương được miễn.
+enum BondIssuerType {
+  CORPORATE
+  GOVERNMENT
 }
 
 enum SnapshotSource {
@@ -140,6 +149,7 @@ model Holding {
   dividends                  Dividend[]
   snapshots                  Snapshot[]
   navOverrides               NavOverride[]
+  bondTerms                  BondTerms? // chỉ tồn tại khi type = BOND (xem model bên dưới)
   createdAt                  DateTime      @default(now())
   updatedAt                  DateTime      @updatedAt
   // Phase 6: trạng thái badge cảnh báo tập trung ở LẦN TÍNH GẦN NHẤT — cần cho
@@ -151,6 +161,25 @@ model Holding {
   concentrationWarningActive Boolean       @default(false)
 
   @@unique([userId, symbol, type]) // một vị thế/user cho mỗi (mã, loại) — mua trùng mã tự gộp; cũng phục vụ lookup theo userId (leftmost prefix)
+}
+
+// Phase 7 — đặc tả (instrument spec) của trái phiếu, tách khỏi Holding (vị thế). Toàn bộ
+// field ở đây là ĐIỀU KHOẢN PHÁT HÀNH: tĩnh, do hợp đồng quy định. KHÔNG chứa trạng thái
+// suy ra được (vd "kỳ trả lãi tới" — suy runtime từ firstCouponDate + couponFrequencyMonths,
+// xem docs/domain/10-cashflow-calendar.md).
+model BondTerms {
+  id                     String         @id @default(cuid())
+  holdingId              String         @unique // 1-1 với Holding; app PHẢI validate holding.type = BOND (quan hệ 1-1 không tự ràng buộc được điều đó)
+  holding                Holding        @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  issuerType             BondIssuerType // quyết định key thuế lãi áp dụng — xem docs/domain/07-tax.md
+  parValue               Decimal        @db.Decimal(20, 4) // mệnh giá MỘT trái phiếu (đ), không phải tổng giá trị lô
+  couponRatePercent      Decimal?       @db.Decimal(20, 4) // lãi suất coupon danh nghĩa (%/năm); null = zero-coupon/chiết khấu
+  couponFrequencyMonths  Int? // kỳ trả lãi theo tháng (6 = nửa năm/lần, 12 = hàng năm); null = zero-coupon
+  firstCouponDate        DateTime? // MỐC NEO của lịch coupon (ngày trả lãi kỳ đầu theo hợp đồng) — KHÔNG bị ghi đè khi ghi trái tức
+  maturityDate           DateTime? // ngày đáo hạn
+  nextCouponDateOverride DateTime? // chỉ dùng khi tổ chức phát hành đổi lịch thực tế — thắng giá trị suy ra; cùng tinh thần NavOverride
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 }
 
 model Cashflow {
@@ -172,25 +201,30 @@ model Cashflow {
 }
 
 model Dividend {
-  id            String       @id @default(cuid())
-  holdingId     String
-  holding       Holding      @relation(fields: [holdingId], references: [id], onDelete: Cascade)
-  type          DividendType
-  date          DateTime
+  id                       String       @id @default(cuid())
+  holdingId                String
+  holding                  Holding      @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  type                     DividendType
+  date                     DateTime
   // Ngày tiền/CP THỰC VỀ tài khoản — thuần thông tin hiển thị, có thể trễ vài
   // tuần so với `date` (ngày chia) ngoài thực tế. KHÔNG dùng cho bất kỳ tính
   // toán nào: không XIRR, không quantity timeline (buildQuantityTimeline luôn
   // dùng `date`), không phải ngày ghi NavOverride bù pha loãng (luôn ghi tại
   // `date`, xem features/dividends/actions.ts::recordDividend). Optional —
   // user có thể không nhập.
-  paymentDate   DateTime?
-  grossAmount   Decimal?     @db.Decimal(20, 4) // type = CASH: cổ tức gộp trước thuế
-  taxAmount     Decimal?     @db.Decimal(20, 4) // type = CASH: thuế TNCN tự khấu trừ (~5%)
-  netAmount     Decimal?     @db.Decimal(20, 4) // type = CASH: thực nhận sau thuế = dòng tiền dương cho XIRR
-  stockQuantity Decimal?     @db.Decimal(20, 4) // type = STOCK: cộng thêm số lượng nắm giữ (không phát sinh tiền)
-  note          String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  paymentDate              DateTime?
+  grossAmount              Decimal?     @db.Decimal(20, 4) // type = CASH | BOND_COUPON: số gộp trước thuế
+  taxAmount                Decimal?     @db.Decimal(20, 4) // type = CASH | BOND_COUPON: thuế TNCN tự khấu trừ (cổ tức 5%; trái tức theo issuerType — 5% doanh nghiệp, 0% Chính phủ)
+  netAmount                Decimal?     @db.Decimal(20, 4) // type = CASH | BOND_COUPON: thực nhận sau thuế = dòng tiền dương cho XIRR
+  stockQuantity            Decimal?     @db.Decimal(20, 4) // type = STOCK: cộng thêm số lượng nắm giữ (không phát sinh tiền)
+  // Phase 7, type = BOND_COUPON: ĐÓNG BĂNG thông số đã dùng để tính tại thời điểm ghi — cùng
+  // nguyên tắc "thuế/phí đã tính không hồi tố" (07-tax.md). Không đọc lại BondTerms khi hiển thị
+  // lịch sử, vì mệnh giá/coupon rate có thể được sửa về sau (nhập sai, trái phiếu thả nổi).
+  parValueApplied          Decimal?     @db.Decimal(20, 4)
+  couponRatePercentApplied Decimal?     @db.Decimal(20, 4)
+  note                     String?
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
 
   @@index([holdingId, date])
 }

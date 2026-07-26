@@ -35,6 +35,8 @@ function cashflowLabel(
       return `Mua ${formatQuantity(cf.quantity, unit)}`;
     case "SELL":
       return `${isFinalSell ? "Bán hết" : "Bán"} ${formatQuantity(cf.quantity, unit)}`;
+    case "MATURITY":
+      return `Đáo hạn ${formatQuantity(cf.quantity, unit)}`;
     default:
       return assertNever(cf.type);
   }

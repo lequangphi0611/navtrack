@@ -120,10 +120,11 @@ export function computeRealizedGainForHolding(
         realQuantity = newRealQuantity;
         break;
       }
-      case "SELL": {
-        // Công thức tổng quát đúng cho cả SELL và MATURITY tương lai —
-        // cf.amount đã materialize đúng dòng tiền thực nhận từ bước
-        // computeCashflowAmount() (lib/cost-basis.ts, process/phase-7.md mục 3).
+      case "SELL":
+      case "MATURITY": {
+        // Công thức tổng quát đúng cho cả SELL và MATURITY — cf.amount đã
+        // materialize đúng dòng tiền thực nhận từ bước computeCashflowAmount()
+        // (lib/cost-basis.ts, process/phase-7.md mục 3).
         realizedGain = realizedGain.plus(
           cf.amount.minus(cf.quantity.mul(avgCost)),
         );

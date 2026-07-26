@@ -402,6 +402,13 @@ export async function recordDividend(
               priceAdjustment,
             };
           }
+          case "BOND_COUPON":
+            // Lỗi lường trước (ActionResult), không throw — chưa triển khai
+            // (issue #101), xem process/phase-7.md.
+            return {
+              ok: false as const,
+              error: "Trái tức chưa được hỗ trợ — sẽ có ở phần sau.",
+            };
           default:
             return assertNever(type);
         }

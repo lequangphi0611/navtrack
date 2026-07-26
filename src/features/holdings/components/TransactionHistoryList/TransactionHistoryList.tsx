@@ -33,6 +33,11 @@ function cashflowBadgeVariant(
       return "gain";
     case "SELL":
       return "destructive";
+    case "MATURITY":
+      // Placeholder tạm — trái phiếu đáo hạn chưa có ngôn ngữ badge riêng
+      // (design-implementer sẽ polish ở #57), "default" (primary) tránh trùng
+      // BUY(gain)/SELL(destructive).
+      return "default";
     default:
       return assertNever(type);
   }

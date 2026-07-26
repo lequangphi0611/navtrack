@@ -3,6 +3,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   CheckCircle2,
+  Flag,
   History,
   type LucideIcon,
   Zap,
@@ -48,6 +49,15 @@ function getTransactionVisual(type: CashflowType): TransactionVisual {
         icon: ArrowUpRight,
         iconBgClass: "bg-gain/12",
         colorClass: "text-gain",
+      };
+    case "MATURITY":
+      // Placeholder tạm — trái phiếu đáo hạn chưa có ngôn ngữ hình ảnh riêng
+      // (design-implementer sẽ polish ở #57), dùng tông primary/neutral để
+      // phân biệt tạm với BUY/SELL.
+      return {
+        icon: Flag,
+        iconBgClass: "bg-primary/12",
+        colorClass: "text-primary",
       };
     default:
       return assertNever(type);
