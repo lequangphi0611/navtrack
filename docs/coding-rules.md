@@ -4,13 +4,14 @@ Bộ quy tắc coding cho Navtrack, tách theo từng mảng. File này là **ch
 
 | Khi làm việc với... | Tham chiếu |
 |---|---|
+| **Khi nào được gộp code, khi nào để lặp; ba tầng `Row → Domain → DTO`; kích thước hàm & độ lồng; comment** | [`rules/clean-code.md`](./rules/clean-code.md) — **đọc trước khi refactor bất kỳ tầng nào** |
 | Đặt tên, style TypeScript, format, ngôn ngữ code | [`rules/typescript-style.md`](./rules/typescript-style.md) |
 | Enum: một nguồn sự thật (Prisma → TS), `switch` exhaustive + `assertNever`, nhãn qua `Record` | [`rules/typescript-style.md`](./rules/typescript-style.md) (mục "Enum") |
-| Cấu trúc thư mục, App Router, ranh giới Python↔TS | [`rules/project-structure.md`](./rules/project-structure.md) |
+| Cấu trúc thư mục, ba vai `repository.ts`/`queries.ts`/`actions.ts`, App Router, ranh giới Python↔TS | [`rules/project-structure.md`](./rules/project-structure.md) |
 | Component: Atomic Design, Server Component/Presentational, shadcn | [`rules/component-architecture.md`](./rules/component-architecture.md) |
 | Màu sắc, typography, icon, kho atoms/molecules đã có | [`rules/ui-ux-design.md`](./rules/ui-ux-design.md) |
 | Định nghĩa Prisma schema: model, enum, quan hệ, soft-delete, effective-dating, migration | [`rules/schema.md`](./rules/schema.md) |
-| Truy vấn Prisma, tiền tệ/Decimal, tách dữ liệu theo user | [`rules/data-prisma.md`](./rules/data-prisma.md) |
+| Truy vấn Prisma, tầng `repository.ts` (DAL) + ranh giới transaction, tiền tệ/Decimal, tách dữ liệu theo user | [`rules/data-prisma.md`](./rules/data-prisma.md) |
 | Job Python lấy giá (vnstock, GitHub Actions, ghi DB) | [`rules/python-job.md`](./rules/python-job.md) |
 | Package manager, TS config, ESLint/Prettier | [`rules/tooling.md`](./rules/tooling.md) |
 | Test: unit (logic), end-to-end (Playwright), integration (job Python) | [`rules/testing.md`](./rules/testing.md) |
