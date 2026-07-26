@@ -1,3 +1,5 @@
+import type { DividendType } from "@prisma/client";
+
 import type { AssetType } from "@/components/AssetTypeBadge";
 
 // Nguồn sự thật cho state của DividendForm (@/features/dividends/components/DividendForm)
@@ -13,7 +15,7 @@ export type DividendFormState =
 // XIRR), component chỉ hiển thị lại, KHÔNG tự tính lại lần 2.
 export type DividendRecordedResult = {
   symbol: string;
-  type: "CASH" | "STOCK";
+  type: DividendType;
   percentLabel: string; // "20" — hiển thị "Cổ tức tiền mặt 20%"
   dateLabel: string; // đã format dd/MM/yyyy
   // CASH

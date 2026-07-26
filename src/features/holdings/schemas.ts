@@ -1,8 +1,11 @@
+import type { CashflowType } from "@prisma/client";
 import Decimal from "decimal.js";
 import { z } from "zod";
 
+import { CASHFLOW_TYPES } from "@/lib/enums";
+
 export const assetTypeEnum = z.enum(["STOCK", "FUND", "BOND", "GOLD"]);
-export const cashflowTypeEnum = z.enum(["BUY", "SELL"]);
+export const cashflowTypeEnum = z.enum(CASHFLOW_TYPES);
 
 function decimalString(message: string) {
   return z
@@ -62,7 +65,7 @@ const transactionFields = {
 // được; tránh từ chối nhầm các biểu diễn khác của 0 ("0.0", "0.00") nếu sau
 // này có nguồn gửi request khác ngoài form (form hiện tại luôn gửi literal "0").
 function buyHasNoTax(data: {
-  cashflowType: "BUY" | "SELL";
+  cashflowType: CashflowType;
   taxAmount: string;
 }): boolean {
   return data.cashflowType !== "BUY" || new Decimal(data.taxAmount).isZero();

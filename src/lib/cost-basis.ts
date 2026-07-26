@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 
 import type { CashflowType } from "@prisma/client";
+import { assertNever } from "@/lib/assert-never";
 import {
   buildQuantityTimeline,
   sortByPositionTrailOrder,
@@ -32,10 +33,17 @@ export function computeCashflowAmount(params: {
   taxAmount: Decimal;
 }): Decimal {
   const gross = params.quantity.mul(params.pricePerUnit);
-  if (params.type === "BUY") {
-    return gross.neg().minus(params.feeAmount);
+  switch (params.type) {
+    case "BUY":
+      return gross.neg().minus(params.feeAmount);
+    case "SELL":
+      // Xác nhận (process/phase-7.md mục 3): công thức này cũng đúng cho
+      // MATURITY tương lai — dòng tiền dương trừ phí/thuế, cùng cấu trúc tất
+      // toán đáo hạn (quantity × parValue − fee − tax lãi).
+      return gross.minus(params.feeAmount).minus(params.taxAmount);
+    default:
+      return assertNever(params.type);
   }
-  return gross.minus(params.feeAmount).minus(params.taxAmount);
 }
 
 export type CashflowInputWithEvent = CashflowInput & {
@@ -133,6 +141,9 @@ export function derivePosition(
   // cả cổ tức cổ phiếu) làm cơ sở bình quân — xem giải thích ở comment đầu hàm.
   let avgCost = new Decimal(0);
   for (const cf of sortByPositionTrailOrder(cashflows)) {
+    // Loại trừ MỌI THỨ không phải BUY — chỉ mua mới đổi avgCost bình quân di
+    // động; xác nhận đúng cho MATURITY tương lai (đóng vị thế = trừ quantity,
+    // không đổi avgCost, giống SELL, process/phase-7.md mục 2).
     if (cf.type !== "BUY") continue;
     const entry = timeline.get(cf.id)!;
     const realQuantityBefore = entry.before;

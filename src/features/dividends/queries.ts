@@ -1,13 +1,14 @@
 import Decimal from "decimal.js";
 import { notFound } from "next/navigation";
 
-import type { SettingValueType } from "@prisma/client";
+import type { DividendType, SettingValueType } from "@prisma/client";
 import type {
   DividendHistoryRow,
   DividendHistorySummary,
 } from "@/features/dividends/components/DividendHistoryList";
 import type { DividendHolding } from "@/features/dividends/types";
 import { getOpenHoldings } from "@/features/holdings/queries";
+import { assertNever } from "@/lib/assert-never";
 import { getSession } from "@/lib/auth";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
@@ -107,11 +108,19 @@ function roundPercentLabel(numerator: Decimal, denominator: Decimal): string {
 // transaction của recordDividend (features/dividends/actions.ts). holdingId
 // đã được caller verify thuộc đúng user trước đó (cùng cách getCashDividends
 // ở holdings/queries.ts không tự re-check userId).
+// Phase 7 (#101) sẽ cần cộng thêm "BOND_COUPON" vào mảng này — trái tức cũng
+// là dòng tiền tiền mặt đã nhận, cùng ý nghĩa với CASH ở đây.
+const CASH_LIKE_DIVIDEND_TYPES: DividendType[] = ["CASH"];
+
 export async function getTotalCashDividendReceived(
   holdingId: string,
 ): Promise<Decimal> {
   const rows = await db.dividend.findMany({
-    where: { holdingId, type: "CASH", netAmount: { not: null } },
+    where: {
+      holdingId,
+      type: { in: CASH_LIKE_DIVIDEND_TYPES },
+      netAmount: { not: null },
+    },
     select: { netAmount: true },
   });
 
@@ -232,47 +241,52 @@ export async function getDividendHistory(holdingId: string): Promise<{
     // action nào ghi hay không.
     const isNew = index === 0;
 
-    if (dividend.type === "CASH") {
-      // grossAmount/taxAmount/netAmount luôn có giá trị khi type === CASH.
-      const grossAmount = new Decimal(dividend.grossAmount!.toString());
-      const taxAmount = new Decimal(dividend.taxAmount!.toString());
-      const netAmount = new Decimal(dividend.netAmount!.toString());
-      const parValueAtDate = resolveParValueAt(parValueRows, dividend.date);
+    switch (dividend.type) {
+      case "CASH": {
+        // grossAmount/taxAmount/netAmount luôn có giá trị khi type === CASH.
+        const grossAmount = new Decimal(dividend.grossAmount!.toString());
+        const taxAmount = new Decimal(dividend.taxAmount!.toString());
+        const netAmount = new Decimal(dividend.netAmount!.toString());
+        const parValueAtDate = resolveParValueAt(parValueRows, dividend.date);
 
-      cashNetTotal = cashNetTotal.plus(netAmount);
-      cashCount += 1;
+        cashNetTotal = cashNetTotal.plus(netAmount);
+        cashCount += 1;
 
-      return {
-        id: dividend.id,
-        type: "CASH",
-        percentLabel: roundPercentLabel(
-          grossAmount,
-          before.mul(parValueAtDate),
-        ),
-        date: dateLabel,
-        isNew,
-        grossAmount: grossAmount.toString(),
-        taxAmount: taxAmount.toString(),
-        netAmount: netAmount.toString(),
-      } satisfies DividendHistoryRow;
+        return {
+          id: dividend.id,
+          type: "CASH",
+          percentLabel: roundPercentLabel(
+            grossAmount,
+            before.mul(parValueAtDate),
+          ),
+          date: dateLabel,
+          isNew,
+          grossAmount: grossAmount.toString(),
+          taxAmount: taxAmount.toString(),
+          netAmount: netAmount.toString(),
+        } satisfies DividendHistoryRow;
+      }
+      case "STOCK": {
+        // stockQuantity luôn có giá trị khi type === STOCK.
+        const stockQuantity = new Decimal(dividend.stockQuantity!.toString());
+        stockAddedQuantityTotal = stockAddedQuantityTotal.plus(stockQuantity);
+        stockCount += 1;
+
+        return {
+          id: dividend.id,
+          type: "STOCK",
+          percentLabel: roundPercentLabel(stockQuantity, before),
+          date: dateLabel,
+          isNew,
+          unit: holding.unit,
+          quantityBefore: before.toString(),
+          quantityAfter: after.toString(),
+          addedQuantity: stockQuantity.toString(),
+        } satisfies DividendHistoryRow;
+      }
+      default:
+        return assertNever(dividend.type);
     }
-
-    // stockQuantity luôn có giá trị khi type === STOCK.
-    const stockQuantity = new Decimal(dividend.stockQuantity!.toString());
-    stockAddedQuantityTotal = stockAddedQuantityTotal.plus(stockQuantity);
-    stockCount += 1;
-
-    return {
-      id: dividend.id,
-      type: "STOCK",
-      percentLabel: roundPercentLabel(stockQuantity, before),
-      date: dateLabel,
-      isNew,
-      unit: holding.unit,
-      quantityBefore: before.toString(),
-      quantityAfter: after.toString(),
-      addedQuantity: stockQuantity.toString(),
-    } satisfies DividendHistoryRow;
   });
 
   return {

@@ -18,6 +18,7 @@ import type { TransactionSnapshotBannerProps } from "@/features/holdings/compone
 // module xử lý an toàn (live binding), không phải "true" circular init dependency.
 import { getManualSnapshotToday } from "@/features/snapshots/queries";
 import { getSession } from "@/lib/auth";
+import { cashflowActionLabel } from "@/lib/cashflow-label";
 import { computeCostDrag } from "@/lib/cost-drag";
 import { derivePosition } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
@@ -696,7 +697,7 @@ export async function getJustRecordedBanner(
   return {
     // Cùng cách build label/dateNote với timeline trong getHoldingDetail() phía trên —
     // "Mua 5.000 cổ phần" / "11/07/2026 · giá 27.300".
-    transactionLabel: `${cashflow.type === "BUY" ? "Mua" : "Bán"} ${formatQuantity(cashflow.quantity, holding.unit)}`,
+    transactionLabel: `${cashflowActionLabel(cashflow.type)} ${formatQuantity(cashflow.quantity, holding.unit)}`,
     transactionDateNote: `${formatDate(cashflow.date)} · giá ${formatMoney(cashflow.pricePerUnit)}`,
     transactionAmount: cashflow.amount,
     transactionKind: cashflow.type,
