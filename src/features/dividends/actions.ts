@@ -21,8 +21,11 @@ import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { logger } from "@/lib/logger";
 import { getCurrentPortfolioXirrPercent } from "@/lib/portfolio-valuation";
-import { buildQuantityTimeline } from "@/lib/position-trail";
-import type { PositionTrailEvent } from "@/lib/position-trail";
+import {
+  buildPositionEvents,
+  buildQuantityTimeline,
+  PENDING_EVENT_CREATED_AT,
+} from "@/lib/position-trail";
 import { revalidateHoldingDependentRoutes } from "@/lib/revalidate-holding-routes";
 import { ROUTES } from "@/lib/routes";
 import {
@@ -37,12 +40,6 @@ import { resolvePrice } from "@/lib/valuation";
 // `.before` = số lượng đang giữ TẠI NGÀY GHI (docs/domain/02
 // "Vị thế mở ban đầu" — SL "tại thời điểm" khác SL cache hiện tại).
 const PROBE_EVENT_ID = "__probe__";
-
-// createdAt xa nhất có thể cho probe — hành động đang xử lý LÀ sự kiện MỚI
-// NHẤT trong toàn bộ lịch sử, kể cả khi trùng NGÀY với cashflow/dividend khác
-// đã ghi trước đó (tie-break theo createdAt trong buildQuantityTimeline phải
-// luôn xếp probe sau cùng trong ngày đó).
-const PROBE_CREATED_AT = new Date(8640000000000000);
 
 type PriceAdjustment = { oldPrice: Decimal; newPrice: Decimal };
 
@@ -186,32 +183,13 @@ export async function recordDividend(
           return { ok: false as const, error: "Không tìm thấy vị thế" };
         }
 
-        const events: PositionTrailEvent[] = [
-          ...holding.cashflows.map((cf) => ({
-            id: cf.id,
-            date: cf.date,
-            createdAt: cf.createdAt,
-            delta:
-              cf.type === "BUY"
-                ? new Decimal(cf.quantity.toString())
-                : new Decimal(cf.quantity.toString()).neg(),
-          })),
-          ...holding.dividends
-            .filter((dividend) => dividend.type === "STOCK")
-            .map((dividend) => ({
-              id: dividend.id,
-              date: dividend.date,
-              createdAt: dividend.createdAt,
-              // Đã lọc type === "STOCK" ở trên -> stockQuantity luôn có giá trị.
-              delta: new Decimal(dividend.stockQuantity!.toString()),
-            })),
-          {
-            id: PROBE_EVENT_ID,
-            date,
-            createdAt: PROBE_CREATED_AT,
-            delta: new Decimal(0),
-          },
-        ];
+        const events = buildPositionEvents({
+          cashflows: holding.cashflows,
+          dividends: holding.dividends,
+          markers: [
+            { id: PROBE_EVENT_ID, date, createdAt: PENDING_EVENT_CREATED_AT },
+          ],
+        });
 
         const timeline = buildQuantityTimeline(events);
         // PROBE_EVENT_ID luôn có mặt trong events -> luôn có entry trong timeline.
