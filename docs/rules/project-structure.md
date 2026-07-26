@@ -18,8 +18,9 @@ navtrack/
 │  │     │     ├─ HoldingTable.tsx
 │  │     │     └─ index.ts         # export { HoldingTable } from "./HoldingTable"
 │  │     ├─ hooks/                 # use-*.ts (kebab-case)
-│  │     ├─ actions.ts             # server actions
-│  │     ├─ queries.ts             # truy vấn DB (server-only)
+│  │     ├─ actions.ts             # server actions — điều phối, KHÔNG chạm Prisma
+│  │     ├─ repository.ts          # nơi DUY NHẤT chạm Prisma; tự filter userId, nhận tx
+│  │     ├─ queries.ts             # ghép + format thành DTO cho màn hình (server-only)
 │  │     ├─ schemas.ts             # zod
 │  │     └─ types.ts
 │  ├─ components/          # dùng chung nhiều feature
@@ -64,12 +65,16 @@ app/holdings/holdingDetail.tsx # đặt file tùy tiện thay vì [id]/page.tsx
 
 ## Module theo feature
 
-- Mỗi feature `features/<name>/` gồm: `components/`, `actions.ts`, `queries.ts`, `schemas.ts`, `types.ts`.
+- Mỗi feature `features/<name>/` gồm: `components/`, `actions.ts`, `repository.ts`, `queries.ts`, `schemas.ts`, `types.ts`.
+- **Ba vai tách bạch** (`Row → Domain → DTO`, xem [`clean-code.md`](./clean-code.md#2-ba-tầng-type-row--domain--dto)):
+  - `repository.ts` — chạm Prisma, filter `userId`, trả **Domain** (`Decimal`). Nơi **duy nhất** được `import { db }`.
+  - `queries.ts` — gọi repository, ghép + format, trả **DTO** (`string`) cho màn hình.
+  - `actions.ts` — validate, mở `$transaction`, điều phối, `revalidate`. **Không** gọi Prisma trực tiếp.
 - **Colocation:** để file gần nơi dùng; chỉ đẩy lên `components/` hoặc `lib/` chung khi thực sự tái dùng ở nhiều feature.
 
 ## Ranh giới data & Python↔TS
 
-- **Chỉ code server** (server component, server action, `queries.ts`) được import Prisma. **Không** import Prisma trong client component.
+- **Chỉ `repository.ts` được import Prisma** (`@/lib/db`). Server component, server action và `queries.ts` đi qua repository. **Không bao giờ** import Prisma trong client component.
 
 ```tsx
 // ❌ Bad — client component import Prisma (rò rỉ DB ra bundle client)
