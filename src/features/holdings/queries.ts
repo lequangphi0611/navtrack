@@ -1,4 +1,3 @@
-import type { CashflowType } from "@prisma/client";
 import Decimal from "decimal.js";
 import { notFound } from "next/navigation";
 import { cache } from "react";
@@ -23,7 +22,6 @@ import { computeCostDrag } from "@/lib/cost-drag";
 import { derivePosition } from "@/lib/cost-basis";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
-import { db } from "@/lib/db";
 import {
   formatDate,
   formatDayMonth,
@@ -31,10 +29,6 @@ import {
   formatQuantity,
 } from "@/lib/format";
 import { computeHoldingPeriodLabel } from "@/lib/holding-period";
-import {
-  positionSourceSelect,
-  POSITION_TRAIL_ORDER_BY,
-} from "@/lib/position-trail";
 // toUiXirr được export từ lib/portfolio-valuation.ts (adapter dùng chung
 // business XirrResult -> UI XirrResult). Import ngược chiều với
 // getOpenHoldings/getClosedHoldings mà portfolio-valuation.ts import từ file
@@ -54,6 +48,16 @@ import { buildXirrCashflows } from "@/lib/xirr-cashflow";
 
 import { buildCashflowTimeline } from "./build-cashflow-timeline";
 import { groupHoldingsByType } from "./group-holdings";
+import {
+  findCashDividendsForHolding,
+  findCashDividendsForHoldings,
+  findCashflowDateRangeForHoldings,
+  findCashflowsForHoldings,
+  findHoldingDetailSource,
+  findHoldingForPricing,
+  findHoldingRows,
+  findSettingRowsByKeys,
+} from "./repository";
 import type {
   CashflowRow,
   HoldingDetail,
@@ -83,27 +87,13 @@ const getHoldingsRaw = cache(async (): Promise<HoldingsOverview> => {
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  const holdings = await db.holding.findMany({
-    where: { userId: session.user.id },
-    select: {
-      id: true,
-      symbol: true,
-      name: true,
-      type: true,
-      unit: true,
-      quantity: true,
-      avgCost: true,
-    },
-    orderBy: { symbol: "asc" },
-  });
+  const holdings = await findHoldingRows(session.user.id);
 
   const open: HoldingSummary[] = [];
   const closed: HoldingSummary[] = [];
 
   for (const holding of holdings) {
-    const quantity = new Decimal(holding.quantity.toString());
-    const avgCost = new Decimal(holding.avgCost.toString());
-    const totalCostBasis = quantity.mul(avgCost);
+    const totalCostBasis = holding.quantity.mul(holding.avgCost);
 
     const summary: HoldingSummary = {
       id: holding.id,
@@ -111,12 +101,12 @@ const getHoldingsRaw = cache(async (): Promise<HoldingsOverview> => {
       name: holding.name,
       type: holding.type,
       unit: holding.unit,
-      quantity: quantity.toString(),
-      avgCost: avgCost.toString(),
+      quantity: holding.quantity.toString(),
+      avgCost: holding.avgCost.toString(),
       totalCostBasis: totalCostBasis.toString(),
     };
 
-    if (quantity.gt(0)) {
+    if (holding.quantity.gt(0)) {
       open.push(summary);
     } else {
       closed.push(summary);
@@ -139,45 +129,6 @@ export async function hasAnyHolding(): Promise<boolean> {
   return open.length > 0 || closed.length > 0;
 }
 
-// Cổ tức tiền mặt đã nhận <= cutoffDate — dòng tiền dương cho XIRR
-// (docs/domain/03-dividends.md, docs/domain/05 "Cách tính": Dividend.netAmount).
-// Chưa có UI nhập cổ tức (chưa có màn hình ghi Dividend) nên hiện tại luôn trả
-// mảng rỗng — vô hại, công thức đã ghi rõ trong domain doc nên viết sẵn thay vì
-// đoán tính năng tương lai.
-async function getCashDividends(
-  holdingId: string,
-  cutoffDate: Date,
-): Promise<
-  { id: string; date: Date; paymentDate: Date | null; netAmount: Decimal }[]
-> {
-  const rows = await db.dividend.findMany({
-    where: {
-      holdingId,
-      type: "CASH",
-      netAmount: { not: null },
-      date: { lte: cutoffDate },
-    },
-    select: {
-      id: true,
-      date: true,
-      createdAt: true,
-      paymentDate: true,
-      netAmount: true,
-    },
-    // Khớp tie-break convention dùng cho cashflows ở include của getHoldingDetail
-    // (date, createdAt, id) — createdAt chỉ dùng để order, không trả ra ngoài.
-    orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-  });
-
-  return rows.map((row) => ({
-    id: row.id,
-    date: row.date,
-    paymentDate: row.paymentDate,
-    // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
-    netAmount: new Decimal(row.netAmount!.toString()),
-  }));
-}
-
 // cutoffDate: khi caller không truyền tường minh, tự đọc mốc chốt user đã
 // chọn qua cookie (getCutoffSelection() — cùng cách Dashboard/Settings dùng),
 // KHÔNG hard-code "TODAY" nữa (code review #4: 3 nơi gọi hàm này — trang chi
@@ -193,24 +144,11 @@ export async function getHoldingDetail(
   const resolvedCutoffDate =
     cutoffDate ?? resolveCutoffDate(await getCutoffSelection());
 
-  const holding = await db.holding.findUnique({
-    where: { id: holdingId },
-    include: {
-      // Khớp thứ tự tie-break dùng ở actions.ts/migration backfill (date, createdAt, id) —
-      // derivePosition() sort theo (date, createdAt, id), cần thứ tự DB nhất quán khi
-      // trùng ngày để không lệch với Holding.quantity/avgCost đã materialize
-      // (docs/domain/02). cashflows cần ĐẦY ĐỦ field (amount/taxAmount/note cho
-      // CashflowRow hiển thị) nên không dùng positionSourceSelect.cashflows
-      // (select hẹp hơn, chỉ đủ cho derivePosition) — chỉ tái dùng orderBy.
-      cashflows: { orderBy: POSITION_TRAIL_ORDER_BY },
-      // Vị thế-tại-cutoff (bên dưới) cần cổ tức cổ phiếu, không chỉ Cashflow
-      // (issue #59) — dùng đúng select dùng chung với 4 action ghi giao dịch.
-      dividends: positionSourceSelect.dividends,
-    },
-  });
-
-  // Không tồn tại hoặc không thuộc user hiện tại: xử lý giống nhau, không lộ thông tin tồn tại.
-  if (!holding || holding.userId !== session.user.id) notFound();
+  // "Không tồn tại" và "không thuộc user hiện tại" đều trả `null` — xử lý
+  // giống nhau, không lộ thông tin tồn tại (findHoldingDetailSource tự filter
+  // userId, xem repository.ts).
+  const holding = await findHoldingDetailSource(holdingId, session.user.id);
+  if (!holding) notFound();
 
   // Lịch sử giao dịch hiển thị mới nhất trước — đảo ngược mảng đã fetch theo thứ tự tăng dần.
   // (Toàn bộ lịch sử, KHÔNG lọc theo cutoff — timeline hiển thị luôn đầy đủ,
@@ -248,35 +186,22 @@ export async function getHoldingDetail(
   // là snapshot HIỆN TẠI, không đổi theo cutoff, dùng cho các nơi khác như
   // getOpenHoldings/getOpenHoldingsWithValuation). Dùng để valuate/xác định
   // isOpenPosition đúng thời điểm đang xem, nhất quán với cashflowsForXirr/
-  // dividends bên dưới.
+  // dividends bên dưới. repository đã trả Domain (Decimal) nên không cần
+  // wrap lại qua new Decimal().
   const position = derivePosition(
-    cashflowsUpToCutoff.map((cf) => ({
-      id: cf.id,
-      type: cf.type,
-      date: cf.date,
-      createdAt: cf.createdAt,
-      quantity: new Decimal(cf.quantity.toString()),
-      pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
-      feeAmount: new Decimal(cf.feeAmount.toString()),
-    })),
-    stockDividendsUpToCutoff.map((dividend) => ({
-      id: dividend.id,
-      date: dividend.date,
-      createdAt: dividend.createdAt,
-      // Đã lọc type === "STOCK" ở include -> stockQuantity luôn có giá trị.
-      quantity: new Decimal(dividend.stockQuantity!.toString()),
-    })),
+    cashflowsUpToCutoff,
+    stockDividendsUpToCutoff,
   );
 
   const cashflowsForXirr = cashflowsUpToCutoff.map((cf) => ({
     date: cf.date,
-    amount: new Decimal(cf.amount.toString()),
+    amount: cf.amount,
   }));
 
   const isOpenPosition = !position.quantity.isZero();
 
   const [dividends, valuations] = await Promise.all([
-    getCashDividends(holding.id, resolvedCutoffDate),
+    findCashDividendsForHolding(holding.id, resolvedCutoffDate),
     valuateHoldings(
       [{ id: holding.id, symbol: holding.symbol, quantity: position.quantity }],
       resolvedCutoffDate,
@@ -314,14 +239,7 @@ export async function getHoldingDetail(
   const appendedNavPoint = isOpenPosition && currentNav !== null;
 
   const timeline: CashflowTimelineRow[] = buildCashflowTimeline(
-    cashflowsUpToCutoff.map((cf) => ({
-      id: cf.id,
-      type: cf.type,
-      date: cf.date,
-      quantity: new Decimal(cf.quantity.toString()),
-      pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
-      amount: new Decimal(cf.amount.toString()),
-    })),
+    cashflowsUpToCutoff,
     dividends,
     holding.unit,
   );
@@ -397,10 +315,7 @@ export async function getTransactionSettingRows(
     transactionFeeKey("SELL", assetType),
   ];
 
-  const rows = await db.setting.findMany({
-    where: { key: { in: keys } },
-    select: { key: true, value: true, valueType: true, effectiveFrom: true },
-  });
+  const rows = await findSettingRowsByKeys(keys);
 
   const toRows = (key: SettingKey): TransactionSettingRow[] =>
     rows
@@ -433,121 +348,18 @@ export async function getHoldingForPricing(holdingId: string): Promise<{
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  const holding = await db.holding.findUnique({
-    where: { id: holdingId },
-    select: {
-      userId: true,
-      symbol: true,
-      name: true,
-      type: true,
-      unit: true,
-      quantity: true,
-      avgCost: true,
-    },
-  });
-
-  if (!holding || holding.userId !== session.user.id) notFound();
-
-  const quantity = new Decimal(holding.quantity.toString());
-  const avgCost = new Decimal(holding.avgCost.toString());
+  const holding = await findHoldingForPricing(holdingId, session.user.id);
+  if (!holding) notFound();
 
   return {
-    id: holdingId,
+    id: holding.id,
     symbol: holding.symbol,
     name: holding.name,
     type: holding.type,
     unit: holding.unit,
-    quantity: quantity.toString(),
-    totalCostBasis: quantity.mul(avgCost).toString(),
+    quantity: holding.quantity.toString(),
+    totalCostBasis: holding.quantity.mul(holding.avgCost).toString(),
   };
-}
-
-// Batch cashflow/dividend theo tập holdingId cho NHIỀU vị thế cùng lúc, khác
-// getCashDividends (1 holdingId) — cùng pattern getAllCashflowsForXirr/
-// getAllCashDividendsForXirr (lib/portfolio-valuation.ts) nhưng thêm
-// holdingId vào select để group lại theo từng vị thế ở JS (portfolio-valuation
-// gộp XIRR CẢ danh mục nên không cần giữ holdingId riêng). type/taxAmount/
-// feeAmount thêm cho computeCostDrag() (grossInvested riêng từng vị thế đã
-// đóng, getClosedHoldingsDetail() — code review #7, không round-trip DB thêm
-// lần nữa chỉ để lấy 3 field này).
-async function getCashflowsForHoldings(
-  holdingIds: string[],
-  cutoffDate: Date,
-): Promise<
-  {
-    holdingId: string;
-    date: Date;
-    amount: Decimal;
-    type: CashflowType;
-    taxAmount: Decimal;
-    feeAmount: Decimal;
-  }[]
-> {
-  if (holdingIds.length === 0) return [];
-
-  const rows = await db.cashflow.findMany({
-    where: { holdingId: { in: holdingIds }, date: { lte: cutoffDate } },
-    select: {
-      holdingId: true,
-      date: true,
-      amount: true,
-      type: true,
-      taxAmount: true,
-      feeAmount: true,
-    },
-  });
-
-  return rows.map((row) => ({
-    holdingId: row.holdingId,
-    date: row.date,
-    amount: new Decimal(row.amount.toString()),
-    type: row.type,
-    taxAmount: new Decimal(row.taxAmount.toString()),
-    feeAmount: new Decimal(row.feeAmount.toString()),
-  }));
-}
-
-// `id` thêm cho ClosedHoldingRow.cashDividends (React key + timeline row id,
-// ClosedHoldingsSection — code review #3: cần liệt kê từng dòng cổ tức riêng,
-// không chỉ tổng).
-async function getCashDividendsForHoldings(
-  holdingIds: string[],
-  cutoffDate: Date,
-): Promise<
-  {
-    id: string;
-    holdingId: string;
-    date: Date;
-    paymentDate: Date | null;
-    netAmount: Decimal;
-  }[]
-> {
-  if (holdingIds.length === 0) return [];
-
-  const rows = await db.dividend.findMany({
-    where: {
-      holdingId: { in: holdingIds },
-      type: "CASH",
-      netAmount: { not: null },
-      date: { lte: cutoffDate },
-    },
-    select: {
-      id: true,
-      holdingId: true,
-      date: true,
-      paymentDate: true,
-      netAmount: true,
-    },
-  });
-
-  return rows.map((row) => ({
-    id: row.id,
-    holdingId: row.holdingId,
-    date: row.date,
-    paymentDate: row.paymentDate,
-    // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
-    netAmount: new Decimal(row.netAmount!.toString()),
-  }));
 }
 
 function groupByHoldingId<T extends { holdingId: string }>(
@@ -571,6 +383,9 @@ export async function getOpenHoldingsWithValuation(cutoffDate?: Date): Promise<{
   holdings: HoldingWithValuation[];
   groupValuations: Partial<Record<HoldingSummary["type"], GroupValuation>>;
 }> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
   const resolvedCutoffDate =
     cutoffDate ?? resolveCutoffDate(await getCutoffSelection());
 
@@ -588,8 +403,12 @@ export async function getOpenHoldingsWithValuation(cutoffDate?: Date): Promise<{
       })),
       resolvedCutoffDate,
     ),
-    getCashflowsForHoldings(holdingIds, resolvedCutoffDate),
-    getCashDividendsForHoldings(holdingIds, resolvedCutoffDate),
+    findCashflowsForHoldings(holdingIds, session.user.id, resolvedCutoffDate),
+    findCashDividendsForHoldings(
+      holdingIds,
+      session.user.id,
+      resolvedCutoffDate,
+    ),
   ]);
 
   const cashflowsByHolding = groupByHoldingId(cashflows);
@@ -756,6 +575,9 @@ export type ClosedHoldingsDetail = {
 // dương THẬT đã đủ cho công thức XIRR, không có NAV tại-mốc-chốt nào cần chọn
 // (docs/domain/05 "Vị thế đã đóng").
 export async function getClosedHoldingsDetail(): Promise<ClosedHoldingsDetail> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
   const closed = await getClosedHoldings();
   const cutoffDate = resolveCutoffDate({ key: "TODAY" });
 
@@ -777,14 +599,9 @@ export async function getClosedHoldingsDetail(): Promise<ClosedHoldingsDetail> {
   // dùng bên trong (buildXirrCashflows + computeXirr), không round-trip DB
   // nào thêm ngoài 3 query batch dưới đây.
   const [cashflowPeriods, allCashflows, allDividends] = await Promise.all([
-    db.cashflow.groupBy({
-      by: ["holdingId"],
-      where: { holdingId: { in: closedIds } },
-      _min: { date: true },
-      _max: { date: true },
-    }),
-    getCashflowsForHoldings(closedIds, cutoffDate),
-    getCashDividendsForHoldings(closedIds, cutoffDate),
+    findCashflowDateRangeForHoldings(closedIds, session.user.id),
+    findCashflowsForHoldings(closedIds, session.user.id, cutoffDate),
+    findCashDividendsForHoldings(closedIds, session.user.id, cutoffDate),
   ]);
 
   const periodByHoldingId = new Map(
@@ -828,8 +645,8 @@ export async function getClosedHoldingsDetail(): Promise<ClosedHoldingsDetail> {
 
     const period = periodByHoldingId.get(holding.id);
     const holdingPeriodLabel =
-      period?._min.date && period._max.date
-        ? computeHoldingPeriodLabel(period._min.date, period._max.date)
+      period?.minDate && period.maxDate
+        ? computeHoldingPeriodLabel(period.minDate, period.maxDate)
         : "";
 
     const row: ClosedHoldingRow = {

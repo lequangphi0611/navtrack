@@ -4,7 +4,6 @@ import Decimal from "decimal.js";
 import { redirect } from "next/navigation";
 
 import { Prisma } from "@prisma/client";
-import type { Cashflow, Dividend } from "@prisma/client";
 // Trigger tự động chốt Snapshot{period: MANUAL} sau mỗi giao dịch (docs/domain/06-snapshots.md
 // "Khi nào lưu snapshot") — snapshots feature không phụ thuộc ngược vào holdings/actions.ts
 // (chỉ holdings/queries.ts, xem features/snapshots/actions.ts) nên import chiều này không tạo vòng.
@@ -14,19 +13,25 @@ import { toFieldErrors } from "@/lib/action-result";
 import { getSession } from "@/lib/auth";
 import { derivePosition } from "@/lib/cost-basis";
 import { computeCashflowAmount } from "@/lib/cost-basis";
-import type {
-  CashflowInputWithEvent,
-  StockDividendInput,
-} from "@/lib/cost-basis";
-import { db } from "@/lib/db";
+import type { CashflowInputWithEvent } from "@/lib/cost-basis";
 import { logger } from "@/lib/logger";
-import {
-  PENDING_EVENT_CREATED_AT,
-  positionSourceSelect,
-} from "@/lib/position-trail";
+import { PENDING_EVENT_CREATED_AT } from "@/lib/position-trail";
 import { revalidateHoldingDependentRoutes } from "@/lib/revalidate-holding-routes";
 import { ROUTES } from "@/lib/routes";
 
+import {
+  deleteCashflowRow,
+  findPositionSourceByCashflow,
+  findPositionSourceById,
+  findPositionSourceBySymbol,
+  insertCashflow,
+  insertHolding,
+  isHoldingOwnedByUser,
+  persistPosition,
+  runInTransaction,
+  updateCashflowRow,
+  upsertNavOverride,
+} from "./repository";
 import {
   addTransactionSchema,
   deleteTransactionSchema,
@@ -35,58 +40,6 @@ import {
   updateTransactionSchema,
 } from "./schemas";
 import type { NavOverrideFormState } from "./types";
-
-function toCashflowInput(
-  cf: Pick<
-    Cashflow,
-    | "id"
-    | "type"
-    | "date"
-    | "createdAt"
-    | "quantity"
-    | "pricePerUnit"
-    | "feeAmount"
-  >,
-): CashflowInputWithEvent {
-  return {
-    id: cf.id,
-    type: cf.type,
-    date: cf.date,
-    createdAt: cf.createdAt,
-    quantity: new Decimal(cf.quantity.toString()),
-    pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
-    feeAmount: new Decimal(cf.feeAmount.toString()),
-  };
-}
-
-function toStockDividendInput(
-  dividend: Pick<Dividend, "id" | "date" | "createdAt" | "stockQuantity">,
-): StockDividendInput {
-  return {
-    id: dividend.id,
-    date: dividend.date,
-    createdAt: dividend.createdAt,
-    // Chỉ gọi hàm này với dividend đã lọc type === "STOCK" -> stockQuantity luôn có giá trị.
-    quantity: new Decimal(dividend.stockQuantity!.toString()),
-  };
-}
-
-// Ghi lại materialized cache vị thế lên Holding từ kết quả derivePosition đã tính sẵn.
-// Gọi trong CÙNG transaction với mọi thay đổi cashflow — giữ cache luôn khớp nguồn sự thật
-// (Cashflow), không bao giờ cập nhật cộng/trừ tay (docs/domain/02-transactions-and-cost-basis.md).
-async function persistPosition(
-  tx: Prisma.TransactionClient,
-  holdingId: string,
-  position: { quantity: Decimal; avgCost: Decimal },
-): Promise<void> {
-  await tx.holding.update({
-    where: { id: holdingId },
-    data: {
-      quantity: position.quantity.toString(),
-      avgCost: position.avgCost.toString(),
-    },
-  });
-}
 
 // Gọi sau MỖI action ghi cashflow (mua/bán/sửa/xoá) — hiệu ứng phụ, KHÔNG làm fail action
 // chính nếu freeze lỗi: giao dịch vẫn phải báo thành công cho user, tách lỗi freeze khỏi
@@ -135,12 +88,12 @@ export async function createHolding(
   } = parsed.data;
 
   try {
-    const result = await db.$transaction(
+    const result = await runInTransaction(
       async (tx) => {
-        const existing = await tx.holding.findUnique({
-          where: { userId_symbol_type: { userId, symbol, type } },
-          select: { id: true, ...positionSourceSelect },
-        });
+        const existing = await findPositionSourceBySymbol(
+          { userId, symbol, type },
+          tx,
+        );
 
         const candidate: CashflowInputWithEvent = {
           id: "__candidate__",
@@ -153,8 +106,8 @@ export async function createHolding(
         };
 
         const position = derivePosition(
-          [...(existing?.cashflows.map(toCashflowInput) ?? []), candidate],
-          existing?.dividends.map(toStockDividendInput) ?? [],
+          [...(existing?.cashflows ?? []), candidate],
+          existing?.dividends ?? [],
         );
         if (position.wentNegative) {
           return {
@@ -173,15 +126,13 @@ export async function createHolding(
 
         // Mua trùng mã đang giữ tự gộp vào Holding đã có, không tạo bản ghi thứ hai
         // (docs/domain/02-transactions-and-cost-basis.md).
-        const holding =
-          existing ??
-          (await tx.holding.create({
-            data: { userId, symbol, type, unit, name },
-          }));
+        const holdingId =
+          existing?.id ??
+          (await insertHolding({ userId, symbol, type, unit, name }, tx)).id;
 
-        const cashflow = await tx.cashflow.create({
-          data: {
-            holdingId: holding.id,
+        const cashflow = await insertCashflow(
+          {
+            holdingId,
             type: cashflowType,
             date,
             quantity,
@@ -191,13 +142,14 @@ export async function createHolding(
             taxAmount,
             note,
           },
-        });
+          tx,
+        );
 
-        await persistPosition(tx, holding.id, position);
+        await persistPosition(holdingId, position, tx);
 
         return {
           ok: true as const,
-          holdingId: holding.id,
+          holdingId,
           cashflowId: cashflow.id,
         };
       },
@@ -273,13 +225,10 @@ export async function addTransaction(
   } = parsed.data;
 
   try {
-    const result = await db.$transaction(
+    const result = await runInTransaction(
       async (tx) => {
-        const holding = await tx.holding.findUnique({
-          where: { id: holdingId },
-          select: { userId: true, ...positionSourceSelect },
-        });
-        if (!holding || holding.userId !== userId) {
+        const source = await findPositionSourceById(holdingId, userId, tx);
+        if (!source) {
           return { ok: false as const, error: "Không tìm thấy danh mục" };
         }
 
@@ -294,8 +243,8 @@ export async function addTransaction(
         };
 
         const position = derivePosition(
-          [...holding.cashflows.map(toCashflowInput), candidate],
-          holding.dividends.map(toStockDividendInput),
+          [...source.cashflows, candidate],
+          source.dividends,
         );
         if (position.wentNegative) {
           return {
@@ -312,8 +261,8 @@ export async function addTransaction(
           taxAmount: new Decimal(taxAmount),
         });
 
-        const cashflow = await tx.cashflow.create({
-          data: {
+        const cashflow = await insertCashflow(
+          {
             holdingId,
             type: cashflowType,
             date,
@@ -324,9 +273,10 @@ export async function addTransaction(
             taxAmount,
             note,
           },
-        });
+          tx,
+        );
 
-        await persistPosition(tx, holdingId, position);
+        await persistPosition(holdingId, position, tx);
 
         return { ok: true as const, cashflowId: cashflow.id };
       },
@@ -385,18 +335,14 @@ export async function updateTransaction(
   } = parsed.data;
 
   try {
-    const result = await db.$transaction(
+    const result = await runInTransaction(
       async (tx) => {
-        const cashflow = await tx.cashflow.findUnique({
-          where: { id: cashflowId },
-          select: {
-            holdingId: true,
-            holding: {
-              select: { userId: true, ...positionSourceSelect },
-            },
-          },
-        });
-        if (!cashflow || cashflow.holding.userId !== userId) {
+        const source = await findPositionSourceByCashflow(
+          cashflowId,
+          userId,
+          tx,
+        );
+        if (!source) {
           return { ok: false as const, error: "Không tìm thấy giao dịch" };
         }
 
@@ -411,13 +357,8 @@ export async function updateTransaction(
         };
 
         const position = derivePosition(
-          [
-            ...cashflow.holding.cashflows
-              .filter((cf) => cf.id !== cashflowId)
-              .map(toCashflowInput),
-            candidate,
-          ],
-          cashflow.holding.dividends.map(toStockDividendInput),
+          [...source.cashflows.filter((cf) => cf.id !== cashflowId), candidate],
+          source.dividends,
         );
         if (position.wentNegative) {
           return {
@@ -435,9 +376,9 @@ export async function updateTransaction(
           taxAmount: new Decimal(taxAmount),
         });
 
-        await tx.cashflow.update({
-          where: { id: cashflowId },
-          data: {
+        await updateCashflowRow(
+          cashflowId,
+          {
             type: cashflowType,
             date,
             quantity,
@@ -447,11 +388,12 @@ export async function updateTransaction(
             taxAmount,
             note,
           },
-        });
+          tx,
+        );
 
-        await persistPosition(tx, cashflow.holdingId, position);
+        await persistPosition(source.holdingId, position, tx);
 
-        return { ok: true as const, holdingId: cashflow.holdingId };
+        return { ok: true as const, holdingId: source.holdingId };
       },
       // Serializable — cùng lý do với addTransaction: đọc lịch sử cashflow để
       // derive vị thế rồi ghi phải atomic với đọc.
@@ -500,29 +442,20 @@ export async function deleteTransaction(
   const { cashflowId } = parsed.data;
 
   try {
-    const result = await db.$transaction(
+    const result = await runInTransaction(
       async (tx) => {
-        const cashflow = await tx.cashflow.findUnique({
-          where: { id: cashflowId },
-          select: {
-            holdingId: true,
-            holding: {
-              select: { userId: true, ...positionSourceSelect },
-            },
-          },
-        });
-        if (!cashflow || cashflow.holding.userId !== userId) {
+        const source = await findPositionSourceByCashflow(
+          cashflowId,
+          userId,
+          tx,
+        );
+        if (!source) {
           return { ok: false as const, error: "Không tìm thấy giao dịch" };
         }
 
-        const remaining = cashflow.holding.cashflows
-          .filter((cf) => cf.id !== cashflowId)
-          .map(toCashflowInput);
+        const remaining = source.cashflows.filter((cf) => cf.id !== cashflowId);
 
-        const position = derivePosition(
-          remaining,
-          cashflow.holding.dividends.map(toStockDividendInput),
-        );
+        const position = derivePosition(remaining, source.dividends);
         if (position.wentNegative) {
           return {
             ok: false as const,
@@ -531,11 +464,11 @@ export async function deleteTransaction(
           };
         }
 
-        await tx.cashflow.delete({ where: { id: cashflowId } });
+        await deleteCashflowRow(cashflowId, tx);
 
-        await persistPosition(tx, cashflow.holdingId, position);
+        await persistPosition(source.holdingId, position, tx);
 
-        return { ok: true as const, holdingId: cashflow.holdingId };
+        return { ok: true as const, holdingId: source.holdingId };
       },
       // Serializable — cùng lý do với addTransaction/updateTransaction.
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -594,11 +527,7 @@ export async function saveNavOverride(
 
   const { holdingId, price, date } = parsed.data;
 
-  const holding = await db.holding.findUnique({
-    where: { id: holdingId },
-    select: { userId: true },
-  });
-  if (!holding || holding.userId !== session.user.id) {
+  if (!(await isHoldingOwnedByUser(holdingId, session.user.id))) {
     return { ok: false, error: "Không tìm thấy vị thế" };
   }
 
@@ -606,11 +535,7 @@ export async function saveNavOverride(
     // upsert theo unique (holdingId, date) — atomic ở tầng DB, không cần
     // $transaction/Serializable như các action cashflow: không có bất biến
     // derive (kiểu derivePosition) cần bảo vệ TOCTOU ở đây.
-    await db.navOverride.upsert({
-      where: { holdingId_date: { holdingId, date } },
-      create: { holdingId, date, price },
-      update: { price },
-    });
+    await upsertNavOverride(holdingId, date, price);
   } catch (err) {
     logger.error({ err, holdingId }, "saveNavOverride failed");
     return { ok: false, error: "Không lưu được giá. Thử lại sau ít phút." };
