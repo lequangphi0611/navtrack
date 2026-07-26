@@ -1,5 +1,8 @@
 import Decimal from "decimal.js";
 
+import type { CashflowType, DividendType, Prisma } from "@prisma/client";
+import { assertNever } from "@/lib/assert-never";
+
 // Phát lại lịch sử số lượng nắm giữ gồm CẢ cổ tức cổ phiếu, không chỉ Cashflow
 // BUY/SELL (docs/domain/01-assets-and-holdings.md "Số lượng hiện tại" = Σ BUY
 // − Σ SELL + Σ dividend STOCK.stockQuantity). Trả về before/after TẠI TỪNG
@@ -60,3 +63,158 @@ export function buildQuantityTimeline(
   }
   return result;
 }
+
+// createdAt xa nhất có thể — sự kiện ĐANG XỬ LÝ (chưa lưu DB) luôn xếp SAU
+// CÙNG khi trùng ngày với cashflow/dividend đã ghi trước đó. Một nguồn sự thật
+// duy nhất dùng cho CẢ candidate cashflow (features/holdings/actions.ts) LẪN
+// probe dividend (features/dividends/actions.ts) — trước đây khai 2 lần, 2
+// tên khác nhau, ràng nhau bằng comment "cùng pattern X" (Connascence of
+// Value, docs/rules/clean-code.md mục 1 — mức nguy hiểm nhất mà trông vô hại
+// nhất).
+export const PENDING_EVENT_CREATED_AT = new Date(8640000000000000);
+
+// Quy tắc dấu delta cho Cashflow — nguồn DUY NHẤT (docs/rules/clean-code.md
+// mục 1 "Connascence of Algorithm"). BUY cộng, SELL/MATURITY trừ — MATURITY
+// (tất toán trái phiếu) hành xử như SELL cho mục đích số lượng đang giữ
+// (process/phase-7.md mục 2). Dùng ở derivePosition() (lib/cost-basis.ts) và
+// buildPositionEvents() bên dưới — thêm giá trị CashflowType mới mà chưa xử
+// lý ở đây là lỗi compile, không phải sai âm thầm.
+export function cashflowPositionDelta(cf: {
+  type: CashflowType;
+  quantity: Decimal;
+}): Decimal {
+  switch (cf.type) {
+    case "BUY":
+      return cf.quantity;
+    case "SELL":
+    case "MATURITY":
+      return cf.quantity.neg();
+    default:
+      return assertNever(cf.type);
+  }
+}
+
+// Quy tắc dấu delta cho Dividend — chỉ STOCK đổi số lượng đang giữ; CASH/
+// BOND_COUPON là dòng tiền/lãi, không đổi SL (delta=0, chỉ giữ chỗ trong dòng
+// thời gian để buildQuantityTimeline() đọc before/after tại đúng vị trí thời
+// gian của chúng). Thêm BOND_COUPON (Phase 7) KHÔNG cần sửa where clause nào ở
+// call site — switch này tự trả 0 cho loại không đổi SL, tránh đúng bug mà
+// ternary nhị phân cũ mắc phải (docs/rules/clean-code.md mục 1).
+export function dividendPositionDelta(dividend: {
+  type: DividendType;
+  stockQuantity: Decimal | null;
+}): Decimal {
+  switch (dividend.type) {
+    case "STOCK":
+      // Prisma chỉ nullable vì field dùng chung mọi loại dividend — STOCK
+      // luôn có giá trị (ràng buộc ở tầng ghi, features/dividends/actions.ts).
+      return dividend.stockQuantity!;
+    case "CASH":
+    case "BOND_COUPON":
+      return new Decimal(0);
+    default:
+      return assertNever(dividend.type);
+  }
+}
+
+type RawPositionCashflow = {
+  id: string;
+  type: CashflowType;
+  date: Date;
+  createdAt: Date;
+  quantity: { toString(): string };
+};
+
+type RawPositionDividend = {
+  id: string;
+  type: DividendType;
+  date: Date;
+  createdAt: Date;
+  stockQuantity: { toString(): string } | null;
+};
+
+export type PositionMarkerInput = { id: string; date: Date; createdAt: Date };
+
+// Chủ sở hữu DUY NHẤT của việc TRỘN Cashflow + Dividend thành một dòng thời
+// gian sự kiện (PositionTrailEvent[]) khi cả hai nguồn cần trộn cùng lúc —
+// recordDividend()/getDividendHistory() (features/dividends/) PHẢI gọi hàm
+// này, không tự dựng PositionTrailEvent[] bằng tay (đã từng cài lại y hệt quy
+// tắc delta ở 2 nơi đó + derivePosition(), docs/rules/clean-code.md mục 1
+// "Connascence of Algorithm"). `markers`: sự kiện delta=0 CHỈ để đọc
+// before/after tại một mốc (thay PROBE_EVENT_ID tự dựng tay trước đây) — dùng
+// khi cần biết SL đang giữ TẠI MỘT NGÀY mà bản thân sự kiện đó chưa tồn tại
+// trong DB.
+export function buildPositionEvents(input: {
+  cashflows: RawPositionCashflow[];
+  dividends: RawPositionDividend[];
+  markers?: PositionMarkerInput[];
+}): PositionTrailEvent[] {
+  return [
+    ...input.cashflows.map((cf) => ({
+      id: cf.id,
+      date: cf.date,
+      createdAt: cf.createdAt,
+      delta: cashflowPositionDelta({
+        type: cf.type,
+        quantity: new Decimal(cf.quantity.toString()),
+      }),
+    })),
+    ...input.dividends.map((dividend) => ({
+      id: dividend.id,
+      date: dividend.date,
+      createdAt: dividend.createdAt,
+      delta: dividendPositionDelta({
+        type: dividend.type,
+        stockQuantity: dividend.stockQuantity
+          ? new Decimal(dividend.stockQuantity.toString())
+          : null,
+      }),
+    })),
+    ...(input.markers ?? []).map((marker) => ({
+      id: marker.id,
+      date: marker.date,
+      createdAt: marker.createdAt,
+      delta: new Decimal(0),
+    })),
+  ];
+}
+
+// Tie-break (date, createdAt, id) dùng CHUNG cho mọi Prisma orderBy cần khớp
+// sortByPositionTrailOrder() ở trên khi trùng ngày (đổi thứ tự này = đổi
+// avgCost/quantity đã materialize) — trước đây khai lặp lại inline ở 6 chỗ.
+export const POSITION_TRAIL_ORDER_BY: Prisma.CashflowOrderByWithRelationInput[] =
+  [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }];
+
+// Select shape DUY NHẤT dùng để tính vị thế từ Holding: Cashflow (đủ field
+// cho delta + avgCost bình quân di động) + Dividend cổ phiếu (đủ field cho
+// delta). Tách rời cashflows/dividends khi đọc là sai (issue #59, Connascence
+// of Meaning — docs/rules/clean-code.md mục 1) — khai một lần ở đây để bất
+// biến đó thành ràng buộc kiểu, không còn dựa vào comment "// Issue #59" dán
+// lại ở từng call site. Dividend cố ý lọc `type: "STOCK"` (khác
+// buildPositionEvents() ở trên, cần TẤT CẢ loại dividend) — vị thế chỉ cần
+// biết cổ tức cổ phiếu, các call site dùng constant này (4 action ghi giao
+// dịch + getHoldingDetail) gọi derivePosition() vốn chỉ nhận dividend đã lọc
+// sẵn STOCK.
+export const positionSourceSelect = {
+  cashflows: {
+    select: {
+      id: true,
+      type: true,
+      date: true,
+      createdAt: true,
+      quantity: true,
+      pricePerUnit: true,
+      feeAmount: true,
+    },
+    orderBy: POSITION_TRAIL_ORDER_BY,
+  },
+  dividends: {
+    where: { type: "STOCK" },
+    select: {
+      id: true,
+      date: true,
+      createdAt: true,
+      stockQuantity: true,
+    },
+  },
+} satisfies Prisma.HoldingSelect;

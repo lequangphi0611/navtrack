@@ -31,6 +31,10 @@ import {
   formatQuantity,
 } from "@/lib/format";
 import { computeHoldingPeriodLabel } from "@/lib/holding-period";
+import {
+  positionSourceSelect,
+  POSITION_TRAIL_ORDER_BY,
+} from "@/lib/position-trail";
 // toUiXirr được export từ lib/portfolio-valuation.ts (adapter dùng chung
 // business XirrResult -> UI XirrResult). Import ngược chiều với
 // getOpenHoldings/getClosedHoldings mà portfolio-valuation.ts import từ file
@@ -195,16 +199,13 @@ export async function getHoldingDetail(
       // Khớp thứ tự tie-break dùng ở actions.ts/migration backfill (date, createdAt, id) —
       // derivePosition() sort theo (date, createdAt, id), cần thứ tự DB nhất quán khi
       // trùng ngày để không lệch với Holding.quantity/avgCost đã materialize
-      // (docs/domain/02).
-      cashflows: {
-        orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-      },
-      // Issue #59: vị thế-tại-cutoff (bên dưới) trước đây chỉ derive từ Cashflow,
-      // bỏ sót cổ tức cổ phiếu đã nhận — hiện SL/avgCost sai (và NAV/XIRR theo đó).
-      dividends: {
-        where: { type: "STOCK" },
-        select: { id: true, date: true, createdAt: true, stockQuantity: true },
-      },
+      // (docs/domain/02). cashflows cần ĐẦY ĐỦ field (amount/taxAmount/note cho
+      // CashflowRow hiển thị) nên không dùng positionSourceSelect.cashflows
+      // (select hẹp hơn, chỉ đủ cho derivePosition) — chỉ tái dùng orderBy.
+      cashflows: { orderBy: POSITION_TRAIL_ORDER_BY },
+      // Vị thế-tại-cutoff (bên dưới) cần cổ tức cổ phiếu, không chỉ Cashflow
+      // (issue #59) — dùng đúng select dùng chung với 4 action ghi giao dịch.
+      dividends: positionSourceSelect.dividends,
     },
   });
 

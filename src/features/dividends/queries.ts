@@ -14,8 +14,10 @@ import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-import { buildQuantityTimeline } from "@/lib/position-trail";
-import type { PositionTrailEvent } from "@/lib/position-trail";
+import {
+  buildPositionEvents,
+  buildQuantityTimeline,
+} from "@/lib/position-trail";
 import {
   AppError,
   parseSettingValue,
@@ -194,27 +196,10 @@ export async function getDividendHistory(holdingId: string): Promise<{
     select: { value: true, valueType: true, effectiveFrom: true },
   });
 
-  const events: PositionTrailEvent[] = [
-    ...holding.cashflows.map((cf) => ({
-      id: cf.id,
-      date: cf.date,
-      createdAt: cf.createdAt,
-      delta:
-        cf.type === "BUY"
-          ? new Decimal(cf.quantity.toString())
-          : new Decimal(cf.quantity.toString()).neg(),
-    })),
-    ...holding.dividends.map((dividend) => ({
-      id: dividend.id,
-      date: dividend.date,
-      createdAt: dividend.createdAt,
-      delta:
-        dividend.type === "STOCK"
-          ? // stockQuantity luôn có giá trị khi type === STOCK.
-            new Decimal(dividend.stockQuantity!.toString())
-          : new Decimal(0),
-    })),
-  ];
+  const events = buildPositionEvents({
+    cashflows: holding.cashflows,
+    dividends: holding.dividends,
+  });
 
   const timeline = buildQuantityTimeline(events);
 

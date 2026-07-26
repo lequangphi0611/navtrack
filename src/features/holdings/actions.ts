@@ -20,6 +20,10 @@ import type {
 } from "@/lib/cost-basis";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import {
+  PENDING_EVENT_CREATED_AT,
+  positionSourceSelect,
+} from "@/lib/position-trail";
 import { revalidateHoldingDependentRoutes } from "@/lib/revalidate-holding-routes";
 import { ROUTES } from "@/lib/routes";
 
@@ -66,13 +70,6 @@ function toStockDividendInput(
     quantity: new Decimal(dividend.stockQuantity!.toString()),
   };
 }
-
-// createdAt xa nhất có thể cho giao dịch ĐANG XỬ LÝ (chưa tồn tại trong DB) —
-// cùng pattern PROBE_CREATED_AT (features/dividends/actions.ts): đảm bảo giao
-// dịch mới LUÔN được coi là sự kiện GẦN NHẤT trong ngày khi trùng ngày với
-// cashflow/dividend đã ghi trước đó, khớp trực giác "vừa nhập thì tính sau
-// cùng" — không phụ thuộc độ trễ giữa lúc query chạy và lúc validate.
-const CANDIDATE_CREATED_AT = new Date(8640000000000000);
 
 // Ghi lại materialized cache vị thế lên Holding từ kết quả derivePosition đã tính sẵn.
 // Gọi trong CÙNG transaction với mọi thay đổi cashflow — giữ cache luôn khớp nguồn sự thật
@@ -142,45 +139,14 @@ export async function createHolding(
       async (tx) => {
         const existing = await tx.holding.findUnique({
           where: { userId_symbol_type: { userId, symbol, type } },
-          select: {
-            id: true,
-            cashflows: {
-              select: {
-                id: true,
-                type: true,
-                date: true,
-                createdAt: true,
-                quantity: true,
-                pricePerUnit: true,
-                feeAmount: true,
-              },
-              // Khớp thứ tự tie-break của migration backfill (date, createdAt, id) —
-              // derivePosition() sort theo (date, createdAt, id) qua
-              // buildQuantityTimeline(), orderBy này chỉ để nhất quán hiển thị debug,
-              // không phải nguồn tie-break duy nhất.
-              orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-            },
-            // Issue #59: SL đang giữ phải gồm cả cổ tức cổ phiếu, không chỉ Cashflow —
-            // nếu không, wentNegative có thể báo "bán vượt" SAI cho lệnh bán hợp lệ
-            // (SL bán nằm trong phần cổ tức cổ phiếu đã nhận), và cache ghi đè mất
-            // phần cổ tức cổ phiếu đã cộng trước đó.
-            dividends: {
-              where: { type: "STOCK" },
-              select: {
-                id: true,
-                date: true,
-                createdAt: true,
-                stockQuantity: true,
-              },
-            },
-          },
+          select: { id: true, ...positionSourceSelect },
         });
 
         const candidate: CashflowInputWithEvent = {
           id: "__candidate__",
           type: cashflowType,
           date,
-          createdAt: CANDIDATE_CREATED_AT,
+          createdAt: PENDING_EVENT_CREATED_AT,
           quantity: new Decimal(quantity),
           pricePerUnit: new Decimal(pricePerUnit),
           feeAmount: new Decimal(feeAmount),
@@ -311,32 +277,7 @@ export async function addTransaction(
       async (tx) => {
         const holding = await tx.holding.findUnique({
           where: { id: holdingId },
-          select: {
-            userId: true,
-            cashflows: {
-              select: {
-                id: true,
-                type: true,
-                date: true,
-                createdAt: true,
-                quantity: true,
-                pricePerUnit: true,
-                feeAmount: true,
-              },
-              // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
-              orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-            },
-            // Issue #59: xem ghi chú tương tự ở createHolding.
-            dividends: {
-              where: { type: "STOCK" },
-              select: {
-                id: true,
-                date: true,
-                createdAt: true,
-                stockQuantity: true,
-              },
-            },
-          },
+          select: { userId: true, ...positionSourceSelect },
         });
         if (!holding || holding.userId !== userId) {
           return { ok: false as const, error: "Không tìm thấy danh mục" };
@@ -346,7 +287,7 @@ export async function addTransaction(
           id: "__candidate__",
           type: cashflowType,
           date,
-          createdAt: CANDIDATE_CREATED_AT,
+          createdAt: PENDING_EVENT_CREATED_AT,
           quantity: new Decimal(quantity),
           pricePerUnit: new Decimal(pricePerUnit),
           feeAmount: new Decimal(feeAmount),
@@ -451,36 +392,7 @@ export async function updateTransaction(
           select: {
             holdingId: true,
             holding: {
-              select: {
-                userId: true,
-                cashflows: {
-                  select: {
-                    id: true,
-                    type: true,
-                    date: true,
-                    createdAt: true,
-                    quantity: true,
-                    pricePerUnit: true,
-                    feeAmount: true,
-                  },
-                  // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
-                  orderBy: [
-                    { date: "asc" },
-                    { createdAt: "asc" },
-                    { id: "asc" },
-                  ],
-                },
-                // Issue #59: xem ghi chú tương tự ở createHolding.
-                dividends: {
-                  where: { type: "STOCK" },
-                  select: {
-                    id: true,
-                    date: true,
-                    createdAt: true,
-                    stockQuantity: true,
-                  },
-                },
-              },
+              select: { userId: true, ...positionSourceSelect },
             },
           },
         });
@@ -492,7 +404,7 @@ export async function updateTransaction(
           id: "__candidate__",
           type: cashflowType,
           date,
-          createdAt: CANDIDATE_CREATED_AT,
+          createdAt: PENDING_EVENT_CREATED_AT,
           quantity: new Decimal(quantity),
           pricePerUnit: new Decimal(pricePerUnit),
           feeAmount: new Decimal(feeAmount),
@@ -595,36 +507,7 @@ export async function deleteTransaction(
           select: {
             holdingId: true,
             holding: {
-              select: {
-                userId: true,
-                cashflows: {
-                  select: {
-                    id: true,
-                    type: true,
-                    date: true,
-                    createdAt: true,
-                    quantity: true,
-                    pricePerUnit: true,
-                    feeAmount: true,
-                  },
-                  // Khớp thứ tự tie-break của migration backfill (date, createdAt, id).
-                  orderBy: [
-                    { date: "asc" },
-                    { createdAt: "asc" },
-                    { id: "asc" },
-                  ],
-                },
-                // Issue #59: xem ghi chú tương tự ở createHolding.
-                dividends: {
-                  where: { type: "STOCK" },
-                  select: {
-                    id: true,
-                    date: true,
-                    createdAt: true,
-                    stockQuantity: true,
-                  },
-                },
-              },
+              select: { userId: true, ...positionSourceSelect },
             },
           },
         });

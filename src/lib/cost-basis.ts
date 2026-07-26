@@ -4,6 +4,7 @@ import type { CashflowType } from "@prisma/client";
 import { assertNever } from "@/lib/assert-never";
 import {
   buildQuantityTimeline,
+  cashflowPositionDelta,
   sortByPositionTrailOrder,
 } from "@/lib/position-trail";
 import type { PositionTrailEvent } from "@/lib/position-trail";
@@ -118,7 +119,7 @@ export function derivePosition(
       id: cf.id,
       date: cf.date,
       createdAt: cf.createdAt,
-      delta: cf.type === "BUY" ? cf.quantity : cf.quantity.neg(),
+      delta: cashflowPositionDelta(cf),
     })),
     ...stockDividends.map((dividend) => ({
       id: dividend.id,
