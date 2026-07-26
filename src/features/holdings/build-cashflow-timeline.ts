@@ -1,11 +1,13 @@
 import type Decimal from "decimal.js";
 
+import type { CashflowType } from "@prisma/client";
 import type { CashflowTimelineRow } from "@/features/holdings/components/CashflowTimeline";
+import { cashflowActionLabel } from "@/lib/cashflow-label";
 import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
 
 export type TimelineCashflowInput = {
   id: string;
-  type: "BUY" | "SELL";
+  type: CashflowType;
   date: Date;
   quantity: Decimal;
   pricePerUnit: Decimal;
@@ -34,7 +36,7 @@ export function buildCashflowTimeline(
       row: {
         id: cf.id,
         kind: cf.type,
-        label: `${cf.type === "BUY" ? "Mua" : "Bán"} ${formatQuantity(cf.quantity.toString(), unit)}`,
+        label: `${cashflowActionLabel(cf.type)} ${formatQuantity(cf.quantity.toString(), unit)}`,
         dateNote: `${formatDate(cf.date)} · giá ${formatMoney(cf.pricePerUnit.toString())}`,
         amount: cf.amount.toString(),
       },

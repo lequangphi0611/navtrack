@@ -1,26 +1,99 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
 import { Coins, Layers } from "lucide-react";
 import { useState } from "react";
 
+import type { DividendType } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
+import { assertNever } from "@/lib/assert-never";
+import { DIVIDEND_TYPES } from "@/lib/enums";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import type { DividendHistoryRow } from "./DividendHistoryList";
 
-type DividendFilterValue = "ALL" | "CASH" | "STOCK";
+type DividendFilterValue = "ALL" | DividendType;
+
+const DIVIDEND_TYPE_LABEL: Record<DividendType, string> = {
+  CASH: "Tiền mặt",
+  STOCK: "Cổ phiếu",
+};
+
+const DIVIDEND_TYPE_ICON: Record<DividendType, LucideIcon> = {
+  CASH: Coins,
+  STOCK: Layers,
+};
+
+const DIVIDEND_TYPE_ICON_CLASS: Record<DividendType, string> = {
+  CASH: "bg-gain/14 text-gain",
+  STOCK: "bg-accent/14 text-accent",
+};
 
 const FILTER_OPTIONS: { value: DividendFilterValue; label: string }[] = [
   { value: "ALL", label: "Tất cả" },
-  { value: "CASH", label: "Tiền mặt" },
-  { value: "STOCK", label: "Cổ phiếu" },
+  ...DIVIDEND_TYPES.map((type) => ({
+    value: type,
+    label: DIVIDEND_TYPE_LABEL[type],
+  })),
 ];
 
 type DividendRowsFilterProps = {
   rows: DividendHistoryRow[];
   hidden: boolean;
 };
+
+// Dòng phụ (ngày · chi tiết) khác cấu trúc thật sự theo loại — CASH hiện gộp/
+// thuế, STOCK hiện SL trước → sau. switch exhaustive (KHÔNG ternary nhị phân,
+// xem docs/rules/typescript-style.md mục "Enum") vì BOND_COUPON (Phase 7 sau)
+// sẽ cần một nhánh riêng, không được âm thầm rơi vào nhánh STOCK.
+function dividendDetailLine(row: DividendHistoryRow): string {
+  switch (row.type) {
+    case "CASH":
+      return `${row.date} · gộp ${row.grossAmount ? formatMoney(row.grossAmount, { compact: true }) : "—"} − thuế ${row.taxAmount ? formatMoney(row.taxAmount, { compact: true }) : "—"}`;
+    case "STOCK":
+      return `${row.date} · ${row.quantityBefore && row.unit ? formatQuantity(row.quantityBefore, row.unit) : "—"} → ${row.quantityAfter && row.unit ? formatQuantity(row.quantityAfter, row.unit) : "—"}`;
+    default:
+      return assertNever(row.type);
+  }
+}
+
+// Cột số tiền/số lượng bên phải — khác hẳn cấu trúc JSX theo loại (CASH hiện
+// netAmount, STOCK hiện addedQuantity), không chỉ khác label/màu.
+function DividendRowAmount({
+  row,
+  hidden,
+}: {
+  row: DividendHistoryRow;
+  hidden: boolean;
+}) {
+  switch (row.type) {
+    case "CASH":
+      return (
+        <>
+          <div className="font-mono text-[13px] font-bold text-gain">
+            {row.netAmount
+              ? `+${formatMoney(row.netAmount, { hidden, compact: true })}`
+              : "—"}
+          </div>
+          <div className="font-mono text-[10px] text-muted-faint">net</div>
+        </>
+      );
+    case "STOCK":
+      return (
+        <>
+          <div className="font-mono text-[13px] font-bold text-accent">
+            {row.addedQuantity && row.unit
+              ? `+${formatQuantity(row.addedQuantity, row.unit)}`
+              : "—"}
+          </div>
+          <div className="font-mono text-[10px] text-muted-faint">SL</div>
+        </>
+      );
+    default:
+      return assertNever(row.type);
+  }
+}
 
 // Chip lọc CASH/STOCK (mockup Phase 4 Screens 4e) — client leaf tách riêng
 // (đẩy ranh giới client xuống lá, xem docs/rules/component-architecture.md):
@@ -53,70 +126,42 @@ function DividendRowsFilter({ rows, hidden }: DividendRowsFilterProps) {
       </div>
 
       <div className="flex flex-col gap-2.25">
-        {filteredRows.map((row) => (
-          <div
-            key={row.id}
-            className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.25"
-          >
+        {filteredRows.map((row) => {
+          const Icon = DIVIDEND_TYPE_ICON[row.type];
+          return (
             <div
-              className={cn(
-                "flex size-9 shrink-0 items-center justify-center rounded-[30%]",
-                row.type === "CASH"
-                  ? "bg-gain/14 text-gain"
-                  : "bg-accent/14 text-accent",
-              )}
+              key={row.id}
+              className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.25"
             >
-              {row.type === "CASH" ? (
-                <Coins className="size-4.75" />
-              ) : (
-                <Layers className="size-4.75" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="truncate text-[13.5px] font-semibold text-foreground">
-                  {row.type === "CASH" ? "Tiền mặt" : "Cổ phiếu"}{" "}
-                  {row.percentLabel}%
-                </span>
-                {row.isNew ? (
-                  <Badge variant="gain" className="px-1.5 py-0 text-[9px]">
-                    MỚI
-                  </Badge>
-                ) : null}
+              <div
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-[30%]",
+                  DIVIDEND_TYPE_ICON_CLASS[row.type],
+                )}
+              >
+                <Icon className="size-4.75" />
               </div>
-              <div className="mt-0.5 font-mono text-[11px] text-muted-faint">
-                {row.type === "CASH"
-                  ? `${row.date} · gộp ${row.grossAmount ? formatMoney(row.grossAmount, { compact: true }) : "—"} − thuế ${row.taxAmount ? formatMoney(row.taxAmount, { compact: true }) : "—"}`
-                  : `${row.date} · ${row.quantityBefore && row.unit ? formatQuantity(row.quantityBefore, row.unit) : "—"} → ${row.quantityAfter && row.unit ? formatQuantity(row.quantityAfter, row.unit) : "—"}`}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-[13.5px] font-semibold text-foreground">
+                    {DIVIDEND_TYPE_LABEL[row.type]} {row.percentLabel}%
+                  </span>
+                  {row.isNew ? (
+                    <Badge variant="gain" className="px-1.5 py-0 text-[9px]">
+                      MỚI
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="mt-0.5 font-mono text-[11px] text-muted-faint">
+                  {dividendDetailLine(row)}
+                </div>
+              </div>
+              <div className="text-right">
+                <DividendRowAmount row={row} hidden={hidden} />
               </div>
             </div>
-            <div className="text-right">
-              {row.type === "CASH" ? (
-                <>
-                  <div className="font-mono text-[13px] font-bold text-gain">
-                    {row.netAmount
-                      ? `+${formatMoney(row.netAmount, { hidden, compact: true })}`
-                      : "—"}
-                  </div>
-                  <div className="font-mono text-[10px] text-muted-faint">
-                    net
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="font-mono text-[13px] font-bold text-accent">
-                    {row.addedQuantity && row.unit
-                      ? `+${formatQuantity(row.addedQuantity, row.unit)}`
-                      : "—"}
-                  </div>
-                  <div className="font-mono text-[10px] text-muted-faint">
-                    SL
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {filteredRows.length === 0 ? (
           <div className="py-6 text-center text-[12.5px] text-muted-faint">
             Không có cổ tức nào khớp bộ lọc.

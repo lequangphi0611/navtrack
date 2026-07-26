@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { Undo2 } from "lucide-react";
 
+import type { CashflowType } from "@prisma/client";
 import { EmptyState } from "@/components/EmptyState";
 import type { CashflowTimelineRow } from "@/features/holdings/components/CashflowTimeline";
 import {
@@ -8,6 +9,7 @@ import {
   getHoldingDetail,
 } from "@/features/holdings/queries";
 import { getHideAmountsByDefault } from "@/features/settings/queries";
+import { assertNever } from "@/lib/assert-never";
 import {
   formatDate,
   formatMoney,
@@ -18,6 +20,25 @@ import { ROUTES } from "@/lib/routes";
 
 import { ClosedHoldingsList } from "./ClosedHoldingsList";
 import { ClosedHoldingsSummaryStrip } from "../ClosedHoldingsSummaryStrip";
+
+// Nhãn dòng lệnh trong timeline "Dòng lệnh của mã" (mockup 6g/6h/6i) — khác
+// cấu trúc chuỗi thật sự theo loại (SELL còn tuỳ isFinalSell), không chỉ khác
+// từ ngữ đơn thuần. switch exhaustive (docs/rules/typescript-style.md mục
+// "Enum") thay vì ternary lồng nhau.
+function cashflowLabel(
+  cf: { type: CashflowType; quantity: string },
+  isFinalSell: boolean,
+  unit: string,
+): string {
+  switch (cf.type) {
+    case "BUY":
+      return `Mua ${formatQuantity(cf.quantity, unit)}`;
+    case "SELL":
+      return `${isFinalSell ? "Bán hết" : "Bán"} ${formatQuantity(cf.quantity, unit)}`;
+    default:
+      return assertNever(cf.type);
+  }
+}
 
 // Container async cho tab "Đã đóng" (mockup 6g/6h/6i, mục 12 phase-6.md) —
 // THAY HẲN nhánh status="closed" cũ trong HoldingsPositionsSection (bỏ
@@ -91,7 +112,7 @@ async function ClosedHoldingsSection() {
           row: {
             id: cf.id,
             kind: cf.type,
-            label: `${cf.type === "BUY" ? "Mua" : isFinalSell ? "Bán hết" : "Bán"} ${formatQuantity(cf.quantity, detail?.unit ?? "")}`,
+            label: cashflowLabel(cf, isFinalSell, detail?.unit ?? ""),
             dateNote: `${formatDate(cf.date)} · giá ${formatMoney(cf.pricePerUnit)}`,
             amount: cf.amount,
           },

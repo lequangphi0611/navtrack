@@ -5,6 +5,7 @@ import { Info, Percent, ReceiptText, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 
+import type { CashflowType } from "@prisma/client";
 import { Alert } from "@/components/Alert";
 import type { AssetType } from "@/components/AssetTypeBadge";
 import { AutoFilledAmountCard } from "@/components/AutoFilledAmountCard";
@@ -221,9 +222,7 @@ function TransactionForm(props: TransactionFormProps) {
           note: "",
         };
 
-  const [cashflowType, setCashflowType] = useState<"BUY" | "SELL">(
-    defaults.type,
-  );
+  const [cashflowType, setCashflowType] = useState<CashflowType>(defaults.type);
   const [quantity, setQuantity] = useState(defaults.quantity);
   const [pricePerUnit, setPricePerUnit] = useState(defaults.pricePerUnit);
   const [date, setDate] = useState(toDateInputValue(defaults.date));

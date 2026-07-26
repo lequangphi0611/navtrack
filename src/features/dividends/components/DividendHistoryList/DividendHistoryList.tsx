@@ -1,6 +1,7 @@
 import { Coins, Layers, ReceiptText } from "lucide-react";
 import Link from "next/link";
 
+import type { DividendType } from "@prisma/client";
 import { EmptyState } from "@/components/EmptyState";
 import { formatMoney, formatQuantity } from "@/lib/format";
 
@@ -12,7 +13,7 @@ import { DividendRowsFilter } from "./DividendRowsFilter";
 // DividendRowsFilter (tiền lệ Snapshot badge — xem SnapshotHistoryList).
 type DividendHistoryRow = {
   id: string;
-  type: "CASH" | "STOCK";
+  type: DividendType;
   percentLabel: string; // "20" — hiển thị "Tiền mặt 20%"/"Cổ phiếu 20%"
   date: string; // đã format dd/MM/yyyy
   isNew?: boolean; // badge "MỚI" — lần vừa ghi

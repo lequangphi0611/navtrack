@@ -15,6 +15,7 @@ import { getTotalCashDividendReceived } from "@/features/dividends/queries";
 import { recordDividendSchema } from "@/features/dividends/schemas";
 import type { DividendFormState } from "@/features/dividends/types";
 import { toFieldErrors } from "@/lib/action-result";
+import { assertNever } from "@/lib/assert-never";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -216,189 +217,194 @@ export async function recordDividend(
         // PROBE_EVENT_ID luôn có mặt trong events -> luôn có entry trong timeline.
         const quantityAtDate = timeline.get(PROBE_EVENT_ID)!.before;
 
-        if (type === "CASH") {
-          // parValue/taxRatePercent đã resolve ở ngoài, luôn có giá trị khi type === "CASH".
-          const { grossAmount, taxAmount, netAmount } = computeCashDividend({
-            percent: percentDecimal,
-            parValue: parValue!,
-            taxRatePercent: taxRatePercent!,
-            quantity: quantityAtDate,
-          });
+        switch (type) {
+          case "CASH": {
+            // parValue/taxRatePercent đã resolve ở ngoài, luôn có giá trị khi type === "CASH".
+            const { grossAmount, taxAmount, netAmount } = computeCashDividend({
+              percent: percentDecimal,
+              parValue: parValue!,
+              taxRatePercent: taxRatePercent!,
+              quantity: quantityAtDate,
+            });
 
-          // Issue #61: bù pha loãng — trừ cổ tức GỘP/CP khỏi giá cũ, ghi tại
-          // `date` (ngày chia), KHÔNG phải paymentDate. Bỏ qua khi user đã
-          // xác nhận giá hiện có đã phản ánh đúng thị trường
-          // (priceAlreadyReflectsMarket) hoặc không có giá cũ nào để điều
-          // chỉnh (MISSING_PRICE).
-          let priceAdjustment: PriceAdjustment | undefined;
-          if (!parsed.data.priceAlreadyReflectsMarket) {
-            const oldPrice = await resolveOldPriceInTx(
-              tx,
-              holdingId,
-              holding.symbol,
-              date,
-            );
-            if (oldPrice) {
-              const newPrice = computeCashDividendPriceAdjustment({
-                oldPrice,
-                grossAmount,
-                quantityAtDate,
-              });
-              if (newPrice) {
-                // Review PR #62 finding #2: ghi kèm `note` khi tự tạo/GHI ĐÈ
-                // NavOverride — nếu holdingId+date đã có sẵn 1 dòng (vd user
-                // tự nhập tay đúng ngày này, hoặc 1 dividend khác cùng ngày
-                // đã điều chỉnh trước đó), note giải thích RÕ vì sao giá bị
-                // thay, không âm thầm mất dấu vết audit.
-                const noteLabel = `Tự động điều chỉnh do ghi cổ tức tiền mặt ngày ${formatDate(date)}`;
-                await tx.navOverride.upsert({
-                  where: { holdingId_date: { holdingId, date } },
-                  create: {
-                    holdingId,
-                    date,
-                    price: newPrice.toString(),
-                    note: noteLabel,
-                  },
-                  update: { price: newPrice.toString(), note: noteLabel },
+            // Issue #61: bù pha loãng — trừ cổ tức GỘP/CP khỏi giá cũ, ghi tại
+            // `date` (ngày chia), KHÔNG phải paymentDate. Bỏ qua khi user đã
+            // xác nhận giá hiện có đã phản ánh đúng thị trường
+            // (priceAlreadyReflectsMarket) hoặc không có giá cũ nào để điều
+            // chỉnh (MISSING_PRICE).
+            let priceAdjustment: PriceAdjustment | undefined;
+            if (!parsed.data.priceAlreadyReflectsMarket) {
+              const oldPrice = await resolveOldPriceInTx(
+                tx,
+                holdingId,
+                holding.symbol,
+                date,
+              );
+              if (oldPrice) {
+                const newPrice = computeCashDividendPriceAdjustment({
+                  oldPrice,
+                  grossAmount,
+                  quantityAtDate,
                 });
-                priceAdjustment = { oldPrice, newPrice };
+                if (newPrice) {
+                  // Review PR #62 finding #2: ghi kèm `note` khi tự tạo/GHI ĐÈ
+                  // NavOverride — nếu holdingId+date đã có sẵn 1 dòng (vd user
+                  // tự nhập tay đúng ngày này, hoặc 1 dividend khác cùng ngày
+                  // đã điều chỉnh trước đó), note giải thích RÕ vì sao giá bị
+                  // thay, không âm thầm mất dấu vết audit.
+                  const noteLabel = `Tự động điều chỉnh do ghi cổ tức tiền mặt ngày ${formatDate(date)}`;
+                  await tx.navOverride.upsert({
+                    where: { holdingId_date: { holdingId, date } },
+                    create: {
+                      holdingId,
+                      date,
+                      price: newPrice.toString(),
+                      note: noteLabel,
+                    },
+                    update: { price: newPrice.toString(), note: noteLabel },
+                  });
+                  priceAdjustment = { oldPrice, newPrice };
+                }
               }
             }
-          }
 
-          await tx.dividend.create({
-            data: {
-              holdingId,
-              type: "CASH",
-              date,
-              // Với CASH: mốc dòng tiền dùng để tính XIRR (fallback `date`
-              // khi bỏ trống) — xem buildXirrCashflows (src/lib/xirr-cashflow.ts)
-              // và docs/domain/05-returns-xirr-and-pnl.md. KHÔNG ảnh hưởng
-              // NavOverride bù pha loãng phía trên — mốc đó vẫn luôn `date`.
-              paymentDate: parsed.data.paymentDate ?? null,
-              grossAmount: grossAmount.toString(),
-              taxAmount: taxAmount.toString(),
-              netAmount: netAmount.toString(),
-            },
-          });
-
-          return {
-            ok: true as const,
-            type: "CASH" as const,
-            symbol: holding.symbol,
-            unit: holding.unit,
-            grossAmount,
-            priceAdjustment,
-            taxAmount,
-            netAmount,
-          };
-        }
-
-        const { rawStockQuantity, stockQuantity, wasRounded } =
-          computeStockDividend({
-            percent: percentDecimal,
-            quantity: quantityAtDate,
-          });
-
-        // stockQuantityOverride chỉ có ý nghĩa khi type === "STOCK". Validate
-        // tolerance phải nằm TRONG transaction, SAU khi có rawStockQuantity —
-        // rawStockQuantity phụ thuộc quantityAtDate, chỉ tính được sau khi đọc
-        // Holding.cashflows/dividends từ `tx` (không tách ra ngoài như
-        // parValue/taxRatePercent của CASH, vốn không phụ thuộc Holding).
-        let finalStockQuantity = stockQuantity;
-        if (parsed.data.stockQuantityOverride !== undefined) {
-          const override = new Decimal(parsed.data.stockQuantityOverride);
-          if (!isStockQuantityOverrideValid(override, rawStockQuantity)) {
-            return {
-              ok: false as const,
-              error:
-                "Số lượng chỉnh tay lệch quá nhiều so với số tính từ tỷ lệ",
-              fieldErrors: {
-                stockQuantityOverride:
-                  "Số lượng chỉnh tay lệch quá nhiều so với số tính từ tỷ lệ",
+            await tx.dividend.create({
+              data: {
+                holdingId,
+                type: "CASH",
+                date,
+                // Với CASH: mốc dòng tiền dùng để tính XIRR (fallback `date`
+                // khi bỏ trống) — xem buildXirrCashflows (src/lib/xirr-cashflow.ts)
+                // và docs/domain/05-returns-xirr-and-pnl.md. KHÔNG ảnh hưởng
+                // NavOverride bù pha loãng phía trên — mốc đó vẫn luôn `date`.
+                paymentDate: parsed.data.paymentDate ?? null,
+                grossAmount: grossAmount.toString(),
+                taxAmount: taxAmount.toString(),
+                netAmount: netAmount.toString(),
               },
+            });
+
+            return {
+              ok: true as const,
+              type: "CASH" as const,
+              symbol: holding.symbol,
+              unit: holding.unit,
+              grossAmount,
+              priceAdjustment,
+              taxAmount,
+              netAmount,
             };
           }
-          finalStockQuantity = override;
-        }
-
-        // Issue #61: bù pha loãng — SL "tại ngày ghi" (quantityAtDate) TRƯỚC
-        // dividend này, SAU khi cộng thêm finalStockQuantity, giữ nguyên tổng
-        // giá trị. Dùng quantityAtDate (không phải cache Holding.quantity/
-        // afterQuantity bên dưới — có thể lệch nhau khi ghi lùi ngày, trong
-        // khi NavOverride phải phản ánh đúng pha loãng TẠI `date`). Ghi tại
-        // `date` (ngày chia), KHÔNG phải paymentDate — cùng lý do nhánh CASH.
-        let priceAdjustment: PriceAdjustment | undefined;
-        if (!parsed.data.priceAlreadyReflectsMarket) {
-          const oldPrice = await resolveOldPriceInTx(
-            tx,
-            holdingId,
-            holding.symbol,
-            date,
-          );
-          if (oldPrice) {
-            const newPrice = computeStockDividendPriceAdjustment({
-              oldPrice,
-              quantityBefore: quantityAtDate,
-              quantityAfter: quantityAtDate.plus(finalStockQuantity),
-            });
-            if (newPrice) {
-              // Cùng lý do note ở nhánh CASH phía trên (review PR #62 finding #2).
-              const noteLabel = `Tự động điều chỉnh do ghi cổ tức cổ phiếu ngày ${formatDate(date)}`;
-              await tx.navOverride.upsert({
-                where: { holdingId_date: { holdingId, date } },
-                create: {
-                  holdingId,
-                  date,
-                  price: newPrice.toString(),
-                  note: noteLabel,
-                },
-                update: { price: newPrice.toString(), note: noteLabel },
+          case "STOCK": {
+            const { rawStockQuantity, stockQuantity, wasRounded } =
+              computeStockDividend({
+                percent: percentDecimal,
+                quantity: quantityAtDate,
               });
-              priceAdjustment = { oldPrice, newPrice };
+
+            // stockQuantityOverride chỉ có ý nghĩa khi type === "STOCK". Validate
+            // tolerance phải nằm TRONG transaction, SAU khi có rawStockQuantity —
+            // rawStockQuantity phụ thuộc quantityAtDate, chỉ tính được sau khi đọc
+            // Holding.cashflows/dividends từ `tx` (không tách ra ngoài như
+            // parValue/taxRatePercent của CASH, vốn không phụ thuộc Holding).
+            let finalStockQuantity = stockQuantity;
+            if (parsed.data.stockQuantityOverride !== undefined) {
+              const override = new Decimal(parsed.data.stockQuantityOverride);
+              if (!isStockQuantityOverrideValid(override, rawStockQuantity)) {
+                return {
+                  ok: false as const,
+                  error:
+                    "Số lượng chỉnh tay lệch quá nhiều so với số tính từ tỷ lệ",
+                  fieldErrors: {
+                    stockQuantityOverride:
+                      "Số lượng chỉnh tay lệch quá nhiều so với số tính từ tỷ lệ",
+                  },
+                };
+              }
+              finalStockQuantity = override;
             }
+
+            // Issue #61: bù pha loãng — SL "tại ngày ghi" (quantityAtDate) TRƯỚC
+            // dividend này, SAU khi cộng thêm finalStockQuantity, giữ nguyên tổng
+            // giá trị. Dùng quantityAtDate (không phải cache Holding.quantity/
+            // afterQuantity bên dưới — có thể lệch nhau khi ghi lùi ngày, trong
+            // khi NavOverride phải phản ánh đúng pha loãng TẠI `date`). Ghi tại
+            // `date` (ngày chia), KHÔNG phải paymentDate — cùng lý do nhánh CASH.
+            let priceAdjustment: PriceAdjustment | undefined;
+            if (!parsed.data.priceAlreadyReflectsMarket) {
+              const oldPrice = await resolveOldPriceInTx(
+                tx,
+                holdingId,
+                holding.symbol,
+                date,
+              );
+              if (oldPrice) {
+                const newPrice = computeStockDividendPriceAdjustment({
+                  oldPrice,
+                  quantityBefore: quantityAtDate,
+                  quantityAfter: quantityAtDate.plus(finalStockQuantity),
+                });
+                if (newPrice) {
+                  // Cùng lý do note ở nhánh CASH phía trên (review PR #62 finding #2).
+                  const noteLabel = `Tự động điều chỉnh do ghi cổ tức cổ phiếu ngày ${formatDate(date)}`;
+                  await tx.navOverride.upsert({
+                    where: { holdingId_date: { holdingId, date } },
+                    create: {
+                      holdingId,
+                      date,
+                      price: newPrice.toString(),
+                      note: noteLabel,
+                    },
+                    update: { price: newPrice.toString(), note: noteLabel },
+                  });
+                  priceAdjustment = { oldPrice, newPrice };
+                }
+              }
+            }
+
+            await tx.dividend.create({
+              data: {
+                holdingId,
+                type: "STOCK",
+                date,
+                // Với STOCK: thuần thông tin, KHÔNG dùng cho tính toán nào —
+                // buildXirrCashflows chỉ ghép cổ tức CASH (có netAmount) vào chuỗi
+                // dòng tiền XIRR, STOCK không tạo dòng tiền (chỉ cộng thêm
+                // stockQuantity) nên paymentDate không góp vào XIRR ở đây.
+                paymentDate: parsed.data.paymentDate ?? null,
+                stockQuantity: finalStockQuantity.toString(),
+              },
+            });
+
+            // Cộng THẲNG vào cache hiện có (Holding.quantity), KHÔNG gọi lại
+            // derivePosition()/buildQuantityTimeline để tính lại từ đầu — avgCost
+            // giữ nguyên, không sửa (docs/domain/01-assets-and-holdings.md).
+            const currentQuantity = new Decimal(holding.quantity.toString());
+            const afterQuantity = currentQuantity.plus(finalStockQuantity);
+            await tx.holding.update({
+              where: { id: holdingId },
+              data: { quantity: afterQuantity.toString() },
+            });
+
+            return {
+              ok: true as const,
+              type: "STOCK" as const,
+              symbol: holding.symbol,
+              unit: holding.unit,
+              addedQuantity: finalStockQuantity,
+              afterQuantity,
+              // true CHỈ khi hệ thống tự làm tròn xuống — không phải khi user tự
+              // sửa qua stockQuantityOverride (override => coi như user đã chốt
+              // đúng giá trị, không cần cảnh báo làm tròn).
+              wasRounded:
+                wasRounded && parsed.data.stockQuantityOverride === undefined,
+              rawStockQuantity,
+              priceAdjustment,
+            };
           }
+          default:
+            return assertNever(type);
         }
-
-        await tx.dividend.create({
-          data: {
-            holdingId,
-            type: "STOCK",
-            date,
-            // Với STOCK: thuần thông tin, KHÔNG dùng cho tính toán nào —
-            // buildXirrCashflows chỉ ghép cổ tức CASH (có netAmount) vào chuỗi
-            // dòng tiền XIRR, STOCK không tạo dòng tiền (chỉ cộng thêm
-            // stockQuantity) nên paymentDate không góp vào XIRR ở đây.
-            paymentDate: parsed.data.paymentDate ?? null,
-            stockQuantity: finalStockQuantity.toString(),
-          },
-        });
-
-        // Cộng THẲNG vào cache hiện có (Holding.quantity), KHÔNG gọi lại
-        // derivePosition()/buildQuantityTimeline để tính lại từ đầu — avgCost
-        // giữ nguyên, không sửa (docs/domain/01-assets-and-holdings.md).
-        const currentQuantity = new Decimal(holding.quantity.toString());
-        const afterQuantity = currentQuantity.plus(finalStockQuantity);
-        await tx.holding.update({
-          where: { id: holdingId },
-          data: { quantity: afterQuantity.toString() },
-        });
-
-        return {
-          ok: true as const,
-          type: "STOCK" as const,
-          symbol: holding.symbol,
-          unit: holding.unit,
-          addedQuantity: finalStockQuantity,
-          afterQuantity,
-          // true CHỈ khi hệ thống tự làm tròn xuống — không phải khi user tự
-          // sửa qua stockQuantityOverride (override => coi như user đã chốt
-          // đúng giá trị, không cần cảnh báo làm tròn).
-          wasRounded:
-            wasRounded && parsed.data.stockQuantityOverride === undefined,
-          rawStockQuantity,
-          priceAdjustment,
-        };
       },
       // Serializable — cùng lý do với addTransaction: đọc lịch sử cashflow/dividend
       // để derive vị thế-tại-ngày-ghi rồi ghi Dividend (+ cập nhật cache khi STOCK)
@@ -443,52 +449,60 @@ export async function recordDividend(
         ? { xirrBeforePercent, xirrAfterPercent }
         : {};
 
-    if (result.type === "CASH") {
-      return {
-        ok: true,
-        result: {
-          symbol: result.symbol,
-          type: "CASH",
-          percentLabel: percent,
-          dateLabel,
-          grossAmount: result.grossAmount.toString(),
-          taxAmount: result.taxAmount.toString(),
-          netAmount: result.netAmount.toString(),
-          ...paymentDateFields,
-          ...priceAdjustmentFields,
-          ...xirrFields,
-          totalDividendReceived: totalDividendReceived.toString(),
-          historyHref: ROUTES.dividendHistory(holdingId),
-          holdingHref: ROUTES.holdingDetail(holdingId),
-        },
-      };
+    switch (result.type) {
+      case "CASH":
+        return {
+          ok: true,
+          result: {
+            symbol: result.symbol,
+            type: "CASH",
+            percentLabel: percent,
+            dateLabel,
+            grossAmount: result.grossAmount.toString(),
+            taxAmount: result.taxAmount.toString(),
+            netAmount: result.netAmount.toString(),
+            ...paymentDateFields,
+            ...priceAdjustmentFields,
+            ...xirrFields,
+            totalDividendReceived: totalDividendReceived.toString(),
+            historyHref: ROUTES.dividendHistory(holdingId),
+            holdingHref: ROUTES.holdingDetail(holdingId),
+          },
+        };
+      case "STOCK":
+        return {
+          ok: true,
+          result: {
+            symbol: result.symbol,
+            type: "STOCK",
+            percentLabel: percent,
+            dateLabel,
+            addedQuantity: result.addedQuantity.toString(),
+            afterQuantity: result.afterQuantity.toString(),
+            unit: result.unit,
+            // rawAddedQuantity chỉ có mặt khi wasRounded=true (docs/dividends/types.ts).
+            ...(result.wasRounded
+              ? {
+                  wasRounded: true as const,
+                  rawAddedQuantity: result.rawStockQuantity.toString(),
+                }
+              : {}),
+            ...paymentDateFields,
+            ...priceAdjustmentFields,
+            ...xirrFields,
+            totalDividendReceived: totalDividendReceived.toString(),
+            historyHref: ROUTES.dividendHistory(holdingId),
+            holdingHref: ROUTES.holdingDetail(holdingId),
+          },
+        };
+      default:
+        // `result` (không phải `result.type`) — sau khi switch phủ hết
+        // "CASH"/"STOCK", TS đã thu hẹp CẢ union `result` về `never` (khác ca
+        // dividend.type ở queries.ts, nơi object gốc không phải union rời
+        // rạc) — dùng thẳng biến đã narrow để tránh lỗi truy cập property
+        // trên `never`.
+        return assertNever(result);
     }
-
-    return {
-      ok: true,
-      result: {
-        symbol: result.symbol,
-        type: "STOCK",
-        percentLabel: percent,
-        dateLabel,
-        addedQuantity: result.addedQuantity.toString(),
-        afterQuantity: result.afterQuantity.toString(),
-        unit: result.unit,
-        // rawAddedQuantity chỉ có mặt khi wasRounded=true (docs/dividends/types.ts).
-        ...(result.wasRounded
-          ? {
-              wasRounded: true as const,
-              rawAddedQuantity: result.rawStockQuantity.toString(),
-            }
-          : {}),
-        ...paymentDateFields,
-        ...priceAdjustmentFields,
-        ...xirrFields,
-        totalDividendReceived: totalDividendReceived.toString(),
-        historyHref: ROUTES.dividendHistory(holdingId),
-        holdingHref: ROUTES.holdingDetail(holdingId),
-      },
-    };
   } catch (err) {
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&

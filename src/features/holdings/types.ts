@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-import type { SettingValueType } from "@prisma/client";
+import type { CashflowType, SettingValueType } from "@prisma/client";
 import type { CashflowTimelineRow } from "@/features/holdings/components/CashflowTimeline";
 import type { XirrResult as XirrResultUi } from "@/components/ReturnMetrics";
 import type { PriceSource } from "@/lib/valuation";
@@ -53,7 +53,7 @@ export type HoldingsGroup = {
 
 export type CashflowRow = {
   id: string;
-  type: "BUY" | "SELL";
+  type: CashflowType;
   date: string;
   quantity: string;
   pricePerUnit: string;

@@ -4,10 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
+import type { CashflowType } from "@prisma/client";
+import { Badge, type badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { assertNever } from "@/lib/assert-never";
+import { cashflowActionLabel } from "@/lib/cashflow-label";
 import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
 import { ROUTES } from "@/lib/routes";
+import type { VariantProps } from "class-variance-authority";
 
 import { deleteTransaction } from "../../actions";
 import type { CashflowRow } from "../../types";
@@ -17,6 +21,22 @@ type TransactionHistoryListProps = {
   unit: string;
   cashflows: CashflowRow[];
 };
+
+// Màu badge "Mua"/"Bán" theo CashflowType — switch exhaustive cùng lý do
+// cashflowActionLabel() (src/lib/cashflow-label.ts), giữ riêng ở đây vì gắn
+// với Badge variant (chi tiết UI), không thuộc lib dùng chung ngoài UI.
+function cashflowBadgeVariant(
+  type: CashflowType,
+): NonNullable<VariantProps<typeof badgeVariants>["variant"]> {
+  switch (type) {
+    case "BUY":
+      return "gain";
+    case "SELL":
+      return "destructive";
+    default:
+      return assertNever(type);
+  }
+}
 
 function TransactionHistoryList({
   holdingId,
@@ -56,8 +76,8 @@ function TransactionHistoryList({
           data-testid="transaction-row"
           className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5"
         >
-          <Badge variant={cf.type === "BUY" ? "gain" : "destructive"}>
-            {cf.type === "BUY" ? "Mua" : "Bán"}
+          <Badge variant={cashflowBadgeVariant(cf.type)}>
+            {cashflowActionLabel(cf.type)}
           </Badge>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-foreground">

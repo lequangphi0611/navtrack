@@ -6,8 +6,9 @@ import {
   nonNegativeDecimal,
   positiveDecimal,
 } from "@/features/holdings/schemas";
+import { DIVIDEND_TYPES } from "@/lib/enums";
 
-export const dividendTypeEnum = z.enum(["CASH", "STOCK"]);
+export const dividendTypeEnum = z.enum(DIVIDEND_TYPES);
 
 export const recordDividendSchema = z
   .object({
