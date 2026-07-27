@@ -12,7 +12,6 @@ import { assertNever } from "@/lib/assert-never";
 import { getSession } from "@/lib/auth";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
-import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import {
   buildPositionEvents,
@@ -22,9 +21,14 @@ import {
   AppError,
   parseSettingValue,
   pickEffectiveSetting,
-  SETTING_KEYS,
 } from "@/lib/settings";
 import { valuateHoldings } from "@/lib/valuation";
+
+import {
+  findCashLikeDividendNetAmounts,
+  findDividendHistorySource,
+  findParValueSettingRows,
+} from "./repository";
 
 // Danh sách Holding đang mở dùng cho HoldingSwitcher (DividendForm) — tái dùng
 // getOpenHoldings() (features/holdings/queries.ts, đã filter userId + quantity
@@ -107,30 +111,21 @@ function roundPercentLabel(numerator: Decimal, denominator: Decimal): string {
 // cho DividendRecordedResult.totalDividendReceived (mockup Phase 4, 4d).
 // KHÔNG lọc theo cutoffDate (đây là tổng lịch sử, không phải input XIRR) và
 // đọc TRỰC TIẾP từ DB nên luôn phản ánh dividend VỪA ghi khi gọi SAU
-// transaction của recordDividend (features/dividends/actions.ts). holdingId
-// đã được caller verify thuộc đúng user trước đó (cùng cách getCashDividends
-// ở holdings/queries.ts không tự re-check userId).
+// transaction của recordDividend (features/dividends/actions.ts).
 // Phase 7 (#101) sẽ cần cộng thêm "BOND_COUPON" vào mảng này — trái tức cũng
 // là dòng tiền tiền mặt đã nhận, cùng ý nghĩa với CASH ở đây.
 const CASH_LIKE_DIVIDEND_TYPES: DividendType[] = ["CASH"];
 
 export async function getTotalCashDividendReceived(
   holdingId: string,
+  userId: string,
 ): Promise<Decimal> {
-  const rows = await db.dividend.findMany({
-    where: {
-      holdingId,
-      type: { in: CASH_LIKE_DIVIDEND_TYPES },
-      netAmount: { not: null },
-    },
-    select: { netAmount: true },
-  });
-
-  return rows.reduce(
-    // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
-    (sum, row) => sum.plus(new Decimal(row.netAmount!.toString())),
-    new Decimal(0),
+  const netAmounts = await findCashLikeDividendNetAmounts(
+    holdingId,
+    userId,
+    CASH_LIKE_DIVIDEND_TYPES,
   );
+  return netAmounts.reduce((sum, amount) => sum.plus(amount), new Decimal(0));
 }
 
 // Lịch sử cổ tức của MỘT Holding (mockup Phase 4 Screens, 4e) — verify
@@ -144,38 +139,11 @@ export async function getDividendHistory(holdingId: string): Promise<{
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  const holding = await db.holding.findUnique({
-    where: { id: holdingId },
-    select: {
-      userId: true,
-      symbol: true,
-      name: true,
-      unit: true,
-      cashflows: {
-        select: {
-          id: true,
-          type: true,
-          date: true,
-          quantity: true,
-          createdAt: true,
-        },
-      },
-      dividends: {
-        select: {
-          id: true,
-          type: true,
-          date: true,
-          createdAt: true,
-          grossAmount: true,
-          taxAmount: true,
-          netAmount: true,
-          stockQuantity: true,
-        },
-      },
-    },
-  });
-
-  if (!holding || holding.userId !== session.user.id) notFound();
+  // "Không tồn tại" và "không thuộc user hiện tại" đều trả `null` — xử lý
+  // giống nhau, không lộ thông tin tồn tại (findDividendHistorySource tự
+  // filter userId, xem repository.ts).
+  const holding = await findDividendHistorySource(holdingId, session.user.id);
+  if (!holding) notFound();
 
   if (holding.dividends.length === 0) {
     return {
@@ -191,10 +159,7 @@ export async function getDividendHistory(holdingId: string): Promise<{
     };
   }
 
-  const parValueRows = await db.setting.findMany({
-    where: { key: SETTING_KEYS.DIVIDEND_PAR_VALUE },
-    select: { value: true, valueType: true, effectiveFrom: true },
-  });
+  const parValueRows = await findParValueSettingRows();
 
   const events = buildPositionEvents({
     cashflows: holding.cashflows,
@@ -229,9 +194,9 @@ export async function getDividendHistory(holdingId: string): Promise<{
     switch (dividend.type) {
       case "CASH": {
         // grossAmount/taxAmount/netAmount luôn có giá trị khi type === CASH.
-        const grossAmount = new Decimal(dividend.grossAmount!.toString());
-        const taxAmount = new Decimal(dividend.taxAmount!.toString());
-        const netAmount = new Decimal(dividend.netAmount!.toString());
+        const grossAmount = dividend.grossAmount!;
+        const taxAmount = dividend.taxAmount!;
+        const netAmount = dividend.netAmount!;
         const parValueAtDate = resolveParValueAt(parValueRows, dividend.date);
 
         cashNetTotal = cashNetTotal.plus(netAmount);
@@ -253,7 +218,7 @@ export async function getDividendHistory(holdingId: string): Promise<{
       }
       case "STOCK": {
         // stockQuantity luôn có giá trị khi type === STOCK.
-        const stockQuantity = new Decimal(dividend.stockQuantity!.toString());
+        const stockQuantity = dividend.stockQuantity!;
         stockAddedQuantityTotal = stockAddedQuantityTotal.plus(stockQuantity);
         stockCount += 1;
 

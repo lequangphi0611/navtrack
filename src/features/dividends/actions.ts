@@ -17,7 +17,6 @@ import type { DividendFormState } from "@/features/dividends/types";
 import { toFieldErrors } from "@/lib/action-result";
 import { assertNever } from "@/lib/assert-never";
 import { getSession } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { logger } from "@/lib/logger";
 import { getCurrentPortfolioXirrPercent } from "@/lib/portfolio-valuation";
@@ -34,6 +33,16 @@ import {
   SETTING_KEYS,
 } from "@/lib/settings";
 import { resolvePrice } from "@/lib/valuation";
+
+import {
+  findDividendPositionSource,
+  findLatestNavOverride,
+  findLatestPriceQuote,
+  insertDividend,
+  runInTransaction,
+  updateHoldingQuantity,
+  upsertPriceAdjustmentOverride,
+} from "./repository";
 
 // Id giữ chỗ cho "sự kiện" ghi cổ tức đang xử lý — KHÔNG phải id thật trong DB
 // (Dividend chưa được tạo lúc build timeline). delta=0 vì mục đích chỉ để đọc
@@ -57,32 +66,11 @@ async function resolveOldPriceInTx(
   date: Date,
 ): Promise<Decimal | null> {
   const [latestOverride, latestQuote] = await Promise.all([
-    tx.navOverride.findFirst({
-      where: { holdingId, date: { lte: date } },
-      orderBy: { date: "desc" },
-      select: { date: true, price: true },
-    }),
-    tx.priceQuote.findFirst({
-      where: { symbol, date: { lte: date } },
-      orderBy: { date: "desc" },
-      select: { date: true, price: true },
-    }),
+    findLatestNavOverride(holdingId, date, tx),
+    findLatestPriceQuote(symbol, date, tx),
   ]);
 
-  const resolved = resolvePrice(
-    latestOverride
-      ? {
-          date: latestOverride.date,
-          price: new Decimal(latestOverride.price.toString()),
-        }
-      : null,
-    latestQuote
-      ? {
-          date: latestQuote.date,
-          price: new Decimal(latestQuote.price.toString()),
-        }
-      : null,
-  );
+  const resolved = resolvePrice(latestOverride, latestQuote);
   return resolved ? resolved.price : null;
 }
 
@@ -148,38 +136,12 @@ export async function recordDividend(
   const xirrBeforePercent = await getCurrentPortfolioXirrPercent(userId);
 
   try {
-    const result = await db.$transaction(
+    const result = await runInTransaction(
       async (tx) => {
-        const holding = await tx.holding.findUnique({
-          where: { id: holdingId },
-          select: {
-            userId: true,
-            symbol: true,
-            unit: true,
-            quantity: true,
-            cashflows: {
-              select: {
-                id: true,
-                type: true,
-                date: true,
-                quantity: true,
-                createdAt: true,
-              },
-            },
-            dividends: {
-              select: {
-                id: true,
-                type: true,
-                date: true,
-                stockQuantity: true,
-                createdAt: true,
-              },
-            },
-          },
-        });
+        const holding = await findDividendPositionSource(holdingId, userId, tx);
         // Không tồn tại hoặc không thuộc user hiện tại: xử lý giống nhau,
         // không lộ thông tin tồn tại (cùng pattern addTransaction).
-        if (!holding || holding.userId !== userId) {
+        if (!holding) {
           return { ok: false as const, error: "Không tìm thấy vị thế" };
         }
 
@@ -231,23 +193,22 @@ export async function recordDividend(
                   // đã điều chỉnh trước đó), note giải thích RÕ vì sao giá bị
                   // thay, không âm thầm mất dấu vết audit.
                   const noteLabel = `Tự động điều chỉnh do ghi cổ tức tiền mặt ngày ${formatDate(date)}`;
-                  await tx.navOverride.upsert({
-                    where: { holdingId_date: { holdingId, date } },
-                    create: {
+                  await upsertPriceAdjustmentOverride(
+                    {
                       holdingId,
                       date,
                       price: newPrice.toString(),
                       note: noteLabel,
                     },
-                    update: { price: newPrice.toString(), note: noteLabel },
-                  });
+                    tx,
+                  );
                   priceAdjustment = { oldPrice, newPrice };
                 }
               }
             }
 
-            await tx.dividend.create({
-              data: {
+            await insertDividend(
+              {
                 holdingId,
                 type: "CASH",
                 date,
@@ -260,7 +221,8 @@ export async function recordDividend(
                 taxAmount: taxAmount.toString(),
                 netAmount: netAmount.toString(),
               },
-            });
+              tx,
+            );
 
             return {
               ok: true as const,
@@ -325,23 +287,22 @@ export async function recordDividend(
                 if (newPrice) {
                   // Cùng lý do note ở nhánh CASH phía trên (review PR #62 finding #2).
                   const noteLabel = `Tự động điều chỉnh do ghi cổ tức cổ phiếu ngày ${formatDate(date)}`;
-                  await tx.navOverride.upsert({
-                    where: { holdingId_date: { holdingId, date } },
-                    create: {
+                  await upsertPriceAdjustmentOverride(
+                    {
                       holdingId,
                       date,
                       price: newPrice.toString(),
                       note: noteLabel,
                     },
-                    update: { price: newPrice.toString(), note: noteLabel },
-                  });
+                    tx,
+                  );
                   priceAdjustment = { oldPrice, newPrice };
                 }
               }
             }
 
-            await tx.dividend.create({
-              data: {
+            await insertDividend(
+              {
                 holdingId,
                 type: "STOCK",
                 date,
@@ -352,17 +313,18 @@ export async function recordDividend(
                 paymentDate: parsed.data.paymentDate ?? null,
                 stockQuantity: finalStockQuantity.toString(),
               },
-            });
+              tx,
+            );
 
             // Cộng THẲNG vào cache hiện có (Holding.quantity), KHÔNG gọi lại
             // derivePosition()/buildQuantityTimeline để tính lại từ đầu — avgCost
             // giữ nguyên, không sửa (docs/domain/01-assets-and-holdings.md).
-            const currentQuantity = new Decimal(holding.quantity.toString());
-            const afterQuantity = currentQuantity.plus(finalStockQuantity);
-            await tx.holding.update({
-              where: { id: holdingId },
-              data: { quantity: afterQuantity.toString() },
-            });
+            const afterQuantity = holding.quantity.plus(finalStockQuantity);
+            await updateHoldingQuantity(
+              holdingId,
+              afterQuantity.toString(),
+              tx,
+            );
 
             return {
               ok: true as const,
@@ -424,7 +386,7 @@ export async function recordDividend(
     // phản ánh đúng Dividend/Holding.quantity vừa commit ở transaction trên.
     const [xirrAfterPercent, totalDividendReceived] = await Promise.all([
       getCurrentPortfolioXirrPercent(userId),
-      getTotalCashDividendReceived(holdingId),
+      getTotalCashDividendReceived(holdingId, userId),
     ]);
     // Chỉ set CẢ HAI khi CẢ before lẫn after đều tính được — vắng 1 trong 2 =
     // ẩn hẳn dòng "XIRR danh mục" (DividendRecordedResult.xirrBeforePercent/

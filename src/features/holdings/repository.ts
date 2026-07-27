@@ -1,0 +1,562 @@
+import Decimal from "decimal.js";
+
+import type {
+  AssetType,
+  CashflowType,
+  Prisma,
+  SettingValueType,
+} from "@prisma/client";
+import type {
+  CashflowInputWithEvent,
+  StockDividendInput,
+} from "@/lib/cost-basis";
+import { db } from "@/lib/db";
+import {
+  positionSourceSelect,
+  POSITION_TRAIL_ORDER_BY,
+} from "@/lib/position-trail";
+import type { SettingKey } from "@/lib/settings";
+
+// Nơi DUY NHẤT của feature holdings được `import { db }` / gọi `tx.*`
+// (docs/rules/data-prisma.md mục "Tầng truy cập dữ liệu"). Mọi hàm ở đây tự
+// filter `userId` — "không tồn tại" và "không thuộc user" đều trả `null`,
+// không lộ thông tin tồn tại. `tx: Prisma.TransactionClient = db` để một chữ
+// ký chạy được cả trong lẫn ngoài `$transaction` — caller mở transaction,
+// repository không tự mở (docs/rules/data-prisma.md mục "Ranh giới transaction").
+
+// Pass-through mỏng cho db.$transaction — actions.ts (caller) vẫn là nơi
+// QUYẾT ĐỊNH ranh giới/isolation level của transaction (không đổi bản chất
+// "repository không tự mở transaction"), chỉ đổi CHỖ import `@/lib/db` để
+// repository.ts thật sự là nơi duy nhất của feature chạm module đó.
+export function runInTransaction<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options?: {
+    maxWait?: number;
+    timeout?: number;
+    isolationLevel?: Prisma.TransactionIsolationLevel;
+  },
+): Promise<T> {
+  return db.$transaction(fn, options);
+}
+
+type PositionSourceRow = Prisma.HoldingGetPayload<{
+  select: typeof positionSourceSelect;
+}>;
+
+function toCashflowInput(
+  cf: PositionSourceRow["cashflows"][number],
+): CashflowInputWithEvent {
+  return {
+    id: cf.id,
+    type: cf.type,
+    date: cf.date,
+    createdAt: cf.createdAt,
+    quantity: new Decimal(cf.quantity.toString()),
+    pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
+    feeAmount: new Decimal(cf.feeAmount.toString()),
+  };
+}
+
+function toStockDividendInput(
+  dividend: PositionSourceRow["dividends"][number],
+): StockDividendInput {
+  return {
+    id: dividend.id,
+    date: dividend.date,
+    createdAt: dividend.createdAt,
+    // positionSourceSelect.dividends đã lọc where: {type: "STOCK"} -> luôn có giá trị.
+    quantity: new Decimal(dividend.stockQuantity!.toString()),
+  };
+}
+
+// Nguồn dữ liệu DUY NHẤT cần để derivePosition() (lib/cost-basis.ts) — Domain
+// (Decimal), không phải row Prisma thô (docs/rules/clean-code.md mục 2).
+export type PositionSource = {
+  cashflows: CashflowInputWithEvent[];
+  dividends: StockDividendInput[];
+};
+
+function toPositionSource(holding: PositionSourceRow): PositionSource {
+  return {
+    cashflows: holding.cashflows.map(toCashflowInput),
+    dividends: holding.dividends.map(toStockDividendInput),
+  };
+}
+
+export async function findPositionSourceById(
+  holdingId: string,
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<PositionSource | null> {
+  const holding = await tx.holding.findUnique({
+    where: { id: holdingId },
+    select: { userId: true, ...positionSourceSelect },
+  });
+  if (!holding || holding.userId !== userId) return null;
+  return toPositionSource(holding);
+}
+
+// Không cần so `userId` sau khi đọc — khóa `userId_symbol_type` đã lọc theo
+// đúng user ngay trong `where` (khớp hành vi createHolding trước refactor).
+export async function findPositionSourceBySymbol(
+  key: { userId: string; symbol: string; type: AssetType },
+  tx: Prisma.TransactionClient = db,
+): Promise<(PositionSource & { id: string }) | null> {
+  const holding = await tx.holding.findUnique({
+    where: { userId_symbol_type: key },
+    select: { id: true, ...positionSourceSelect },
+  });
+  if (!holding) return null;
+  return { id: holding.id, ...toPositionSource(holding) };
+}
+
+export async function findPositionSourceByCashflow(
+  cashflowId: string,
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<(PositionSource & { holdingId: string }) | null> {
+  const cashflow = await tx.cashflow.findUnique({
+    where: { id: cashflowId },
+    select: {
+      holdingId: true,
+      holding: { select: { userId: true, ...positionSourceSelect } },
+    },
+  });
+  if (!cashflow || cashflow.holding.userId !== userId) return null;
+  return {
+    holdingId: cashflow.holdingId,
+    ...toPositionSource(cashflow.holding),
+  };
+}
+
+export async function insertHolding(
+  data: {
+    userId: string;
+    symbol: string;
+    type: AssetType;
+    unit: string;
+    name?: string;
+  },
+  tx: Prisma.TransactionClient = db,
+): Promise<{ id: string }> {
+  return tx.holding.create({ data, select: { id: true } });
+}
+
+export async function insertCashflow(
+  data: {
+    holdingId: string;
+    type: CashflowType;
+    date: Date;
+    quantity: string;
+    pricePerUnit: string;
+    amount: string;
+    feeAmount: string;
+    taxAmount: string;
+    note?: string;
+  },
+  tx: Prisma.TransactionClient = db,
+): Promise<{ id: string }> {
+  return tx.cashflow.create({ data, select: { id: true } });
+}
+
+export async function updateCashflowRow(
+  cashflowId: string,
+  data: {
+    type: CashflowType;
+    date: Date;
+    quantity: string;
+    pricePerUnit: string;
+    amount: string;
+    feeAmount: string;
+    taxAmount: string;
+    note?: string;
+  },
+  tx: Prisma.TransactionClient = db,
+): Promise<void> {
+  await tx.cashflow.update({ where: { id: cashflowId }, data });
+}
+
+export async function deleteCashflowRow(
+  cashflowId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<void> {
+  await tx.cashflow.delete({ where: { id: cashflowId } });
+}
+
+// Ghi lại materialized cache vị thế lên Holding từ kết quả derivePosition đã tính sẵn.
+// Gọi trong CÙNG transaction với mọi thay đổi cashflow — giữ cache luôn khớp nguồn sự thật
+// (Cashflow), không bao giờ cập nhật cộng/trừ tay (docs/domain/02-transactions-and-cost-basis.md).
+export async function persistPosition(
+  holdingId: string,
+  position: { quantity: Decimal; avgCost: Decimal },
+  tx: Prisma.TransactionClient = db,
+): Promise<void> {
+  await tx.holding.update({
+    where: { id: holdingId },
+    data: {
+      quantity: position.quantity.toString(),
+      avgCost: position.avgCost.toString(),
+    },
+  });
+}
+
+// Dùng cho saveNavOverride (không cần PositionSource — chỉ verify quyền sở
+// hữu trước khi upsert giá tay).
+export async function isHoldingOwnedByUser(
+  holdingId: string,
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<boolean> {
+  const holding = await tx.holding.findUnique({
+    where: { id: holdingId },
+    select: { userId: true },
+  });
+  return holding?.userId === userId;
+}
+
+export async function upsertNavOverride(
+  holdingId: string,
+  date: Date,
+  price: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<void> {
+  await tx.navOverride.upsert({
+    where: { holdingId_date: { holdingId, date } },
+    create: { holdingId, date, price },
+    update: { price },
+  });
+}
+
+// --- Đọc (queries.ts) ---
+
+export type HoldingRow = {
+  id: string;
+  symbol: string;
+  name: string | null;
+  type: AssetType;
+  unit: string;
+  quantity: Decimal;
+  avgCost: Decimal;
+};
+
+// Đọc thuần materialized cache (quantity/avgCost) trên Holding — KHÔNG kéo
+// cashflow. Cache được 4 hàm ghi ở trên recompute-in-transaction nên luôn khớp
+// nguồn sự thật. Chi phí O(số holding), không phình theo lịch sử giao dịch.
+export async function findHoldingRows(
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<HoldingRow[]> {
+  const holdings = await tx.holding.findMany({
+    where: { userId },
+    select: {
+      id: true,
+      symbol: true,
+      name: true,
+      type: true,
+      unit: true,
+      quantity: true,
+      avgCost: true,
+    },
+    orderBy: { symbol: "asc" },
+  });
+
+  return holdings.map((h) => ({
+    id: h.id,
+    symbol: h.symbol,
+    name: h.name,
+    type: h.type,
+    unit: h.unit,
+    quantity: new Decimal(h.quantity.toString()),
+    avgCost: new Decimal(h.avgCost.toString()),
+  }));
+}
+
+export type CashDividendRow = {
+  id: string;
+  date: Date;
+  paymentDate: Date | null;
+  netAmount: Decimal;
+};
+
+// Cổ tức tiền mặt đã nhận <= cutoffDate — dòng tiền dương cho XIRR
+// (docs/domain/03-dividends.md, docs/domain/05 "Cách tính": Dividend.netAmount).
+export async function findCashDividendsForHolding(
+  holdingId: string,
+  cutoffDate: Date,
+  tx: Prisma.TransactionClient = db,
+): Promise<CashDividendRow[]> {
+  const rows = await tx.dividend.findMany({
+    where: {
+      holdingId,
+      type: "CASH",
+      netAmount: { not: null },
+      date: { lte: cutoffDate },
+    },
+    select: {
+      id: true,
+      date: true,
+      createdAt: true,
+      paymentDate: true,
+      netAmount: true,
+    },
+    // Khớp tie-break convention dùng cho cashflows (date, createdAt, id) —
+    // createdAt chỉ dùng để order, không trả ra ngoài.
+    orderBy: [{ date: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    date: row.date,
+    paymentDate: row.paymentDate,
+    // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
+    netAmount: new Decimal(row.netAmount!.toString()),
+  }));
+}
+
+export type HoldingDetailCashflowRow = {
+  id: string;
+  type: CashflowType;
+  date: Date;
+  createdAt: Date;
+  quantity: Decimal;
+  pricePerUnit: Decimal;
+  amount: Decimal;
+  feeAmount: Decimal;
+  taxAmount: Decimal;
+  note: string | null;
+};
+
+export type HoldingDetailSource = {
+  id: string;
+  symbol: string;
+  name: string | null;
+  type: AssetType;
+  unit: string;
+  cashflows: HoldingDetailCashflowRow[];
+  dividends: StockDividendInput[];
+};
+
+// Nguồn dữ liệu cho getHoldingDetail() (queries.ts) — cashflows cần ĐẦY ĐỦ
+// field (amount/taxAmount/note cho hiển thị) nên không dùng
+// positionSourceSelect.cashflows (select hẹp hơn, chỉ đủ cho derivePosition);
+// chỉ tái dùng orderBy + dividends (Issue #59: vị thế phải gồm cổ tức cổ phiếu).
+export async function findHoldingDetailSource(
+  holdingId: string,
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<HoldingDetailSource | null> {
+  const holding = await tx.holding.findUnique({
+    where: { id: holdingId },
+    include: {
+      cashflows: { orderBy: POSITION_TRAIL_ORDER_BY },
+      dividends: positionSourceSelect.dividends,
+    },
+  });
+  if (!holding || holding.userId !== userId) return null;
+
+  return {
+    id: holding.id,
+    symbol: holding.symbol,
+    name: holding.name,
+    type: holding.type,
+    unit: holding.unit,
+    cashflows: holding.cashflows.map((cf) => ({
+      id: cf.id,
+      type: cf.type,
+      date: cf.date,
+      createdAt: cf.createdAt,
+      quantity: new Decimal(cf.quantity.toString()),
+      pricePerUnit: new Decimal(cf.pricePerUnit.toString()),
+      amount: new Decimal(cf.amount.toString()),
+      feeAmount: new Decimal(cf.feeAmount.toString()),
+      taxAmount: new Decimal(cf.taxAmount.toString()),
+      note: cf.note,
+    })),
+    dividends: holding.dividends.map(toStockDividendInput),
+  };
+}
+
+export type SettingRow = {
+  key: string;
+  value: string;
+  valueType: SettingValueType;
+  effectiveFrom: Date;
+};
+
+// Setting không scoped theo user (app-wide config) — không cần filter userId.
+export async function findSettingRowsByKeys(
+  keys: SettingKey[],
+  tx: Prisma.TransactionClient = db,
+): Promise<SettingRow[]> {
+  return tx.setting.findMany({
+    where: { key: { in: keys } },
+    select: { key: true, value: true, valueType: true, effectiveFrom: true },
+  });
+}
+
+export type HoldingPricingRow = {
+  id: string;
+  symbol: string;
+  name: string | null;
+  type: AssetType;
+  unit: string;
+  quantity: Decimal;
+  avgCost: Decimal;
+};
+
+// Query hẹp riêng cho màn nhập giá tay (NavOverrideForm) — không kéo cashflows
+// như findHoldingDetailSource (màn này không cần lịch sử giao dịch).
+export async function findHoldingForPricing(
+  holdingId: string,
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<HoldingPricingRow | null> {
+  const holding = await tx.holding.findUnique({
+    where: { id: holdingId },
+    select: {
+      userId: true,
+      symbol: true,
+      name: true,
+      type: true,
+      unit: true,
+      quantity: true,
+      avgCost: true,
+    },
+  });
+  if (!holding || holding.userId !== userId) return null;
+
+  return {
+    id: holdingId,
+    symbol: holding.symbol,
+    name: holding.name,
+    type: holding.type,
+    unit: holding.unit,
+    quantity: new Decimal(holding.quantity.toString()),
+    avgCost: new Decimal(holding.avgCost.toString()),
+  };
+}
+
+export type CashflowForXirrRow = {
+  holdingId: string;
+  date: Date;
+  amount: Decimal;
+  type: CashflowType;
+  taxAmount: Decimal;
+  feeAmount: Decimal;
+};
+
+// Batch cashflow theo tập holdingId cho NHIỀU vị thế cùng lúc (không N+1).
+// type/taxAmount/feeAmount thêm cho computeCostDrag() (grossInvested riêng
+// từng vị thế đã đóng). Lọc thêm `holding: { userId }` (không chỉ tin
+// `holdingIds` caller truyền vào đã scoped sẵn) — hàm repository tự filter
+// userId, không dựa vào caller (docs/rules/data-prisma.md).
+export async function findCashflowsForHoldings(
+  holdingIds: string[],
+  userId: string,
+  cutoffDate: Date,
+  tx: Prisma.TransactionClient = db,
+): Promise<CashflowForXirrRow[]> {
+  if (holdingIds.length === 0) return [];
+
+  const rows = await tx.cashflow.findMany({
+    where: {
+      holdingId: { in: holdingIds },
+      holding: { userId },
+      date: { lte: cutoffDate },
+    },
+    select: {
+      holdingId: true,
+      date: true,
+      amount: true,
+      type: true,
+      taxAmount: true,
+      feeAmount: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    holdingId: row.holdingId,
+    date: row.date,
+    amount: new Decimal(row.amount.toString()),
+    type: row.type,
+    taxAmount: new Decimal(row.taxAmount.toString()),
+    feeAmount: new Decimal(row.feeAmount.toString()),
+  }));
+}
+
+export type CashDividendForXirrRow = {
+  id: string;
+  holdingId: string;
+  date: Date;
+  paymentDate: Date | null;
+  netAmount: Decimal;
+};
+
+// Batch cổ tức tiền mặt theo tập holdingId — `id` thêm cho ClosedHoldingRow.cashDividends
+// (React key + timeline row id, cần liệt kê từng dòng cổ tức riêng, không chỉ tổng).
+// Lọc thêm `holding: { userId }` — cùng lý do findCashflowsForHoldings.
+export async function findCashDividendsForHoldings(
+  holdingIds: string[],
+  userId: string,
+  cutoffDate: Date,
+  tx: Prisma.TransactionClient = db,
+): Promise<CashDividendForXirrRow[]> {
+  if (holdingIds.length === 0) return [];
+
+  const rows = await tx.dividend.findMany({
+    where: {
+      holdingId: { in: holdingIds },
+      holding: { userId },
+      type: "CASH",
+      netAmount: { not: null },
+      date: { lte: cutoffDate },
+    },
+    select: {
+      id: true,
+      holdingId: true,
+      date: true,
+      paymentDate: true,
+      netAmount: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    holdingId: row.holdingId,
+    date: row.date,
+    paymentDate: row.paymentDate,
+    // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
+    netAmount: new Decimal(row.netAmount!.toString()),
+  }));
+}
+
+export type CashflowDateRange = {
+  holdingId: string;
+  minDate: Date | null;
+  maxDate: Date | null;
+};
+
+// Khoảng thời gian nắm giữ (ngày mua đầu tiên -> ngày bán cuối cùng) cho
+// TOÀN BỘ vị thế đã đóng trong 1 lượt — dùng cho holdingPeriodLabel
+// (getClosedHoldingsDetail, queries.ts). Lọc thêm `holding: { userId }` —
+// cùng lý do findCashflowsForHoldings.
+export async function findCashflowDateRangeForHoldings(
+  holdingIds: string[],
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<CashflowDateRange[]> {
+  if (holdingIds.length === 0) return [];
+
+  const rows = await tx.cashflow.groupBy({
+    by: ["holdingId"],
+    where: { holdingId: { in: holdingIds }, holding: { userId } },
+    _min: { date: true },
+    _max: { date: true },
+  });
+
+  return rows.map((row) => ({
+    holdingId: row.holdingId,
+    minDate: row._min.date,
+    maxDate: row._max.date,
+  }));
+}
