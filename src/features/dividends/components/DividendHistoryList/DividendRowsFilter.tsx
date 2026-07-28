@@ -7,6 +7,7 @@ import { useState } from "react";
 import type { DividendType } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { assertNever } from "@/lib/assert-never";
+import { dividendTypeName } from "@/lib/dividend-label";
 import { DIVIDEND_TYPES } from "@/lib/enums";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -14,12 +15,6 @@ import { cn } from "@/lib/utils";
 import type { DividendHistoryRow } from "./DividendHistoryList";
 
 type DividendFilterValue = "ALL" | DividendType;
-
-const DIVIDEND_TYPE_LABEL: Record<DividendType, string> = {
-  CASH: "Tiền mặt",
-  STOCK: "Cổ phiếu",
-  BOND_COUPON: "Trái tức",
-};
 
 const DIVIDEND_TYPE_ICON: Record<DividendType, LucideIcon> = {
   CASH: Coins,
@@ -40,7 +35,7 @@ const FILTER_OPTIONS: { value: DividendFilterValue; label: string }[] = [
   { value: "ALL", label: "Tất cả" },
   ...DIVIDEND_TYPES.map((type) => ({
     value: type,
-    label: DIVIDEND_TYPE_LABEL[type],
+    label: dividendTypeName(type),
   })),
 ];
 
@@ -154,7 +149,7 @@ function DividendRowsFilter({ rows, hidden }: DividendRowsFilterProps) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-[13.5px] font-semibold text-foreground">
-                    {DIVIDEND_TYPE_LABEL[row.type]} {row.percentLabel}%
+                    {dividendTypeName(row.type)} {row.percentLabel}%
                   </span>
                   {row.isNew ? (
                     <Badge variant="gain" className="px-1.5 py-0 text-[9px]">

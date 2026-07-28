@@ -41,7 +41,7 @@ import { resolveDecimalSetting, SETTING_KEYS } from "@/lib/settings";
 import type { HoldingValuation } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
-import { buildXirrCashflows } from "@/lib/xirr-cashflow";
+import { buildXirrCashflows, sumXirrPointsAmount } from "@/lib/xirr-cashflow";
 
 // Một nguồn "chi phí ăn mòn" (docs/domain/07-tax.md mục "Chi phí ăn mòn") —
 // `source` là enum thuần, KHÔNG kèm nhãn tiếng Việt (nhất quán cách tách UI
@@ -499,10 +499,7 @@ async function computeXirrAndPnlCore(
   // "NAV − tổng vốn ròng đã bỏ vào" tương đương đại số với tổng có dấu của
   // đúng tập điểm đã đưa vào XIRR (Cashflow.amount mang dấu chuẩn BUY âm/SELL
   // dương + Dividend dương + NAV giả định dương) — không cần công thức riêng.
-  const absolutePnl = points.reduce(
-    (sum, p) => sum.plus(p.amount),
-    new Decimal(0),
-  );
+  const absolutePnl = sumXirrPointsAmount(points);
 
   // Tổng vốn ròng = -(Σ Cashflow.amount + Σ Dividend.netAmount) trước cutoff,
   // KHÔNG gồm điểm NAV giả định (points ở trên có thể có, nhưng cashflows/

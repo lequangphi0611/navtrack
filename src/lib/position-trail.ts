@@ -134,12 +134,16 @@ export function dividendPositionDelta(dividend: {
   }
 }
 
+// Cả 2 caller thật (dividends/actions.ts, dividends/queries.ts) đều truyền
+// thẳng field Decimal đọc từ repository (Prisma trả Decimal instance cho cột
+// Decimal, xem DividendPositionCashflow/DividendHistoryCashflow) — nhận
+// Decimal trực tiếp ở đây, không round-trip qua string rồi parse lại.
 type RawPositionCashflow = {
   id: string;
   type: CashflowType;
   date: Date;
   createdAt: Date;
-  quantity: { toString(): string };
+  quantity: Decimal;
 };
 
 type RawPositionDividend = {
@@ -147,7 +151,7 @@ type RawPositionDividend = {
   type: DividendType;
   date: Date;
   createdAt: Date;
-  stockQuantity: { toString(): string } | null;
+  stockQuantity: Decimal | null;
 };
 
 export type PositionMarkerInput = { id: string; date: Date; createdAt: Date };
@@ -173,7 +177,7 @@ export function buildPositionEvents(input: {
       createdAt: cf.createdAt,
       delta: cashflowPositionDelta({
         type: cf.type,
-        quantity: new Decimal(cf.quantity.toString()),
+        quantity: cf.quantity,
       }),
     })),
     ...input.dividends.map((dividend) => ({
@@ -182,9 +186,7 @@ export function buildPositionEvents(input: {
       createdAt: dividend.createdAt,
       delta: dividendPositionDelta({
         type: dividend.type,
-        stockQuantity: dividend.stockQuantity
-          ? new Decimal(dividend.stockQuantity.toString())
-          : null,
+        stockQuantity: dividend.stockQuantity,
       }),
     })),
     ...(input.markers ?? []).map((marker) => ({

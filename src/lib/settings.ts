@@ -4,6 +4,7 @@ import type { AssetType, BondIssuerType } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   AppError,
+  assertDecimalSettingValue,
   parseSettingValue,
   pickEffectiveSetting,
 } from "@/lib/settings-resolution";
@@ -13,7 +14,12 @@ import {
 // (thuần, không import `db`) để dùng được từ client component (xem
 // process/phase-5-plan-DRAFT.md mục A2). File này giữ nguyên chữ ký
 // resolveSetting/resolveDecimalSetting cho mọi chỗ gọi hiện có.
-export { AppError, parseSettingValue, pickEffectiveSetting };
+export {
+  AppError,
+  assertDecimalSettingValue,
+  parseSettingValue,
+  pickEffectiveSetting,
+};
 
 // Một nguồn sự thật cho mọi key của bảng Setting — không hardcode string key
 // rải rác ở seed/queries/actions (xem docs/rules/schema.md#key-value-config).
@@ -139,12 +145,7 @@ export async function resolveDecimalSetting(
   atDate: Date,
 ): Promise<Decimal> {
   const value = await resolveSetting(key, atDate);
-  if (!(value instanceof Decimal)) {
-    throw new AppError(
-      "INVALID_SETTING_VALUE",
-      `Setting "${key}" không phải kiểu DECIMAL`,
-    );
-  }
+  assertDecimalSettingValue(value, key);
   return value;
 }
 
@@ -184,11 +185,6 @@ export function requireDecimalSetting(
   key: SettingKey,
 ): Decimal {
   const value = settings.get(key);
-  if (!(value instanceof Decimal)) {
-    throw new AppError(
-      "INVALID_SETTING_VALUE",
-      `Setting "${key}" không phải kiểu DECIMAL`,
-    );
-  }
+  assertDecimalSettingValue(value, key);
   return value;
 }

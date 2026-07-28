@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import type { SettingValueType } from "@prisma/client";
 import {
   AppError,
+  assertDecimalSettingValue,
   parseSettingValue,
   pickEffectiveSetting,
 } from "@/lib/settings";
@@ -26,12 +27,7 @@ export function resolveParValueAt(
     );
   }
   const parsed = parseSettingValue(row.value, row.valueType);
-  if (!(parsed instanceof Decimal)) {
-    throw new AppError(
-      "INVALID_SETTING_VALUE",
-      "Setting DIVIDEND_PAR_VALUE không phải kiểu DECIMAL",
-    );
-  }
+  assertDecimalSettingValue(parsed, "DIVIDEND_PAR_VALUE");
   return parsed;
 }
 

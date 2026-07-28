@@ -19,6 +19,13 @@ type _AllDividendTypesCovered =
     ? true
     : never;
 
+// Consume type check ở trên bằng một giá trị thật — nếu chỉ khai `type` mà
+// không gán, tsc KHÔNG bao giờ báo lỗi (type alias không dùng thì không được
+// kiểm tra), nên thiếu giá trị sẽ lọt qua âm thầm. Gán `true` cho biến kiểu
+// `_AllDividendTypesCovered` thì thiếu giá trị -> kiểu suy ra `never` -> gán
+// `true` đỏ ngay ở dòng dưới (compile error thật, không phải cảnh báo lint).
+export const dividendTypesCovered: _AllDividendTypesCovered = true;
+
 export const CASHFLOW_TYPES = [
   "BUY",
   "SELL",
@@ -29,3 +36,5 @@ type _AllCashflowTypesCovered =
   Exclude<CashflowType, (typeof CASHFLOW_TYPES)[number]> extends never
     ? true
     : never;
+
+export const cashflowTypesCovered: _AllCashflowTypesCovered = true;

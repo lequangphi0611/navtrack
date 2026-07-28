@@ -8,8 +8,14 @@ import type {
   NavTrendPeriodData,
 } from "@/features/dashboard/components/NavTrendChart";
 import type { CostDragBreakdownEntry } from "@/lib/portfolio-valuation";
+import type { SnapshotTodayState } from "@/features/snapshots/types";
 
-import { fakeSnapshotAction } from "./actions";
+// Stub cho prop `action` của SnapshotTodayCard (useActionState) — page này đã
+// là Client Component nên KHÔNG cần "use server" (component-architecture.md
+// "Bề mặt preview": preview page cấm Server Action/queries.ts/Prisma thật).
+async function fakeSnapshotAction(): Promise<SnapshotTodayState> {
+  return { ok: true, snapshotAt: "15:42" };
+}
 
 // Sample chuỗi NAV (mirror preview/nav-trend-chart) — đủ 3 kỳ để soi
 // SegmentedControl bên trong card biểu đồ.

@@ -13,7 +13,7 @@ import { computeHoldingPeriodLabel } from "@/lib/holding-period";
 import { toUiXirr } from "@/lib/portfolio-valuation";
 import { computeWeightedAverageXirr } from "@/lib/weighted-average-xirr";
 import { computeXirr } from "@/lib/xirr";
-import { buildXirrCashflows } from "@/lib/xirr-cashflow";
+import { buildXirrCashflows, sumXirrPointsAmount } from "@/lib/xirr-cashflow";
 
 import {
   findCashDividendsForHoldings,
@@ -126,12 +126,9 @@ export async function getClosedHoldingsDetail(): Promise<ClosedHoldingsDetail> {
     const xirr = computeXirr(points);
 
     // "NAV cuối kỳ (=0, đã đóng) − vốn ròng đã bỏ vào" tương đương đại số
-    // với tổng có dấu của các điểm đã đưa vào XIRR — cùng kỹ thuật
-    // computeXirrAndPnlCore (lib/portfolio-valuation.ts).
-    const realizedPnl = points.reduce(
-      (sum, p) => sum.plus(p.amount),
-      new Decimal(0),
-    );
+    // với tổng có dấu của các điểm đã đưa vào XIRR — MỘT hàm dùng chung với
+    // computeXirrAndPnlCore (lib/portfolio-valuation.ts), xem sumXirrPointsAmount.
+    const realizedPnl = sumXirrPointsAmount(points);
 
     // Vốn mua vào (gồm phí mua) = Σ|BUY.amount| — dùng LUÔN làm trọng số
     // cho weighted average XIRR bên dưới (process/DECISION.md 2026-07-21).

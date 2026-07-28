@@ -9,7 +9,7 @@ import {
   getHoldingDetail,
 } from "@/features/holdings/queries";
 import { getHideAmountsByDefault } from "@/features/settings/queries";
-import { assertNever } from "@/lib/assert-never";
+import { cashflowActionLabel } from "@/lib/cashflow-label";
 import {
   formatDate,
   formatMoney,
@@ -21,25 +21,21 @@ import { ROUTES } from "@/lib/routes";
 import { ClosedHoldingsList } from "./ClosedHoldingsList";
 import { ClosedHoldingsSummaryStrip } from "../ClosedHoldingsSummaryStrip";
 
-// Nhãn dòng lệnh trong timeline "Dòng lệnh của mã" (mockup 6g/6h/6i) — khác
-// cấu trúc chuỗi thật sự theo loại (SELL còn tuỳ isFinalSell), không chỉ khác
-// từ ngữ đơn thuần. switch exhaustive (docs/rules/typescript-style.md mục
-// "Enum") thay vì ternary lồng nhau.
+// Nhãn dòng lệnh trong timeline "Dòng lệnh của mã" (mockup 6g/6h/6i) — tái
+// dùng cashflowActionLabel() (src/lib/cashflow-label.ts) cho "Mua"/"Đáo hạn",
+// chỉ SELL cần logic riêng (isFinalSell -> "Bán hết" thay vì "Bán").
 function cashflowLabel(
   cf: { type: CashflowType; quantity: string },
   isFinalSell: boolean,
   unit: string,
 ): string {
-  switch (cf.type) {
-    case "BUY":
-      return `Mua ${formatQuantity(cf.quantity, unit)}`;
-    case "SELL":
-      return `${isFinalSell ? "Bán hết" : "Bán"} ${formatQuantity(cf.quantity, unit)}`;
-    case "MATURITY":
-      return `Đáo hạn ${formatQuantity(cf.quantity, unit)}`;
-    default:
-      return assertNever(cf.type);
-  }
+  const action =
+    cf.type === "SELL"
+      ? isFinalSell
+        ? "Bán hết"
+        : "Bán"
+      : cashflowActionLabel(cf.type);
+  return `${action} ${formatQuantity(cf.quantity, unit)}`;
 }
 
 // Container async cho tab "Đã đóng" (mockup 6g/6h/6i, mục 12 phase-6.md) —
@@ -87,8 +83,11 @@ async function ClosedHoldingsSection() {
         new Decimal(0),
       )
       .toString();
+    // SELL và MATURITY đều là tiền thu về khi đóng vị thế (cùng nhóm với
+    // realized-pnl.ts) — thiếu MATURITY ở đây sẽ khiến "Tổng tiền bán ra"
+    // không khớp "Chênh lệch (đã chốt)" cho vị thế trái phiếu đáo hạn.
     const totalProceeds = ascending
-      .filter((cf) => cf.type === "SELL")
+      .filter((cf) => cf.type === "SELL" || cf.type === "MATURITY")
       .reduce((sum, cf) => sum.plus(cf.amount), new Decimal(0))
       .toString();
 

@@ -3,8 +3,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   CheckCircle2,
-  Flag,
   History,
+  Landmark,
   type LucideIcon,
   Zap,
 } from "lucide-react";
@@ -53,9 +53,11 @@ function getTransactionVisual(type: CashflowType): TransactionVisual {
     case "MATURITY":
       // Placeholder tạm — trái phiếu đáo hạn chưa có ngôn ngữ hình ảnh riêng
       // (design-implementer sẽ polish ở #57), dùng tông primary/neutral để
-      // phân biệt tạm với BUY/SELL.
+      // phân biệt tạm với BUY/SELL. Icon Landmark khớp với KIND_ICON.MATURITY
+      // ở CashflowTimeline.tsx — hai nơi PHẢI cùng icon vì cả hai đều tự nhận
+      // "cùng nguồn sự thật màu" (đừng lệch lại khi #57 polish).
       return {
-        icon: Flag,
+        icon: Landmark,
         iconBgClass: "bg-primary/12",
         colorClass: "text-primary",
       };

@@ -40,6 +40,7 @@ import type {
   DividendRecordedResult,
 } from "@/features/dividends/types";
 import { assertNever } from "@/lib/assert-never";
+import { dividendTypeName } from "@/lib/dividend-label";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -689,17 +690,18 @@ function DividendForm({
   );
 }
 
-// Nhãn "Cổ tức tiền mặt"/"Cổ tức cổ phiếu" theo DividendType — switch
-// exhaustive để compiler bắt lỗi ngay khi thêm BOND_COUPON/MATURITY (issue
-// #101), thay vì ternary nhị phân âm thầm coi mọi giá trị khác CASH là STOCK.
+// Nhãn "Cổ tức tiền mặt"/"Cổ tức cổ phiếu" theo DividendType — ghép từ
+// dividendTypeName() (src/lib/dividend-label.ts, MỘT nguồn sự thật cho tên
+// loại), không tự khai lại tên loại ở đây. BOND_COUPON không ghép "Cổ tức"
+// (đây là trái tức, không phải cổ tức) — giữ switch exhaustive để compiler
+// bắt lỗi ngay khi thêm giá trị DividendType mới.
 function dividendTypeLabel(type: DividendType): string {
   switch (type) {
     case "CASH":
-      return "Cổ tức tiền mặt";
     case "STOCK":
-      return "Cổ tức cổ phiếu";
+      return `Cổ tức ${dividendTypeName(type).toLowerCase()}`;
     case "BOND_COUPON":
-      return "Trái tức";
+      return dividendTypeName(type);
     default:
       return assertNever(type);
   }
