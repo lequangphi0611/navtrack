@@ -35,22 +35,26 @@ của các component đã dựng trong issue #57 — phần "Props đã chốt" 
    quyết con số, chỉ hiển thị cái được truyền xuống. Biến thể miễn thuế nhận
    biết bằng `issuerType`, không bằng việc so `taxRatePercent === "0"`.
 
-3. **7a nằm trong form vị thế, không phải route riêng.** Mockup vẽ 7a là màn
-   "Sửa vị thế" đầy đủ. Ở code, phần điều khoản tách thành `BondTermsFields`
-   (Presentational thuần) để `NewHoldingForm`/form sửa vị thế lắp vào khi
-   `type === "BOND"` — không dựng route mới, đúng phạm vi "mở rộng, không dựng
-   lại" của `process/phase-7.md`.
+3. **7a: ĐÃ ĐẢO ở #58 — là route riêng `/holdings/[id]/bond-terms`.**
+   ~~Dự kiến ban đầu (issue #57): `BondTermsFields` lắp vào `NewHoldingForm`/form
+   sửa vị thế khi `type === "BOND"`, không dựng route mới.~~ Lúc wiring mới thấy
+   7a là **đích** của mọi chỗ báo thiếu điều khoản (màn chặn 7g, link "Sửa điều
+   khoản" ở thẻ tóm tắt 7b/7c) nên phải có URL ổn định — trỏ vào một form vị thế
+   dài rồi mong user tự cuộn tới đúng nhóm field là trải nghiệm tệ hơn hẳn.
+   `BondTermsFields` giữ nguyên (Presentational thuần), thêm `BondTermsForm` bọc
+   state + gọi `saveBondTerms`. Xem `process/DECISION.md` 2026-07-28 (2) mục (4).
 
 4. **Không đụng Server Action/Prisma trong issue #57.** Mọi component ở đây
    nhận số đã tính qua props hoặc tự tính **preview client-side minh hoạ**
    (cùng cách `CashDividendFields` đang làm) — Server Action #58/#101 tính lại
    độc lập khi lưu, không tin số của UI.
 
-5. **7h dùng lại `Alert`/badge sẵn có, chưa gắn vào danh mục thật.** Mockup vẽ
-   badge nằm trong card vị thế của màn Danh mục. Issue #57 dựng
-   `OverdueMaturityCallout` + `OverdueMaturityBadge` như component độc lập có
-   preview; việc gắn vào `HoldingsList` thật cần biết vị thế nào quá hạn →
-   thuộc tầng query, để lại cho #101.
+5. **7h gắn ở CHI TIẾT VỊ THẾ, chưa gắn vào màn Danh mục.** Mockup vẽ badge nằm
+   trong card vị thế của màn Danh mục. Issue #57 dựng `OverdueMaturityCallout` +
+   `OverdueMaturityCard` như component độc lập có preview; #101 gắn callout vào
+   **chi tiết vị thế** (`getBondHoldingActions`, kèm dòng "Đáo hạn dd/MM/yyyy ·
+   trễ N ngày"). Bản ở màn Danh mục cần batch `BondTerms.maturityDate` cho toàn
+   bộ vị thế mở — **còn treo**, ghi ở `process/phase-7.md` mục "Việc còn treo".
 
 ## Component đã dựng + Props đã chốt
 

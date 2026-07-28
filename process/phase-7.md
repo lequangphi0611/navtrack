@@ -14,8 +14,8 @@ Ghi nhận lãi định kỳ (trái tức) và tất toán đáo hạn cho `Hold
 
 ### 2. Dọn nợ enum trước khi thêm giá trị (bắt buộc, làm TRƯỚC bước 3)
 Thêm giá trị vào `DividendType`/`CashflowType` sẽ **sai âm thầm** ở các điểm phân nhánh nhị phân hiện có — TypeScript không bắt được. Rule mới: `docs/rules/typescript-style.md` mục "Enum".
-- [ ] Tạo `src/lib/assert-never.ts` và `src/lib/enums.ts` (danh sách giá trị runtime + `satisfies` + check bắt thiếu giá trị).
-- [ ] Chuyển các điểm rẽ nhánh sang `switch` exhaustive; nhãn UI sang `Record<EnumType, string>`. Danh sách đã rà (không phải suy đoán):
+- [x] Tạo `src/lib/assert-never.ts` và `src/lib/enums.ts` (danh sách giá trị runtime + `satisfies` + check bắt thiếu giá trị).
+- [x] Chuyển các điểm rẽ nhánh sang `switch` exhaustive; nhãn UI sang `Record<EnumType, string>`. Danh sách đã rà (không phải suy đoán):
   - `src/features/dividends/queries.ts` — `if (type === "CASH") … else` (nhánh else non-null-assert `stockQuantity`, `BOND_COUPON` sẽ crash/sai); filter `type: "CASH"` ở `getTotalCashDividendReceived`.
   - `src/features/dividends/actions.ts` — chuỗi `type === "CASH"`.
   - `src/features/dividends/components/DividendHistoryList/DividendRowsFilter.tsx` — `type === "CASH" ? "Tiền mặt" : "Cổ phiếu"` (trái tức sẽ hiện nhãn "Cổ phiếu"); tab filter.
@@ -23,32 +23,49 @@ Thêm giá trị vào `DividendType`/`CashflowType` sẽ **sai âm thầm** ở 
   - `src/features/holdings/components/ClosedHoldingsSection/ClosedHoldingsSection.tsx` — lọc `type === "SELL"` để tìm lần đóng vị thế; **không sửa thì trái phiếu đáo hạn xong không hiện đúng ở mục "đã đóng"**.
   - `src/features/holdings/components/CashflowTimeline/CashflowTimeline.tsx` — nhãn/màu theo `kind`.
   - `src/features/holdings/components/TransactionForm/TransactionForm.tsx` — state union `"BUY" | "SELL"`.
-- [ ] Rà lại các predicate `=== "BUY"` (`lib/cost-basis.ts`, `lib/cost-drag.ts`, `lib/realized-pnl.ts`, `lib/portfolio-valuation.ts`): `MATURITY` rơi vào nhánh "không phải BUY" và hành xử **đúng** (giảm số lượng, không gộp giá vốn) — xác nhận lại bằng test, không sửa mù.
+- [x] Rà lại các predicate `=== "BUY"` (`lib/cost-basis.ts`, `lib/cost-drag.ts`, `lib/realized-pnl.ts`, `lib/portfolio-valuation.ts`): `MATURITY` rơi vào nhánh "không phải BUY" và hành xử **đúng** (giảm số lượng, không gộp giá vốn) — xác nhận lại bằng test, không sửa mù.
 
 ### 3. Server Action + tính toán
-- [ ] `dividend-math.ts`: hàm tính trái tức `gross = parValue × couponRatePercent/100 × couponFrequencyMonths/12 × SL tại ngày trả lãi`; thuế theo `issuerType`; `net = gross − tax`.
-- [ ] `recordDividend` nhánh `BOND_COUPON`: đọc thông số từ `BondTerms` (không hỏi lại user), ghi `parValueApplied`/`couponRatePercentApplied`, **BỎ QUA hoàn toàn bước bù pha loãng NAV** (xem tiêu chí bên dưới), **không ghi gì** vào `BondTerms`.
-- [ ] Hàm suy "kỳ trả lãi tới" (`firstCouponDate + k × frequency`, neo theo lịch hợp đồng, override thắng) — dùng chung cho Phase 8.
-- [ ] Server Action ghi `Cashflow{type: MATURITY}`: prefill `date = maturityDate`, `quantity` = toàn bộ đang giữ, `pricePerUnit = parValue`, `taxAmount = max(0, (pricePerUnit − avgCost) × quantity) × thuế lãi theo issuerType`, `feeAmount` từ `TRANSACTION_FEE_SELL_BOND`. Tất cả **chỉ prefill, không khoá**.
-- [ ] Quy ước thứ tự trong `buildQuantityTimeline`: cùng một ngày, `Dividend` xếp **trước** `Cashflow{type: MATURITY}` (trái tức kỳ cuối tính trên số dư trước khi tất toán).
-- [ ] `queries.ts::getDividendHistory` hiển thị lịch sử trái tức; rà lại `getTotalCashDividendReceived` và bộ lọc dòng tiền XIRR — **`Dividend{type: BOND_COUPON}` phải được đưa vào chuỗi XIRR** (`lib/xirr-cashflow.ts` nhận dividends đã lọc sẵn ở caller, hiện lọc cứng `type: "CASH"`).
+- [x] `dividend-math.ts`: hàm tính trái tức `gross = parValue × couponRatePercent/100 × couponFrequencyMonths/12 × SL tại ngày trả lãi`; thuế theo `issuerType`; `net = gross − tax`.
+- [x] `recordDividend` nhánh `BOND_COUPON`: đọc thông số từ `BondTerms` (không hỏi lại user), ghi `parValueApplied`/`couponRatePercentApplied`, **BỎ QUA hoàn toàn bước bù pha loãng NAV** (xem tiêu chí bên dưới), **không ghi gì** vào `BondTerms`.
+- [x] Hàm suy "kỳ trả lãi tới" (`firstCouponDate + k × frequency`, neo theo lịch hợp đồng, override thắng) — dùng chung cho Phase 8.
+- [x] Server Action ghi `Cashflow{type: MATURITY}`: prefill `date = maturityDate`, `quantity` = toàn bộ đang giữ, `pricePerUnit = parValue`, `taxAmount = max(0, (pricePerUnit − avgCost) × quantity) × thuế lãi theo issuerType`, `feeAmount` từ `TRANSACTION_FEE_SELL_BOND`. Tất cả **chỉ prefill, không khoá**.
+- [x] Quy ước thứ tự trong `buildQuantityTimeline`: cùng một ngày, `Dividend` xếp **trước** `Cashflow{type: MATURITY}` (trái tức kỳ cuối tính trên số dư trước khi tất toán).
+- [x] `queries.ts::getDividendHistory` hiển thị lịch sử trái tức; rà lại `getTotalCashDividendReceived` và bộ lọc dòng tiền XIRR — **`Dividend{type: BOND_COUPON}` phải được đưa vào chuỗi XIRR** (`lib/xirr-cashflow.ts` nhận dividends đã lọc sẵn ở caller, hiện lọc cứng `type: "CASH"`).
 
 ### 4. Design & UI
-- [ ] Form tạo/sửa `Holding{type: BOND}`: nhập điều khoản trái phiếu một lần (loại phát hành, mệnh giá, coupon rate, kỳ trả lãi, ngày trả lãi kỳ đầu, ngày đáo hạn) — không hỏi lại mỗi lần ghi trái tức.
-- [ ] `DividendForm` hỗ trợ loại trái tức: chỉ hỏi ngày trả lãi (+ `paymentDate`), hiển thị số tiền tự tính từ `BondTerms` để user đối chiếu.
-- [ ] Màn/nút "Tất toán đáo hạn" cho `Holding{type: BOND}` có `maturityDate`; sau khi ghi thành công, nếu chưa có trái tức kỳ cuối tại/gần `maturityDate` thì **gợi ý ghi bổ sung**.
-- [ ] `DividendHistoryList` hiển thị đúng loại mới (nhãn "Trái tức", dòng phụ `9%/năm · kỳ 6 tháng` đọc từ field đã đóng băng); `CashflowTimeline` hiển thị `MATURITY` khác `SELL`.
+- [x] Form tạo/sửa `Holding{type: BOND}`: nhập điều khoản trái phiếu một lần (loại phát hành, mệnh giá, coupon rate, kỳ trả lãi, ngày trả lãi kỳ đầu, ngày đáo hạn) — không hỏi lại mỗi lần ghi trái tức.
+- [x] `DividendForm` hỗ trợ loại trái tức: chỉ hỏi ngày trả lãi (+ `paymentDate`), hiển thị số tiền tự tính từ `BondTerms` để user đối chiếu.
+- [x] Màn/nút "Tất toán đáo hạn" cho `Holding{type: BOND}` có `maturityDate`; sau khi ghi thành công, nếu chưa có trái tức kỳ cuối tại/gần `maturityDate` thì **gợi ý ghi bổ sung**.
+- [x] `DividendHistoryList` hiển thị đúng loại mới (nhãn "Trái tức", dòng phụ `9%/năm · kỳ 6 tháng` đọc từ field đã đóng băng); `CashflowTimeline` hiển thị `MATURITY` khác `SELL`.
 
 ## Tiêu chí hoàn thành
-- [ ] Ghi trái tức tạo dòng tiền dương đúng (sau thuế) vào chuỗi XIRR của `Holding` loại BOND — kiểm chứng bằng test, không chỉ bằng việc "đã ghi được bản ghi".
-- [ ] Thuế trái tức đúng theo `issuerType`: 5% với `CORPORATE`, **0% với `GOVERNMENT`** (miễn theo NĐ 253/2026/NĐ-CP).
-- [ ] **Ghi trái tức KHÔNG tạo `NavOverride` bù pha loãng** — có test khẳng định điều này (clean price trái phiếu không giảm theo coupon; nếu để chạy chung sẽ kéo NAV tụt tích luỹ qua từng kỳ, sai âm thầm).
-- [ ] Điều khoản trái phiếu lưu ở **`BondTerms`** (bảng riêng), `recordDividend` đọc từ đó và **không ghi ngược** field lịch nào; "kỳ trả lãi tới" luôn suy runtime từ `firstCouponDate`, không cộng tay.
-- [ ] Sửa `BondTerms` (vd nhập sai coupon rate) **không làm đổi** số tiền/nhãn của các trái tức đã ghi trước đó.
-- [ ] Đáo hạn ghi bằng `Cashflow{type: MATURITY}`, **không** chịu `SALE_TAX_BOND` 0.1%; trái phiếu mua chiết khấu tính đúng thuế lãi trên phần lợi tức; mua đúng mệnh giá ra thuế 0.
-- [ ] Trái tức kỳ cuối trùng ngày đáo hạn tính trên số lượng **trước** khi tất toán (không ra 0 đồng do thứ tự ghi).
-- [ ] Không còn điểm rẽ nhánh nhị phân theo `DividendType`/`CashflowType` trong `src/` (đã chuyển sang `switch` + `assertNever` / `Record`).
-- [ ] Docs domain (`03-dividends.md`, `07-tax.md`, `09-settings.md`, `10-cashflow-calendar.md`, `02-data-model.md`) đồng bộ với quyết định thật lúc implement.
+- [x] Ghi trái tức tạo dòng tiền dương đúng (sau thuế) vào chuỗi XIRR của `Holding` loại BOND — kiểm chứng bằng test, không chỉ bằng việc "đã ghi được bản ghi".
+- [x] Thuế trái tức đúng theo `issuerType`: 5% với `CORPORATE`, **0% với `GOVERNMENT`** (miễn theo NĐ 253/2026/NĐ-CP).
+- [x] **Ghi trái tức KHÔNG tạo `NavOverride` bù pha loãng** — có test khẳng định điều này (clean price trái phiếu không giảm theo coupon; nếu để chạy chung sẽ kéo NAV tụt tích luỹ qua từng kỳ, sai âm thầm).
+- [x] Điều khoản trái phiếu lưu ở **`BondTerms`** (bảng riêng), `recordDividend` đọc từ đó và **không ghi ngược** field lịch nào; "kỳ trả lãi tới" luôn suy runtime từ `firstCouponDate`, không cộng tay.
+- [x] Sửa `BondTerms` (vd nhập sai coupon rate) **không làm đổi** số tiền/nhãn của các trái tức đã ghi trước đó.
+- [x] Đáo hạn ghi bằng `Cashflow{type: MATURITY}`, **không** chịu `SALE_TAX_BOND` 0.1%; trái phiếu mua chiết khấu tính đúng thuế lãi trên phần lợi tức; mua đúng mệnh giá ra thuế 0.
+- [x] Trái tức kỳ cuối trùng ngày đáo hạn tính trên số lượng **trước** khi tất toán (không ra 0 đồng do thứ tự ghi).
+- [x] Không còn điểm rẽ nhánh nhị phân theo `DividendType`/`CashflowType` trong `src/` (đã chuyển sang `switch` + `assertNever` / `Record`).
+- [x] Docs domain (`03-dividends.md`, `07-tax.md`, `09-settings.md`, `10-cashflow-calendar.md`, `02-data-model.md`) đồng bộ với quyết định thật lúc implement.
+
+## Trạng thái verify (2026-07-28, issue #58 + #101)
+
+Tiêu chí ở trên đã tick theo bằng chứng thật (code + unit test), nhưng **hai việc hạ tầng chưa chạy được trên Claude Cloud** — phải làm trên Claude Local trước khi coi Phase 7 là xong tuyệt đối (xem `TOOLS.md`):
+
+- ❌ **`prisma migrate dev` thật** — treo từ issue #56, chưa chạy (thiếu Postgres/Docker). Schema đã `prisma validate`/`generate` sạch.
+- ❌ **`pnpm e2e` (Playwright)** — cần Docker. Chưa có e2e cho luồng trái tức/đáo hạn; đây là nơi duy nhất kiểm chứng được đường ghi thật (Server Action + DB), vì unit test không chạm DB.
+- ✅ `pnpm lint` / `pnpm typecheck` / `pnpm test` (374/374) / `pnpm build` sạch.
+
+Cách các tiêu chí "khó test" được khoá lại khi chưa có e2e:
+- *"Ghi trái tức KHÔNG tạo `NavOverride`"* — khoá bằng **kiểu**: union `RecordedDividend` (`build-dividend-form-state.ts`) cố ý không có field `priceAdjustment` ở nhánh `BOND_COUPON`, nên "quên bỏ qua" là lỗi compile; cộng test đầu ra khẳng định không có `navOverrideAdjusted`/`oldPrice`/`newPrice`.
+- *"Trái tức được đưa vào chuỗi XIRR"* — bộ lọc dòng tiền dùng chung hằng số `CASH_FLOW_DIVIDEND_TYPES` (`lib/enums.ts`) thay vì 3 chỗ tự viết `type: "CASH"`.
+- *"Trái tức kỳ cuối trùng ngày đáo hạn"* — khoá bằng test thứ tự ở `lib/position-trail.test.ts` (3 ca: MATURITY ghi trước trái tức, probe đang ghi, candidate đang ghi).
+
+## Việc còn treo sang sau (không chặn Phase 7)
+- **Callout "quá đáo hạn" ở màn Danh mục (mockup 7h)** — hiện chỉ gắn ở **chi tiết vị thế** (`getBondHoldingActions`). Bản danh mục cần batch `BondTerms.maturityDate` cho toàn bộ vị thế mở; `OverdueMaturityCard` (đã dựng ở #57) vẫn chỉ có preview.
+- **Ô nhập `nextCouponDateOverride`** — cột + logic ưu tiên đã có, form 7a chưa có ô. Xoay xở bằng cách sửa thẳng ngày trên form ghi trái tức. Xem `docs/domain/10-cashflow-calendar.md`.
 
 ## Phụ thuộc / ghi chú
 - Phụ thuộc Phase 4 (model `Dividend`, `DividendForm`, `recordDividend` đã có) — mở rộng, không dựng lại từ đầu.
