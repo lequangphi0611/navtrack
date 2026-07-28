@@ -188,6 +188,7 @@ export async function insertDividend(
     // (docs/domain/03-dividends.md, process/phase-7.md "Tiêu chí hoàn thành").
     parValueApplied?: string;
     couponRatePercentApplied?: string;
+    couponFrequencyMonthsApplied?: number;
   },
   tx: Prisma.TransactionClient = db,
 ): Promise<{ id: string }> {
@@ -267,6 +268,7 @@ export type DividendHistoryDividend = {
   // BOND_COUPON — điều khoản đã đóng băng lúc ghi (issue #56/#58).
   parValueApplied: Decimal | null;
   couponRatePercentApplied: Decimal | null;
+  couponFrequencyMonthsApplied: number | null;
 };
 
 export type DividendHistorySource = {
@@ -312,6 +314,7 @@ export async function findDividendHistorySource(
           stockQuantity: true,
           parValueApplied: true,
           couponRatePercentApplied: true,
+          couponFrequencyMonthsApplied: true,
         },
       },
     },
@@ -353,6 +356,7 @@ export async function findDividendHistorySource(
       couponRatePercentApplied: dividend.couponRatePercentApplied
         ? new Decimal(dividend.couponRatePercentApplied.toString())
         : null,
+      couponFrequencyMonthsApplied: dividend.couponFrequencyMonthsApplied,
     })),
   };
 }

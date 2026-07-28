@@ -9,7 +9,7 @@ Ghi nhận lãi định kỳ (trái tức) và tất toán đáo hạn cho `Hold
 - [x] Bảng mới **`BondTerms`** (1-1 với `Holding` qua `holdingId @unique`, `onDelete: Cascade`) — **không** thêm cột nullable vào `Holding`. Field: `issuerType` (enum `BondIssuerType`: `CORPORATE`/`GOVERNMENT`), `parValue`, `couponRatePercent?`, `couponFrequencyMonths?`, `firstCouponDate?`, `maturityDate?`, `nextCouponDateOverride?`. Xem `docs/02-data-model.md`. (issue #56)
 - [x] Validate ở tầng app: chỉ tạo/sửa `BondTerms` cho `Holding{type: BOND}` (quan hệ 1-1 không tự ràng buộc được điều này) — `src/lib/bond-terms.ts::assertBondHoldingType()`. (issue #56)
 - [x] Enum: `DividendType += BOND_COUPON`, `CashflowType += MATURITY`, thêm `BondIssuerType`. (issue #56)
-- [x] `Dividend` thêm `parValueApplied?`/`couponRatePercentApplied?` — đóng băng thông số đã dùng để tính tại thời điểm ghi. (issue #56)
+- [x] `Dividend` thêm `parValueApplied?`/`couponRatePercentApplied?` — đóng băng thông số đã dùng để tính tại thời điểm ghi. (issue #56) **Bổ sung ở #58: `couponFrequencyMonthsApplied?`** — kỳ trả lãi nằm trong nhãn lịch sử nên phải bất biến như 2 field kia; suy ngược từ `grossAmount` là bẫy (mẫu số chứa SL-tại-ngày-ghi, không đóng băng). Xem `DECISION.md` 2026-07-28 (3).
 - [x] Seed `Setting`: `BOND_INTEREST_TAX_RATE_CORPORATE = 5`, `BOND_INTEREST_TAX_RATE_GOVERNMENT = 0` (seed tường minh cả giá trị 0). (issue #56) — **Migration thật (`prisma migrate dev`) CHƯA chạy được** trên Claude Cloud (thiếu Postgres/Docker, hạn chế hạ tầng đã biết); đã xác nhận `pnpm prisma generate`/`pnpm prisma validate` sạch và schema migration-ready. Cần chạy `prisma migrate dev` thật trên Claude Local trước khi coi phần DB là xong tuyệt đối.
 
 ### 2. Dọn nợ enum trước khi thêm giá trị (bắt buộc, làm TRƯỚC bước 3)
@@ -56,12 +56,13 @@ Tiêu chí ở trên đã tick theo bằng chứng thật (code + unit test), nh
 
 - ❌ **`prisma migrate dev` thật** — treo từ issue #56, chưa chạy (thiếu Postgres/Docker). Schema đã `prisma validate`/`generate` sạch.
 - ❌ **`pnpm e2e` (Playwright)** — cần Docker. Chưa có e2e cho luồng trái tức/đáo hạn; đây là nơi duy nhất kiểm chứng được đường ghi thật (Server Action + DB), vì unit test không chạm DB.
-- ✅ `pnpm lint` / `pnpm typecheck` / `pnpm test` (374/374) / `pnpm build` sạch.
+- ✅ `pnpm lint` / `pnpm typecheck` / `pnpm test` (369/369) / `pnpm build` sạch.
 
 Cách các tiêu chí "khó test" được khoá lại khi chưa có e2e:
 - *"Ghi trái tức KHÔNG tạo `NavOverride`"* — khoá bằng **kiểu**: union `RecordedDividend` (`build-dividend-form-state.ts`) cố ý không có field `priceAdjustment` ở nhánh `BOND_COUPON`, nên "quên bỏ qua" là lỗi compile; cộng test đầu ra khẳng định không có `navOverrideAdjusted`/`oldPrice`/`newPrice`.
 - *"Trái tức được đưa vào chuỗi XIRR"* — bộ lọc dòng tiền dùng chung hằng số `CASH_FLOW_DIVIDEND_TYPES` (`lib/enums.ts`) thay vì 3 chỗ tự viết `type: "CASH"`.
 - *"Trái tức kỳ cuối trùng ngày đáo hạn"* — khoá bằng test thứ tự ở `lib/position-trail.test.ts` (3 ca: MATURITY ghi trước trái tức, probe đang ghi, candidate đang ghi).
+- *"Sửa `BondTerms` không đổi nhãn kỳ đã ghi"* — khoá bằng **schema**: cả 3 thành phần của nhãn đọc thẳng từ `parValueApplied`/`couponRatePercentApplied`/`couponFrequencyMonthsApplied`, không có phép tính nào ở đường đọc nên không có gì để trôi. (Bản đầu suy ngược kỳ trả lãi từ `grossAmount` đã bị bỏ — mẫu số của phép đảo chứa SL-tại-ngày-ghi, không đóng băng; xem `DECISION.md` 2026-07-28 (3).)
 
 ## Việc còn treo sang sau (không chặn Phase 7)
 - **Callout "quá đáo hạn" ở màn Danh mục (mockup 7h)** — hiện chỉ gắn ở **chi tiết vị thế** (`getBondHoldingActions`). Bản danh mục cần batch `BondTerms.maturityDate` cho toàn bộ vị thế mở; `OverdueMaturityCard` (đã dựng ở #57) vẫn chỉ có preview.

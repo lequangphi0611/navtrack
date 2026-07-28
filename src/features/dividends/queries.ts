@@ -20,11 +20,7 @@ import {
 } from "@/lib/position-trail";
 import { valuateHoldings } from "@/lib/valuation";
 
-import {
-  deriveCouponFrequencyMonths,
-  resolveParValueAt,
-  roundPercentLabel,
-} from "./dividend-percent-label";
+import { resolveParValueAt, roundPercentLabel } from "./dividend-percent-label";
 import {
   findCashLikeDividendNetAmounts,
   findDividendHistorySource,
@@ -223,16 +219,12 @@ export async function getDividendHistory(holdingId: string): Promise<{
         bondCouponNetTotal = bondCouponNetTotal.plus(netAmount);
         bondCouponCount += 1;
 
-        // Kỳ trả lãi suy NGƯỢC từ chính dòng này, KHÔNG đọc BondTerms hiện tại
-        // — sửa điều khoản về sau không được làm đổi nhãn của kỳ đã ghi
-        // (process/phase-7.md "Tiêu chí hoàn thành"). Xem
-        // deriveCouponFrequencyMonths (dividend-percent-label.ts).
-        const couponFrequencyMonths = deriveCouponFrequencyMonths({
-          grossAmount,
-          parValueApplied: dividend.parValueApplied!,
-          couponRatePercentApplied,
-          quantityAtDate: before,
-        });
+        // Cả 3 thông số của nhãn ("9%/năm · kỳ 6 tháng") đọc thẳng từ field ĐÃ
+        // ĐÓNG BĂNG trên chính dòng này — không đọc BondTerms hiện tại, cũng
+        // không suy ngược từ grossAmount (phép đảo cần SL-tại-ngày-ghi, mà SL
+        // đó tính lại từ lịch sử giao dịch mỗi lần đọc nên sửa/xoá một lệnh mua
+        // cũ sẽ đổi nhãn của kỳ đã ghi — xem DECISION.md 2026-07-28 (3)).
+        const couponFrequencyMonths = dividend.couponFrequencyMonthsApplied;
 
         return {
           id: dividend.id,

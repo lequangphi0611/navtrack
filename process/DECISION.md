@@ -451,3 +451,28 @@ Bối cảnh: review PR #102 (issue #100, dọn nợ enum) phát hiện `Dividen
 - **Lỗ hổng phát hiện thêm khi rà (đã vá):** form sửa giao dịch (`TransactionForm`) chỉ có 2 lựa chọn Mua/Bán, nhưng sau #101 thì `Cashflow{MATURITY}` đã tồn tại thật và **sửa được qua form đó** — đổi `MATURITY` → `SELL` sẽ âm thầm chuyển sang chế độ thuế khác hẳn (0,1% trên toàn bộ mệnh giá hoàn trả) và đi vòng qua mọi kiểm tra của luồng tất toán. Vá: sửa một dòng `MATURITY` thì bộ chọn loại đổi thành nhãn tĩnh, các field khác vẫn sửa bình thường.
 
 - Docs đã sync: `docs/domain/03-dividends.md` (cách tính + hiển thị lịch sử + ca biên), `docs/domain/07-tax.md` (hàm thuần, chặn khi thiếu `BondTerms`, loại giao dịch không phải input client), `docs/domain/10-cashflow-calendar.md` (cài đặt `lib/bond-schedule.ts`, giới hạn thiếu `maturityDate`, `nextCouponDateOverride` chưa có UI), `process/phase-7.md` (tick mục 2-4 + tiêu chí, thêm mục "Trạng thái verify" và "Việc còn treo"), `process/UI_phase_7.md` (route thật).
+
+## 2026-07-28 (3)
+
+**Đảo quyết định (2) của mục 2026-07-28 (2) — kỳ trả lãi trên lịch sử trái tức phải là MỘT CỘT đóng băng, không phải phép đảo công thức. Phát hiện khi user hỏi lại "9% là số cố định à?".**
+
+Bối cảnh: mục (2) hôm nay chốt suy ngược kỳ trả lãi từ dữ liệu đã lưu — `freq = grossAmount × 1200 / (parValueApplied × couponRatePercentApplied × SL_tại_ngày_ghi)` — với lý do "mọi thừa số đều đã lưu nên phép đảo chính xác tuyệt đối" và "tránh thêm một migration khi migration #56 còn chưa chạy được".
+
+- **Cả hai lý do đều sai.**
+  - **Không phải mọi thừa số đều đã lưu.** `parValueApplied` và `couponRatePercentApplied` đóng băng thật, nhưng **`SL_tại_ngày_ghi` thì không** — nó được `buildQuantityTimeline()` phát lại từ toàn bộ `Cashflow`/`Dividend` **mỗi lần đọc**. Tôi đã tránh được phụ thuộc vào `BondTerms` nhưng thay bằng một phụ thuộc khác còn dễ đổi hơn: lịch sử giao dịch.
+  - **Không có migration nào để tránh.** `prisma/migrations/` chưa từng có migration cho `BondTerms`/`parValueApplied` (issue #56 mới chỉ sửa `schema.prisma`, `prisma migrate dev` chưa chạy lần nào vì hạ tầng). Nghĩa là chưa có một dòng dữ liệu thật nào, thêm cột lúc này gần như miễn phí — đúng thời điểm rẻ nhất để sửa.
+
+- **Ca hỏng cụ thể** (số thật, mockup TCB2528 — par 100tr, 9%/năm, kỳ 6 tháng, giữ 2 TP → gộp 9tr):
+  | Hành động | `SL_tại_ngày_ghi` | Nhãn hiển thị |
+  |---|---|---|
+  | Ghi trái tức | 2 | `kỳ 6 tháng` ✅ |
+  | Nhập bù 1 lệnh mua bị sót, lùi ngày trước đó | 3 | **`kỳ 4 tháng`** ❌ |
+  | Xoá 1 lệnh mua cũ | 1 | **`kỳ 12 tháng`** ❌ |
+
+  Cả 4, 6, 12 đều là kỳ trả lãi **hợp lệ ngoài đời**, nên kết quả sai không có vẻ gì bất thường — **sai âm thầm**, đúng loại lỗi mà cơ chế đóng băng sinh ra để chặn. Sửa/xoá giao dịch cũ là thao tác bình thường của app (4 Server Action đã có từ Phase 1), không phải ca hiếm.
+
+- **Quyết định:** thêm `Dividend.couponFrequencyMonthsApplied Int?`, ghi cùng lúc với 2 field đóng băng kia trong `recordBondCouponDividend`. Đường đọc (`getDividendHistory`) đọc thẳng cả 3 field, **không còn phép tính nào** — không có gì để trôi. Hàm `deriveCouponFrequencyMonths()` và 5 test của nó bị xoá hẳn thay vì giữ làm fallback: giữ lại một cài đặt song song đã biết là sai chính là pattern gây chuỗi bug retrofit ở `derivePosition`/`computeRealizedGainForHolding` (2026-07-24 (2)(3)).
+
+- **Bài học rút ra, áp cho lần sau:** "suy ngược từ dữ liệu đã lưu" chỉ an toàn khi **mọi** thừa số của phép đảo cũng bất biến. Trước khi thay một cột bằng một công thức đảo, liệt kê từng thừa số và hỏi "cái này có đóng băng không" — một thừa số derive-lại-lúc-đọc là đủ để phá bất biến. Tiền lệ ngược lại đã có sẵn trong repo và tôi đã bỏ qua: `percentLabel` của `CASH`/`STOCK` cũng suy ngược và cũng phụ thuộc `SL trước đó` — nhưng ở đó suy ngược là **bắt buộc** (`Dividend` không lưu `percent`, quyết định từ Phase 4), còn ở đây thì không.
+
+- Docs đã sync: `prisma/schema.prisma` (cột mới + comment nêu đích danh cái bẫy), `docs/02-data-model.md` (model `Dividend`), `docs/domain/03-dividends.md` (mục "Hiển thị lịch sử" — viết lại, bỏ mô tả cách suy ngược), `process/phase-7.md` (mục 1 + "Trạng thái verify").

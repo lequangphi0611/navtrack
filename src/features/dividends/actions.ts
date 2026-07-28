@@ -400,9 +400,13 @@ async function recordBondCouponDividend(
       grossAmount: computed.grossAmount.toString(),
       taxAmount: taxAmount.toString(),
       netAmount: netAmount.toString(),
-      // Đóng băng thông số đã dùng — xem comment insertDividend (repository.ts).
+      // Đóng băng TOÀN BỘ 3 thông số đã dùng để tính — xem comment insertDividend
+      // (repository.ts). Kỳ trả lãi phải nằm trong nhóm này chứ không suy ngược
+      // từ grossAmount: phép đảo cần SL-tại-ngày-ghi, mà SL đó tính lại từ lịch
+      // sử giao dịch mỗi lần đọc (xem DECISION.md 2026-07-28 (3)).
       parValueApplied: ctx.terms.parValue.toString(),
       couponRatePercentApplied: ctx.couponRatePercent.toString(),
+      couponFrequencyMonthsApplied: ctx.couponFrequencyMonths,
     },
     tx,
   );
