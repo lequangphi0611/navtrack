@@ -1,8 +1,12 @@
 import type { ZodError } from "zod";
 
-export type ActionResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> };
+export type ActionFailure = {
+  ok: false;
+  error: string;
+  fieldErrors?: Record<string, string>;
+};
+
+export type ActionResult<T> = { ok: true; data: T } | ActionFailure;
 
 export function toFieldErrors(error: ZodError): Record<string, string> {
   const fieldErrors: Record<string, string> = {};

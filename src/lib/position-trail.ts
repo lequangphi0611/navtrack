@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 
-import type { CashflowType, DividendType, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { CashflowType, DividendType } from "@prisma/client";
 import { assertNever } from "@/lib/assert-never";
 
 // Phát lại lịch sử số lượng nắm giữ gồm CẢ cổ tức cổ phiếu, không chỉ Cashflow
@@ -72,6 +73,22 @@ export function buildQuantityTimeline(
 // Value, docs/rules/clean-code.md mục 1 — mức nguy hiểm nhất mà trông vô hại
 // nhất).
 export const PENDING_EVENT_CREATED_AT = new Date(8640000000000000);
+
+// Option $transaction dùng chung cho MỌI action đọc cashflows/dividends để
+// derive vị thế rồi ghi persistPosition/insertDividend trong CÙNG transaction
+// (createHolding/addTransaction/updateTransaction/deleteTransaction,
+// features/holdings/actions.ts + recordDividend, features/dividends/actions.ts)
+// — TOCTOU: đọc-để-derive và ghi phải atomic, không có unique constraint nào
+// khác bảo vệ đường ghi này (docs/rules/data-prisma.md "Race condition khi
+// check-rồi-ghi (TOCTOU)"). Trước đây khai lặp lại `{ isolationLevel:
+// Prisma.TransactionIsolationLevel.Serializable }` kèm comment "cùng lý do"
+// ở 5 nơi — gộp về một nguồn để đổi isolation level (nếu cần) chỉ sửa một
+// chỗ. KHÔNG dùng cho freezeManualSnapshot (features/snapshots/actions.ts) —
+// TOCTOU ở đó là check-before-insert theo (holdingId, date, period), lý do
+// khác, khai Serializable riêng tại chỗ.
+export const POSITION_WRITE_TX_OPTIONS = {
+  isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+} as const;
 
 // Quy tắc dấu delta cho Cashflow — nguồn DUY NHẤT (docs/rules/clean-code.md
 // mục 1 "Connascence of Algorithm"). BUY cộng, SELL/MATURITY trừ — MATURITY

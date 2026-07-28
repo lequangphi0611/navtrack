@@ -19,18 +19,17 @@ import {
 import { getTotalCashDividendReceived } from "@/features/dividends/queries";
 import { recordDividendSchema } from "@/features/dividends/schemas";
 import type { DividendFormState } from "@/features/dividends/types";
-import { toFieldErrors } from "@/lib/action-result";
 import { assertNever } from "@/lib/assert-never";
-import { getSession } from "@/lib/auth";
-import { logger } from "@/lib/logger";
 import { getCurrentPortfolioXirrPercent } from "@/lib/portfolio-valuation";
 import {
   buildPositionEvents,
   buildQuantityTimeline,
   PENDING_EVENT_CREATED_AT,
+  POSITION_WRITE_TX_OPTIONS,
 } from "@/lib/position-trail";
 import { revalidateHoldingDependentRoutes } from "@/lib/revalidate-holding-routes";
 import { ROUTES } from "@/lib/routes";
+import { handleWriteError, parseAuthenticated } from "@/lib/server-action";
 import {
   requireDecimalSetting,
   resolveSettings,
@@ -442,7 +441,7 @@ export async function recordDividend(
   _prevState: DividendFormState,
   formData: FormData,
 ): Promise<DividendFormState> {
-  const parsed = recordDividendSchema.safeParse({
+  const ctx = await parseAuthenticated(recordDividendSchema, {
     holdingId: formData.get("holdingId"),
     type: formData.get("type"),
     date: formData.get("date"),
@@ -457,19 +456,10 @@ export async function recordDividend(
     priceAlreadyReflectsMarket:
       formData.get("priceAlreadyReflectsMarket") || undefined,
   });
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: "Dữ liệu không hợp lệ",
-      fieldErrors: toFieldErrors(parsed.error),
-    };
-  }
+  if (!ctx.ok) return ctx;
+  const { userId } = ctx;
 
-  const session = await getSession();
-  if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
-  const userId = session.user.id;
-
-  const { holdingId, type, date, percent } = parsed.data;
+  const { holdingId, type, date, percent } = ctx.data;
   const percentDecimal = new Decimal(percent);
   const { parValue, taxRatePercent } = await resolveCashDividendSettings(
     type,
@@ -488,21 +478,18 @@ export async function recordDividend(
     userId,
     type,
     date,
-    paymentDate: parsed.data.paymentDate ?? null,
+    paymentDate: ctx.data.paymentDate ?? null,
     percentDecimal,
     parValue,
     taxRatePercent,
-    stockQuantityOverride: parsed.data.stockQuantityOverride,
-    priceAlreadyReflectsMarket: parsed.data.priceAlreadyReflectsMarket,
+    stockQuantityOverride: ctx.data.stockQuantityOverride,
+    priceAlreadyReflectsMarket: ctx.data.priceAlreadyReflectsMarket,
   };
 
   try {
     const result = await runInTransaction(
       (tx) => runRecordDividendTransaction(tx, txCtx),
-      // Serializable — cùng lý do với addTransaction: đọc lịch sử cashflow/dividend
-      // để derive vị thế-tại-ngày-ghi rồi ghi Dividend (+ cập nhật cache khi STOCK)
-      // phải atomic với đọc, tránh hai request đồng thời cùng thấy vị thế cũ.
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      POSITION_WRITE_TX_OPTIONS,
     );
 
     if (!result.ok) return result;
@@ -522,26 +509,13 @@ export async function recordDividend(
       ...result,
       percent,
       date,
-      paymentDate: parsed.data.paymentDate ?? null,
+      paymentDate: ctx.data.paymentDate ?? null,
       xirrBeforePercent,
       xirrAfterPercent,
       totalDividendReceived,
       holdingId,
     });
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2034"
-    ) {
-      // Serializable — request thua trong đua tranh gặp serialization conflict,
-      // cùng lý do với addTransaction/updateTransaction/deleteTransaction.
-      logger.warn({ holdingId }, "recordDividend race, ask to retry");
-      return {
-        ok: false,
-        error: "Có giao dịch khác đang xử lý cùng lúc, vui lòng thử lại",
-      };
-    }
-    logger.error({ err, holdingId }, "recordDividend failed");
-    throw err;
+    return handleWriteError(err, { action: "recordDividend", holdingId });
   }
 }
