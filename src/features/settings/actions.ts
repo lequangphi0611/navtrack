@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import type { ActionResult } from "@/lib/action-result";
-import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { ROUTES } from "@/lib/routes";
+import { requireUserId } from "@/lib/server-action";
 
 // Chế độ ẩn số tiền toàn app (mục 8 phase-6.md, process/DECISION.md 2026-07-21
 // mục (1)) — nút mắt header VÀ toggle "Chế độ ẩn số tiền" ở Cài đặt CÙNG gọi
@@ -17,19 +17,17 @@ import { ROUTES } from "@/lib/routes";
 export async function setHideAmountsByDefault(
   hidden: boolean,
 ): Promise<ActionResult<{ hidden: boolean }>> {
-  const session = await getSession();
-  if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
+  const auth = await requireUserId();
+  if (!auth.ok) return auth;
+  const { userId } = auth;
 
   try {
     await db.user.update({
-      where: { id: session.user.id },
+      where: { id: userId },
       data: { hideAmountsByDefault: hidden },
     });
   } catch (err) {
-    logger.error(
-      { err, userId: session.user.id },
-      "setHideAmountsByDefault failed",
-    );
+    logger.error({ err, userId }, "setHideAmountsByDefault failed");
     throw err;
   }
 
