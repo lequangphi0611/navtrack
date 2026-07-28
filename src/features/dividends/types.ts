@@ -44,7 +44,11 @@ export type DividendFormState =
 export type DividendRecordedResult = {
   symbol: string;
   type: DividendType;
-  percentLabel: string; // "20" — hiển thị "Cổ tức tiền mặt 20%"
+  // CASH/STOCK: "20" — hiển thị "Cổ tức tiền mặt 20%". BOND_COUPON: lãi suất
+  // coupon đã đóng băng — hiển thị "Trái tức 9%/năm".
+  percentLabel: string;
+  // BOND_COUPON-only: kỳ trả lãi (tháng) — ghép thành "9%/năm · kỳ 6 tháng".
+  couponFrequencyMonths?: number;
   dateLabel: string; // đã format dd/MM/yyyy
   // CASH
   grossAmount?: string;

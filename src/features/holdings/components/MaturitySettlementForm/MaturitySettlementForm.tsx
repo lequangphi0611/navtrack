@@ -10,8 +10,10 @@ import {
   Info,
   ReceiptText,
 } from "lucide-react";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useState } from "react";
 
+import { Alert } from "@/components/Alert";
 import { AutoFilledAmountCard } from "@/components/AutoFilledAmountCard";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +21,9 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { formatMoney, formatQuantity } from "@/lib/format";
+import { holdingDetailAfterTransaction } from "@/lib/routes";
 
+import { settleMaturity } from "../../actions";
 import {
   computeMaturitySettlementPreview,
   toDecimalOrZero,
@@ -40,8 +44,13 @@ type MaturitySettlementFormProps = {
   defaultDateInputValue: string; // yyyy-MM-dd = ngày đáo hạn
   interestTaxRatePercent: string; // "5" (CORPORATE) | "0" (GOVERNMENT)
   closeHref: string;
-  isPending?: boolean;
 };
+
+type FormState = {
+  ok: boolean;
+  error?: string;
+  fieldErrors?: Record<string, string>;
+} | null;
 
 // Màn "Tất toán đáo hạn" (mockup Phase 7 Screens 7e mua đúng mệnh giá / 7f mua
 // chiết khấu). MỌI field đều prefill sẵn và sửa được — giữ đúng ngôn ngữ "tự
@@ -58,8 +67,44 @@ function MaturitySettlementForm({
   defaultDateInputValue,
   interestTaxRatePercent,
   closeHref,
-  isPending = false,
 }: MaturitySettlementFormProps) {
+  const router = useRouter();
+
+  // Gọi thẳng Server Action từ component (cùng pattern TransactionForm) thay vì
+  // nhận `action` qua prop: form này chỉ có đúng MỘT hành động, và bridge
+  // FormData -> payload là phần của chính form, không phải của route.
+  async function submitSettlement(
+    _prevState: FormState,
+    formData: FormData,
+  ): Promise<FormState> {
+    const result = await settleMaturity({
+      holdingId: holding.id,
+      date: formData.get("date"),
+      quantity: formData.get("quantity"),
+      pricePerUnit: formData.get("pricePerUnit"),
+      taxAmount: formData.get("taxAmount") || undefined,
+      note: formData.get("note") || undefined,
+    });
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: result.error,
+        fieldErrors: result.fieldErrors,
+      };
+    }
+
+    router.push(
+      holdingDetailAfterTransaction(
+        result.data.holdingId,
+        result.data.cashflowId,
+      ),
+    );
+    return { ok: true };
+  }
+
+  const [state, formAction, isPending] = useActionState(submitSettlement, null);
+
   const [date, setDate] = useState(defaultDateInputValue);
   const [quantity, setQuantity] = useState(holding.quantity);
   const [pricePerUnit, setPricePerUnit] = useState(parValue);
@@ -89,7 +134,7 @@ function MaturitySettlementForm({
         variant="close"
       />
 
-      <form className="flex flex-col gap-4.5">
+      <form action={formAction} className="flex flex-col gap-4.5">
         <input type="hidden" name="holdingId" value={holding.id} />
 
         <div className="flex gap-2.5 rounded-2xl border border-asset-bond/42 bg-linear-to-br from-asset-bond/18 to-card p-3.5">
@@ -333,6 +378,14 @@ function MaturitySettlementForm({
             </span>
           </div>
         </div>
+
+        {state && !state.ok ? (
+          <Alert
+            variant="error"
+            title="Không ghi được tất toán"
+            description={state.error ?? "Thử lại sau ít phút."}
+          />
+        ) : null}
 
         <Button
           type="submit"

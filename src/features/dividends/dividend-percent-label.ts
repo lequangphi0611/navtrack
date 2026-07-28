@@ -45,3 +45,37 @@ export function roundPercentLabel(
     .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
     .toString();
 }
+
+// Kỳ trả lãi (số tháng) của MỘT dòng trái tức đã ghi — suy NGƯỢC từ chính dữ
+// liệu đã lưu trên dòng đó, KHÔNG đọc `BondTerms.couponFrequencyMonths` hiện
+// tại (Phase 7, issue #58).
+//
+// Vì sao suy ngược thay vì đọc thẳng: schema chỉ đóng băng `parValueApplied` và
+// `couponRatePercentApplied` (issue #56), không đóng băng kỳ trả lãi. Nhưng
+// tiêu chí phase yêu cầu "sửa BondTerms KHÔNG làm đổi số tiền/NHÃN của các trái
+// tức đã ghi trước đó" — mà nhãn gồm cả "kỳ 6 tháng". Đảo ngược công thức
+// computeBondCoupon() cho ra kỳ trả lãi ĐÃ DÙNG LÚC GHI mà không cần thêm cột:
+//   gross = par × rate/100 × freq/12 × SL   =>   freq = gross × 1200 / (par × rate × SL)
+//
+// Trả null khi không suy được (SL tại ngày ghi = 0, mệnh giá/lãi suất 0, hoặc
+// kết quả không ra số tháng nguyên vì user đã sửa tay số tiền) — caller ẩn phần
+// "· kỳ N tháng", vẫn hiển thị phần "%/năm" đã đóng băng.
+export function deriveCouponFrequencyMonths(input: {
+  grossAmount: Decimal;
+  parValueApplied: Decimal;
+  couponRatePercentApplied: Decimal;
+  quantityAtDate: Decimal;
+}): number | null {
+  const denominator = input.parValueApplied
+    .mul(input.couponRatePercentApplied)
+    .mul(input.quantityAtDate);
+  if (denominator.isZero()) return null;
+
+  const months = input.grossAmount.mul(1200).div(denominator);
+  const rounded = months.toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+  // Lệch khỏi số nguyên = số tiền đã bị sửa tay khỏi công thức -> không bịa ra
+  // một kỳ trả lãi không có thật.
+  if (!months.minus(rounded).abs().lt("0.01")) return null;
+  if (rounded.lte(0)) return null;
+  return rounded.toNumber();
+}

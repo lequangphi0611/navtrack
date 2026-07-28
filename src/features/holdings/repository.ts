@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 
 import type {
   AssetType,
+  BondIssuerType,
   CashflowType,
   Prisma,
   SettingValueType,
@@ -11,6 +12,7 @@ import type {
   StockDividendInput,
 } from "@/lib/cost-basis";
 import { db } from "@/lib/db";
+import { CASH_FLOW_DIVIDEND_TYPES } from "@/lib/enums";
 import {
   positionSourceSelect,
   POSITION_TRAIL_ORDER_BY,
@@ -278,8 +280,11 @@ export type CashDividendRow = {
   netAmount: Decimal;
 };
 
-// Cổ tức tiền mặt đã nhận <= cutoffDate — dòng tiền dương cho XIRR
+// Cổ tức tiền mặt + TRÁI TỨC đã nhận <= cutoffDate — dòng tiền dương cho XIRR
 // (docs/domain/03-dividends.md, docs/domain/05 "Cách tính": Dividend.netAmount).
+// Lọc theo CASH_FLOW_DIVIDEND_TYPES (lib/enums.ts), KHÔNG hardcode `type:
+// "CASH"`: bỏ sót BOND_COUPON ở đây khiến trái tức không vào XIRR mà không có
+// test nào fail (process/phase-7.md mục 3).
 export async function findCashDividendsForHolding(
   holdingId: string,
   cutoffDate: Date,
@@ -288,7 +293,7 @@ export async function findCashDividendsForHolding(
   const rows = await tx.dividend.findMany({
     where: {
       holdingId,
-      type: "CASH",
+      type: { in: [...CASH_FLOW_DIVIDEND_TYPES] },
       netAmount: { not: null },
       date: { lte: cutoffDate },
     },
@@ -311,6 +316,143 @@ export async function findCashDividendsForHolding(
     // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
     netAmount: new Decimal(row.netAmount!.toString()),
   }));
+}
+
+export type BondTermsRow = {
+  issuerType: BondIssuerType;
+  parValue: Decimal;
+  couponRatePercent: Decimal | null;
+  couponFrequencyMonths: number | null;
+  firstCouponDate: Date | null;
+  maturityDate: Date | null;
+  nextCouponDateOverride: Date | null;
+};
+
+// Điều khoản trái phiếu của MỘT Holding (Phase 7). Sống ở repository của
+// feature HOLDINGS — `BondTerms` là đặc tả của chính vị thế (nhập trên form vị
+// thế, 1-1 với Holding), không phải dữ liệu của feature dividends; nhánh ghi
+// trái tức (features/dividends/actions.ts) import từ đây thay vì mỗi feature
+// tự viết một truy vấn cùng bảng (docs/rules/clean-code.md mục 1).
+//
+// Tự filter userId qua quan hệ `holding` (docs/rules/data-prisma.md): "không
+// tồn tại" và "không thuộc user" đều trả null. Đọc NGOÀI transaction ghi là an
+// toàn — BondTerms là dữ liệu HỢP ĐỒNG tĩnh, không phải trạng thái suy ra từ
+// Cashflow/Dividend đang ghi, nên không có bất biến TOCTOU cần bảo vệ.
+export async function findBondTerms(
+  holdingId: string,
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<BondTermsRow | null> {
+  const row = await tx.bondTerms.findFirst({
+    where: { holdingId, holding: { userId } },
+    select: {
+      issuerType: true,
+      parValue: true,
+      couponRatePercent: true,
+      couponFrequencyMonths: true,
+      firstCouponDate: true,
+      maturityDate: true,
+      nextCouponDateOverride: true,
+    },
+  });
+  if (!row) return null;
+
+  return {
+    issuerType: row.issuerType,
+    parValue: new Decimal(row.parValue.toString()),
+    couponRatePercent: row.couponRatePercent
+      ? new Decimal(row.couponRatePercent.toString())
+      : null,
+    couponFrequencyMonths: row.couponFrequencyMonths,
+    firstCouponDate: row.firstCouponDate,
+    maturityDate: row.maturityDate,
+    nextCouponDateOverride: row.nextCouponDateOverride,
+  };
+}
+
+// Tạo/cập nhật điều khoản trái phiếu. Upsert theo `holdingId` (@unique) — form
+// 7a dùng chung cho cả lần nhập đầu lẫn lần sửa, không cần caller tự phân biệt.
+// KHÔNG bao giờ được gọi từ nhánh ghi trái tức: `recordDividend` đọc BondTerms
+// và không ghi ngược gì (docs/domain/10-cashflow-calendar.md).
+export async function upsertBondTerms(
+  holdingId: string,
+  data: {
+    issuerType: BondIssuerType;
+    parValue: string;
+    couponRatePercent: string | null;
+    couponFrequencyMonths: number | null;
+    firstCouponDate: Date | null;
+    maturityDate: Date | null;
+  },
+  tx: Prisma.TransactionClient = db,
+): Promise<void> {
+  await tx.bondTerms.upsert({
+    where: { holdingId },
+    create: { holdingId, ...data },
+    update: data,
+  });
+}
+
+export type BondSettlementSource = {
+  id: string;
+  symbol: string;
+  name: string | null;
+  type: AssetType;
+  unit: string;
+  quantity: Decimal;
+  avgCost: Decimal;
+  bondTerms: {
+    issuerType: BondIssuerType;
+    parValue: Decimal;
+    maturityDate: Date | null;
+  } | null;
+};
+
+// Vị thế + điều khoản trái phiếu cần cho màn/Server Action tất toán đáo hạn
+// (Phase 7, issue #101). Đọc NGOÀI transaction ghi được: `bondTerms` là dữ liệu
+// hợp đồng tĩnh và `quantity`/`avgCost` ở đây chỉ dùng để PREFILL form + resolve
+// thuế suất — số thật đưa vào `persistPosition` vẫn derive lại TRONG transaction
+// từ toàn bộ Cashflow (bất biến "cache chỉ ghi bằng derivePosition",
+// docs/domain/02-transactions-and-cost-basis.md).
+export async function findBondSettlementSource(
+  holdingId: string,
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<BondSettlementSource | null> {
+  const holding = await tx.holding.findUnique({
+    where: { id: holdingId },
+    select: {
+      id: true,
+      userId: true,
+      symbol: true,
+      name: true,
+      type: true,
+      unit: true,
+      quantity: true,
+      avgCost: true,
+      bondTerms: {
+        select: { issuerType: true, parValue: true, maturityDate: true },
+      },
+    },
+  });
+  if (!holding || holding.userId !== userId) return null;
+
+  return {
+    id: holding.id,
+    symbol: holding.symbol,
+    name: holding.name,
+    type: holding.type,
+    unit: holding.unit,
+    quantity: new Decimal(holding.quantity.toString()),
+    avgCost: new Decimal(holding.avgCost.toString()),
+    bondTerms: holding.bondTerms
+      ? {
+          issuerType: holding.bondTerms.issuerType,
+          parValue: new Decimal(holding.bondTerms.parValue.toString()),
+          maturityDate: holding.bondTerms.maturityDate,
+        }
+      : null,
+  };
 }
 
 export type HoldingDetailCashflowRow = {
@@ -492,9 +634,11 @@ export type CashDividendForXirrRow = {
   netAmount: Decimal;
 };
 
-// Batch cổ tức tiền mặt theo tập holdingId — `id` thêm cho ClosedHoldingRow.cashDividends
-// (React key + timeline row id, cần liệt kê từng dòng cổ tức riêng, không chỉ tổng).
-// Lọc thêm `holding: { userId }` — cùng lý do findCashflowsForHoldings.
+// Batch cổ tức tiền mặt + trái tức theo tập holdingId — `id` thêm cho
+// ClosedHoldingRow.cashDividends (React key + timeline row id, cần liệt kê từng
+// dòng cổ tức riêng, không chỉ tổng). Lọc thêm `holding: { userId }` — cùng lý
+// do findCashflowsForHoldings; lọc type qua CASH_FLOW_DIVIDEND_TYPES — cùng lý
+// do findCashDividendsForHolding ở trên.
 export async function findCashDividendsForHoldings(
   holdingIds: string[],
   userId: string,
@@ -507,7 +651,7 @@ export async function findCashDividendsForHoldings(
     where: {
       holdingId: { in: holdingIds },
       holding: { userId },
-      type: "CASH",
+      type: { in: [...CASH_FLOW_DIVIDEND_TYPES] },
       netAmount: { not: null },
       date: { lte: cutoffDate },
     },

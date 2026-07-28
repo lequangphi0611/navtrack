@@ -7,6 +7,7 @@ import {
   cashflowPositionDelta,
   dividendPositionDelta,
   PENDING_EVENT_CREATED_AT,
+  SETTLEMENT_RANK,
 } from "./position-trail";
 import type { PositionTrailEvent } from "./position-trail";
 
@@ -227,5 +228,119 @@ describe("buildPositionEvents", () => {
   test("markers mặc định rỗng khi không truyền", () => {
     const events = buildPositionEvents({ cashflows: [], dividends: [] });
     expect(events).toEqual([]);
+  });
+});
+
+// Issue #101 — trái tức kỳ cuối trùng ngày đáo hạn (docs/domain/03-dividends.md
+// "Ca biên", process/phase-7.md mục 3). Đây là ca sai ÂM THẦM: không có lỗi,
+// không có cảnh báo, chỉ ra 0 đồng — nên phải khoá bằng test.
+describe("thứ tự Dividend vs Cashflow{MATURITY} cùng ngày", () => {
+  // MATURITY được ghi TRƯỚC (createdAt sớm hơn) nhưng vẫn phải xếp SAU trái
+  // tức cùng ngày — nếu tie-break vẫn theo createdAt như trước, "SL tại ngày
+  // trả lãi" đọc ra 0 và trái tức kỳ cuối tính ra 0 đồng.
+  test("MATURITY xếp sau trái tức dù được ghi trước", () => {
+    const events = buildPositionEvents({
+      cashflows: [
+        {
+          id: "buy-1",
+          type: "BUY",
+          date: d(1),
+          createdAt: d(1),
+          quantity: new Decimal(2),
+        },
+        {
+          id: "maturity-1",
+          type: "MATURITY",
+          date: d(15),
+          // Ghi lúc 10:00 — SỚM hơn trái tức bên dưới.
+          createdAt: new Date("2024-01-20T10:00:00.000Z"),
+          quantity: new Decimal(2),
+        },
+      ],
+      dividends: [
+        {
+          id: "coupon-cuoi",
+          type: "BOND_COUPON",
+          date: d(15),
+          // Ghi lúc 11:00 — MUỘN hơn maturity ở trên.
+          createdAt: new Date("2024-01-20T11:00:00.000Z"),
+          stockQuantity: null,
+        },
+      ],
+    });
+
+    const timeline = buildQuantityTimeline(events);
+
+    // Trái tức đọc số dư TRƯỚC khi tất toán -> 2 trái phiếu, không phải 0.
+    expect(timeline.get("coupon-cuoi")?.before.toString()).toBe("2");
+    // Tất toán mới là sự kiện đưa số lượng về 0.
+    expect(timeline.get("maturity-1")?.before.toString()).toBe("2");
+    expect(timeline.get("maturity-1")?.after.toString()).toBe("0");
+  });
+
+  // Probe "đang ghi trái tức" (PENDING_EVENT_CREATED_AT — createdAt xa nhất có
+  // thể) vẫn phải đứng trước MATURITY đã ghi cùng ngày: hạng thắng createdAt.
+  test("probe ghi trái tức đọc SL trước MATURITY đã tồn tại cùng ngày", () => {
+    const events = buildPositionEvents({
+      cashflows: [
+        {
+          id: "buy-1",
+          type: "BUY",
+          date: d(1),
+          createdAt: d(1),
+          quantity: new Decimal(2),
+        },
+        {
+          id: "maturity-1",
+          type: "MATURITY",
+          date: d(15),
+          createdAt: d(15),
+          quantity: new Decimal(2),
+        },
+      ],
+      dividends: [],
+      markers: [
+        { id: "probe", date: d(15), createdAt: PENDING_EVENT_CREATED_AT },
+      ],
+    });
+
+    const timeline = buildQuantityTimeline(events);
+    expect(timeline.get("probe")?.before.toString()).toBe("2");
+  });
+
+  // Candidate MATURITY (đang ghi, chưa lưu DB) phải đứng SAU trái tức cùng ngày
+  // đã ghi trước đó — caller truyền rank qua marker.
+  test("candidate MATURITY nhận SETTLEMENT_RANK đứng sau dividend cùng ngày", () => {
+    const events = buildPositionEvents({
+      cashflows: [
+        {
+          id: "buy-1",
+          type: "BUY",
+          date: d(1),
+          createdAt: d(1),
+          quantity: new Decimal(2),
+        },
+      ],
+      dividends: [
+        {
+          id: "coupon-cuoi",
+          type: "BOND_COUPON",
+          date: d(15),
+          createdAt: PENDING_EVENT_CREATED_AT,
+          stockQuantity: null,
+        },
+      ],
+      markers: [
+        {
+          id: "candidate-maturity",
+          date: d(15),
+          createdAt: d(15),
+          rank: SETTLEMENT_RANK,
+        },
+      ],
+    });
+
+    const timeline = buildQuantityTimeline(events);
+    expect(timeline.get("candidate-maturity")?.before.toString()).toBe("2");
   });
 });

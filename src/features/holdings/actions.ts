@@ -8,10 +8,12 @@ import { redirect } from "next/navigation";
 // (chỉ holdings/queries.ts, xem features/snapshots/actions.ts) nên import chiều này không tạo vòng.
 import { freezeManualSnapshot } from "@/features/snapshots/actions";
 import type { ActionResult } from "@/lib/action-result";
+import { assertBondHoldingType } from "@/lib/bond-terms";
 import { derivePosition } from "@/lib/cost-basis";
 import { computeCashflowAmount } from "@/lib/cost-basis";
 import type { CashflowInputWithEvent } from "@/lib/cost-basis";
 import { logger } from "@/lib/logger";
+import { computeMaturitySettlement } from "@/lib/maturity-settlement";
 import {
   PENDING_EVENT_CREATED_AT,
   POSITION_WRITE_TX_OPTIONS,
@@ -19,9 +21,15 @@ import {
 import { revalidateHoldingDependentRoutes } from "@/lib/revalidate-holding-routes";
 import { ROUTES } from "@/lib/routes";
 import { handleWriteError, parseAuthenticated } from "@/lib/server-action";
+import {
+  bondInterestTaxKey,
+  resolveDecimalSetting,
+  transactionFeeKey,
+} from "@/lib/settings";
 
 import {
   deleteCashflowRow,
+  findBondSettlementSource,
   findPositionSourceByCashflow,
   findPositionSourceById,
   findPositionSourceBySymbol,
@@ -31,13 +39,17 @@ import {
   persistPosition,
   runInTransaction,
   updateCashflowRow,
+  upsertBondTerms,
   upsertNavOverride,
 } from "./repository";
+import type { BondSettlementSource } from "./repository";
 import {
   addTransactionSchema,
+  bondTermsSchema,
   deleteTransactionSchema,
   navOverrideSchema,
   newHoldingSchema,
+  settleMaturitySchema,
   updateTransactionSchema,
 } from "./schemas";
 import type { NavOverrideFormState } from "./types";
@@ -386,6 +398,217 @@ export async function deleteTransaction(
     });
   } catch (err) {
     return handleWriteError(err, { action: "deleteTransaction", cashflowId });
+  }
+}
+
+// Lưu điều khoản trái phiếu (Phase 7, mockup 7a) — nhập một lần trên vị thế,
+// `recordDividend` nhánh BOND_COUPON đọc lại từ đây.
+//
+// KHÔNG ghi trong `$transaction` Serializable như 4 action cashflow: ở đó
+// transaction bảo vệ bất biến "đọc-để-derive và ghi phải atomic"
+// (docs/rules/data-prisma.md "TOCTOU"); còn ở đây không derive gì cả, chỉ upsert
+// một hàng theo khoá duy nhất `holdingId` — atomic sẵn ở tầng DB (cùng lý do
+// saveNavOverride bên dưới).
+export async function saveBondTerms(
+  input: unknown,
+): Promise<ActionResult<{ holdingId: string }>> {
+  const ctx = await parseAuthenticated(bondTermsSchema, input);
+  if (!ctx.ok) return ctx;
+  const { userId } = ctx;
+
+  const { holdingId, ...terms } = ctx.data;
+
+  const holding = await findBondSettlementSource(holdingId, userId);
+  if (!holding) return { ok: false, error: "Không tìm thấy vị thế" };
+  // Quan hệ 1-1 của Prisma KHÔNG ràng buộc được `holding.type = BOND` — chặn ở
+  // tầng app là cách duy nhất (src/lib/bond-terms.ts, issue #56). Chuyển
+  // AppError thành ActionResult ở đây thay vì để throw: user chọn nhầm vị thế
+  // là lỗi lường trước, không phải sự cố (docs/rules/error-handling.md).
+  if (holding.type !== "BOND") {
+    return {
+      ok: false,
+      error: "Điều khoản trái phiếu chỉ áp dụng cho vị thế loại trái phiếu",
+    };
+  }
+  assertBondHoldingType(holding.type);
+
+  try {
+    await upsertBondTerms(holdingId, {
+      issuerType: terms.issuerType,
+      parValue: terms.parValue,
+      couponRatePercent: terms.couponRatePercent,
+      couponFrequencyMonths: terms.couponFrequencyMonths,
+      firstCouponDate: terms.firstCouponDate,
+      maturityDate: terms.maturityDate,
+    });
+  } catch (err) {
+    return handleWriteError(err, { action: "saveBondTerms", holdingId });
+  }
+
+  revalidateHoldingDependentRoutes(holdingId);
+  return { ok: true, data: { holdingId } };
+}
+
+// Điều khoản + thuế suất + phí cần để ghi tất toán đáo hạn, resolve NGOÀI
+// transaction (cùng lý do resolveCashDividendSettings ở dividends/actions.ts).
+// Thiếu `BondTerms` -> chặn với thông báo rõ thay vì đoán `issuerType`: không
+// biết tổ chức phát hành thì không biết áp 5% hay 0% (docs/domain/07-tax.md).
+async function resolveMaturitySettlementContext(
+  holdingId: string,
+  userId: string,
+  date: Date,
+): Promise<
+  | {
+      ok: true;
+      source: BondSettlementSource;
+      interestTaxRatePercent: Decimal;
+      feeRatePercent: Decimal;
+    }
+  | { ok: false; error: string }
+> {
+  const source = await findBondSettlementSource(holdingId, userId);
+  if (!source) return { ok: false, error: "Không tìm thấy vị thế" };
+  if (source.type !== "BOND") {
+    return {
+      ok: false,
+      error: "Chỉ vị thế trái phiếu mới có thể tất toán đáo hạn",
+    };
+  }
+  if (!source.bondTerms) {
+    return {
+      ok: false,
+      error:
+        "Chưa có điều khoản trái phiếu cho vị thế này — nhập loại phát hành và mệnh giá trước khi tất toán.",
+    };
+  }
+
+  const [interestTaxRatePercent, feeRatePercent] = await Promise.all([
+    resolveDecimalSetting(
+      bondInterestTaxKey(source.bondTerms.issuerType),
+      date,
+    ),
+    // Đáo hạn thường KHÔNG qua lệnh khớp CTCK nên phí thực tế là 0, nhưng vẫn
+    // prefill từ Setting để nhất quán với mọi giao dịch khác (docs/domain/07-tax.md).
+    resolveDecimalSetting(transactionFeeKey("SELL", source.type), date),
+  ]);
+
+  return { ok: true, source, interestTaxRatePercent, feeRatePercent };
+}
+
+// Tất toán đáo hạn trái phiếu (Phase 7, issue #101) — ghi `Cashflow{type:
+// MATURITY}`, KHÔNG phải một dòng SELL. Khác biệt không nằm ở nhãn hiển thị mà
+// ở THUẾ: SELL áp `SALE_TAX_BOND` 0,1% trên toàn bộ giá trị chuyển nhượng,
+// MATURITY chỉ đánh thuế lãi trên phần lợi tức (xem lib/maturity-settlement.ts).
+//
+// Mọi con số client gửi lên là giá trị user đã xác nhận trên form "tự điền, sửa
+// được"; server vẫn tự tính lại thuế/phí gợi ý và chỉ dùng số client gửi khi
+// user thực sự sửa (nguyên tắc "prefill, không khoá" — docs/domain/07-tax.md).
+export async function settleMaturity(
+  input: unknown,
+): Promise<ActionResult<{ holdingId: string; cashflowId: string }>> {
+  const ctx = await parseAuthenticated(settleMaturitySchema, input);
+  if (!ctx.ok) return ctx;
+  const { userId } = ctx;
+
+  const { holdingId, date, quantity, pricePerUnit, note } = ctx.data;
+
+  const settlementCtx = await resolveMaturitySettlementContext(
+    holdingId,
+    userId,
+    date,
+  );
+  if (!settlementCtx.ok) return settlementCtx;
+
+  const quantityDecimal = new Decimal(quantity);
+  const pricePerUnitDecimal = new Decimal(pricePerUnit);
+
+  // Thuế gợi ý tính trên avgCost HIỆN TẠI của vị thế — cùng con số form đã hiển
+  // thị. User sửa tay thì số của user thắng.
+  const computed = computeMaturitySettlement({
+    quantity: quantityDecimal,
+    pricePerUnit: pricePerUnitDecimal,
+    avgCost: settlementCtx.source.avgCost,
+    interestTaxRatePercent: settlementCtx.interestTaxRatePercent,
+  });
+  const taxAmount =
+    ctx.data.taxAmount !== undefined
+      ? new Decimal(ctx.data.taxAmount)
+      : computed.taxAmount;
+  const feeAmount =
+    ctx.data.feeAmount !== undefined
+      ? new Decimal(ctx.data.feeAmount)
+      : quantityDecimal
+          .mul(pricePerUnitDecimal)
+          .mul(settlementCtx.feeRatePercent)
+          .div(100);
+
+  try {
+    const result = await runInTransaction(async (tx) => {
+      const source = await findPositionSourceById(holdingId, userId, tx);
+      if (!source) {
+        return { ok: false as const, error: "Không tìm thấy vị thế" };
+      }
+
+      const candidate: CashflowInputWithEvent = {
+        id: "__candidate__",
+        type: "MATURITY",
+        date,
+        createdAt: PENDING_EVENT_CREATED_AT,
+        quantity: quantityDecimal,
+        pricePerUnit: pricePerUnitDecimal,
+        feeAmount,
+      };
+
+      // derivePosition() tự xếp MATURITY sau mọi sự kiện cùng ngày
+      // (cashflowEventRank, lib/position-trail.ts) -> tất toán trùng ngày với
+      // trái tức kỳ cuối không bị báo "vượt quá số lượng" oan.
+      const position = derivePosition(
+        [...source.cashflows, candidate],
+        source.dividends,
+      );
+      if (position.wentNegative) {
+        return {
+          ok: false as const,
+          error: "Tất toán vượt quá số lượng đang giữ tại ngày đáo hạn",
+        };
+      }
+
+      const amount = computeCashflowAmount({
+        type: "MATURITY",
+        quantity: candidate.quantity,
+        pricePerUnit: candidate.pricePerUnit,
+        feeAmount,
+        taxAmount,
+      });
+
+      const cashflow = await insertCashflow(
+        {
+          holdingId,
+          type: "MATURITY",
+          date,
+          quantity,
+          pricePerUnit,
+          amount: amount.toString(),
+          feeAmount: feeAmount.toString(),
+          taxAmount: taxAmount.toString(),
+          note,
+        },
+        tx,
+      );
+
+      await persistPosition(holdingId, position, tx);
+
+      return { ok: true as const, cashflowId: cashflow.id };
+    }, POSITION_WRITE_TX_OPTIONS);
+
+    if (!result.ok) return result;
+
+    return finalizeHoldingWrite("settleMaturity", holdingId, {
+      holdingId,
+      cashflowId: result.cashflowId,
+    });
+  } catch (err) {
+    return handleWriteError(err, { action: "settleMaturity", holdingId });
   }
 }
 

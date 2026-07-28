@@ -2,7 +2,11 @@ import Decimal from "decimal.js";
 
 import type { CashflowType } from "@prisma/client";
 import { assertNever } from "@/lib/assert-never";
-import { sortByPositionTrailOrder } from "@/lib/position-trail";
+import {
+  cashflowEventRank,
+  DEFAULT_EVENT_RANK,
+  sortByPositionTrailOrder,
+} from "@/lib/position-trail";
 
 // Tách thuần khỏi lib/cost-basis.ts (không đụng DB) — CỐ Ý KHÔNG mở rộng
 // CashflowInput/derivePosition() ở đó: field cần ở đây (Cashflow.amount đã
@@ -79,13 +83,21 @@ export function computeRealizedGainForHolding(
     | { kind: "CASHFLOW"; cf: RealizedGainCashflowInput }
     | { kind: "STOCK_DIVIDEND"; dividend: RealizedGainStockDividendInput };
 
-  const events: (Event & { id: string; date: Date; createdAt: Date })[] = [
+  const events: (Event & {
+    id: string;
+    date: Date;
+    createdAt: Date;
+    rank: number;
+  })[] = [
     ...cashflows.map((cf) => ({
       kind: "CASHFLOW" as const,
       cf,
       id: cf.id,
       date: cf.date,
       createdAt: cf.createdAt,
+      // Tất toán đáo hạn là sự kiện CUỐI trong ngày (issue #101) — cùng quy
+      // ước với derivePosition()/buildPositionEvents, không tự so type ở đây.
+      rank: cashflowEventRank(cf.type),
     })),
     ...stockDividends.map((dividend) => ({
       kind: "STOCK_DIVIDEND" as const,
@@ -93,6 +105,7 @@ export function computeRealizedGainForHolding(
       id: dividend.id,
       date: dividend.date,
       createdAt: dividend.createdAt,
+      rank: DEFAULT_EVENT_RANK,
     })),
   ];
   const sorted = sortByPositionTrailOrder(events);

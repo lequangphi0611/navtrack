@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { recordDividend } from "@/features/dividends/actions";
 import { DividendForm } from "@/features/dividends/components/DividendForm";
 import { getOpenHoldingsForDividendSwitcher } from "@/features/dividends/queries";
+import { getBondCouponFormData } from "@/features/holdings/queries";
 import { ROUTES } from "@/lib/routes";
 import {
   requireDecimalSetting,
@@ -19,6 +20,12 @@ export default async function NewDividendStandalonePage() {
   if (holdings.length === 0) redirect(ROUTES.newHolding);
 
   const current = holdings[0]!;
+  // Cùng wiring với route theo-holding (/holdings/[id]/dividends/new): vị thế
+  // mặc định có thể là trái phiếu, và cùng một vị thế không được lúc có lúc
+  // không có tab "Trái tức" tuỳ lối vào.
+  const bondData =
+    current.type === "BOND" ? await getBondCouponFormData(current.id) : null;
+
   const today = new Date();
   const settings = await resolveSettings(
     [SETTING_KEYS.DIVIDEND_PAR_VALUE, SETTING_KEYS.DIVIDEND_TAX_RATE],
@@ -46,7 +53,21 @@ export default async function NewDividendStandalonePage() {
       }}
       faceValuePerShare={parValue.toString()}
       taxRatePercent={taxRatePercent.toString()}
-      defaultDateInputValue={today.toISOString().slice(0, 10)}
+      {...(bondData
+        ? {
+            bond: {
+              terms: bondData.terms,
+              taxRatePercent: bondData.taxRatePercent,
+              ...(bondData.couponPeriodLabel
+                ? { couponPeriodLabel: bondData.couponPeriodLabel }
+                : {}),
+              bondTermsHref: ROUTES.bondTerms(current.id),
+            },
+          }
+        : {})}
+      defaultDateInputValue={
+        bondData?.nextCouponDateInputValue ?? today.toISOString().slice(0, 10)
+      }
       historyHref={ROUTES.dividendHistory(current.id)}
       closeHref={ROUTES.dashboard}
       action={recordDividend}

@@ -1,5 +1,7 @@
 "use client";
 
+import Decimal from "decimal.js";
+
 import type { DividendType } from "@prisma/client";
 import {
   Check,
@@ -343,6 +345,29 @@ function dividendTypeLabel(type: DividendType): string {
   }
 }
 
+// Dòng mô tả dưới tiêu đề màn thành công. CASH/STOCK là "% cổ tức" của đợt
+// chia; BOND_COUPON là LÃI SUẤT DANH NGHĨA THEO NĂM + kỳ trả lãi — đọc "Trái
+// tức 9%" trơ trọi sẽ bị hiểu nhầm là 9% cho riêng kỳ này (thực tế kỳ 6 tháng
+// chỉ trả 4,5%).
+function dividendResultSubtitle(result: DividendRecordedResult): string {
+  switch (result.type) {
+    case "CASH":
+    case "STOCK":
+      return `${dividendTypeLabel(result.type)} ${result.percentLabel}%`;
+    case "BOND_COUPON":
+      return [
+        `${dividendTypeLabel(result.type)} ${result.percentLabel}%/năm`,
+        result.couponFrequencyMonths
+          ? `kỳ ${result.couponFrequencyMonths} tháng`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    default:
+      return assertNever(result.type);
+  }
+}
+
 // Icon minh hoạ dòng "Tổng cổ tức đã nhận" — cùng lý do exhaustive như trên.
 function DividendReceivedIcon({ type }: { type: DividendType }) {
   switch (type) {
@@ -404,10 +429,28 @@ function DividendMainCard({ result }: { result: DividendRecordedResult }) {
         </div>
       );
     case "BOND_COUPON":
-      // Placeholder — recordDividend() (actions.ts) trả lỗi lường trước cho
-      // BOND_COUPON trước khi tới DividendFormState.ok=true, nên nhánh này
-      // không thực sự render được ở UI hiện tại (issue #101 sẽ implement).
-      return null;
+      // Cùng khung số liệu với CASH (đều là tiền thực nhận), khác ở TÔNG MÀU
+      // trái phiếu và ở chỗ thuế 0 được nói rõ là "miễn thuế" thay vì để trống
+      // — người dùng trái phiếu Chính phủ nhìn 0 ₫ mà không có lời giải thích
+      // sẽ tưởng app tính thiếu (mockup 7c).
+      return (
+        <div className="rounded-2xl border border-asset-bond/34 bg-linear-to-br from-asset-bond/14 to-card p-4.5 text-center">
+          <div className="text-xs font-semibold text-asset-bond">
+            Thực nhận vào tài khoản
+          </div>
+          <div className="mt-1.25 font-mono text-[28px] font-bold tracking-tight text-gain">
+            {result.netAmount ? formatMoney(result.netAmount) : "—"}
+          </div>
+          {result.grossAmount && result.taxAmount ? (
+            <div className="mt-1.25 font-mono text-[11px] text-muted-faint">
+              gộp {formatMoney(result.grossAmount)}
+              {new Decimal(result.taxAmount).isZero()
+                ? " · miễn thuế"
+                : ` − thuế ${formatMoney(result.taxAmount)}`}
+            </div>
+          ) : null}
+        </div>
+      );
     default:
       return assertNever(result.type);
   }
@@ -430,11 +473,13 @@ function DividendSuccessContent({
         </div>
         <div className="text-center">
           <div className="text-xl font-bold text-foreground">
-            Đã ghi cổ tức {result.symbol}
+            {result.type === "BOND_COUPON"
+              ? "Đã ghi trái tức"
+              : "Đã ghi cổ tức"}{" "}
+            {result.symbol}
           </div>
           <div className="mt-0.75 text-[12.5px] text-muted-faint">
-            {dividendTypeLabel(result.type)} {result.percentLabel}% ·{" "}
-            {result.dateLabel}
+            {dividendResultSubtitle(result)} · {result.dateLabel}
           </div>
           {result.paymentDateLabel ? (
             <div className="mt-0.5 text-[11px] text-muted-faint">

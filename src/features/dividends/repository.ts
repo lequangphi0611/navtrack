@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 
 import type {
+  AssetType,
   CashflowType,
   DividendType,
   Prisma,
@@ -181,10 +182,33 @@ export async function insertDividend(
     taxAmount?: string;
     netAmount?: string;
     stockQuantity?: string;
+    // BOND_COUPON (Phase 7) — ĐÓNG BĂNG thông số đã dùng để tính tại thời điểm
+    // ghi. BondTerms sửa được về sau (nhập sai, hoặc lãi suất thả nổi); nếu
+    // lịch sử đọc lại giá trị hiện tại thì mọi kỳ cũ hiển thị sai
+    // (docs/domain/03-dividends.md, process/phase-7.md "Tiêu chí hoàn thành").
+    parValueApplied?: string;
+    couponRatePercentApplied?: string;
   },
   tx: Prisma.TransactionClient = db,
 ): Promise<{ id: string }> {
   return tx.dividend.create({ data, select: { id: true } });
+}
+
+// Ngày trả lãi GẦN NHẤT đã ghi của một Holding — đầu vào `lastPaidCouponDate`
+// cho computeNextCouponDate() (lib/bond-schedule.ts). Lấy max(date), KHÔNG phải
+// bản ghi mới tạo nhất: user có thể ghi bù một kỳ cũ bỏ sót, và lịch phải neo
+// theo kỳ xa nhất đã về tay (docs/domain/10-cashflow-calendar.md).
+export async function findLastBondCouponDate(
+  holdingId: string,
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<Date | null> {
+  const row = await tx.dividend.findFirst({
+    where: { holdingId, holding: { userId }, type: "BOND_COUPON" },
+    orderBy: { date: "desc" },
+    select: { date: true },
+  });
+  return row?.date ?? null;
 }
 
 // Cộng thẳng vào cache Holding.quantity khi ghi cổ tức cổ phiếu — KHÔNG gọi
@@ -240,11 +264,15 @@ export type DividendHistoryDividend = {
   taxAmount: Decimal | null;
   netAmount: Decimal | null;
   stockQuantity: Decimal | null;
+  // BOND_COUPON — điều khoản đã đóng băng lúc ghi (issue #56/#58).
+  parValueApplied: Decimal | null;
+  couponRatePercentApplied: Decimal | null;
 };
 
 export type DividendHistorySource = {
   symbol: string;
   name: string | null;
+  type: AssetType;
   unit: string;
   cashflows: DividendHistoryCashflow[];
   dividends: DividendHistoryDividend[];
@@ -261,6 +289,7 @@ export async function findDividendHistorySource(
       userId: true,
       symbol: true,
       name: true,
+      type: true,
       unit: true,
       cashflows: {
         select: {
@@ -281,6 +310,8 @@ export async function findDividendHistorySource(
           taxAmount: true,
           netAmount: true,
           stockQuantity: true,
+          parValueApplied: true,
+          couponRatePercentApplied: true,
         },
       },
     },
@@ -290,6 +321,7 @@ export async function findDividendHistorySource(
   return {
     symbol: holding.symbol,
     name: holding.name,
+    type: holding.type,
     unit: holding.unit,
     cashflows: holding.cashflows.map((cf) => ({
       id: cf.id,
@@ -314,6 +346,12 @@ export async function findDividendHistorySource(
         : null,
       stockQuantity: dividend.stockQuantity
         ? new Decimal(dividend.stockQuantity.toString())
+        : null,
+      parValueApplied: dividend.parValueApplied
+        ? new Decimal(dividend.parValueApplied.toString())
+        : null,
+      couponRatePercentApplied: dividend.couponRatePercentApplied
+        ? new Decimal(dividend.couponRatePercentApplied.toString())
         : null,
     })),
   };

@@ -12,15 +12,19 @@ import { assertNever } from "@/lib/assert-never";
 import { getSession } from "@/lib/auth";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
+import { CASH_FLOW_DIVIDEND_TYPES } from "@/lib/enums";
 import { formatDate } from "@/lib/format";
 import {
   buildPositionEvents,
   buildQuantityTimeline,
 } from "@/lib/position-trail";
-import { AppError } from "@/lib/settings";
 import { valuateHoldings } from "@/lib/valuation";
 
-import { resolveParValueAt, roundPercentLabel } from "./dividend-percent-label";
+import {
+  deriveCouponFrequencyMonths,
+  resolveParValueAt,
+  roundPercentLabel,
+} from "./dividend-percent-label";
 import {
   findCashLikeDividendNetAmounts,
   findDividendHistorySource,
@@ -73,9 +77,10 @@ export async function getOpenHoldingsForDividendSwitcher(): Promise<
 // KHÔNG lọc theo cutoffDate (đây là tổng lịch sử, không phải input XIRR) và
 // đọc TRỰC TIẾP từ DB nên luôn phản ánh dividend VỪA ghi khi gọi SAU
 // transaction của recordDividend (features/dividends/actions.ts).
-// Phase 7 (#101) sẽ cần cộng thêm "BOND_COUPON" vào mảng này — trái tức cũng
-// là dòng tiền tiền mặt đã nhận, cùng ý nghĩa với CASH ở đây.
-const CASH_LIKE_DIVIDEND_TYPES: DividendType[] = ["CASH"];
+// Phase 7 (#58): gồm CẢ trái tức — cùng ý nghĩa "tiền đã thực nhận" với CASH.
+// Dùng chung hằng số CASH_FLOW_DIVIDEND_TYPES với bộ lọc dòng tiền XIRR
+// (lib/enums.ts) để hai nơi không lệch nhau.
+const CASH_LIKE_DIVIDEND_TYPES: DividendType[] = [...CASH_FLOW_DIVIDEND_TYPES];
 
 export async function getTotalCashDividendReceived(
   holdingId: string,
@@ -106,6 +111,15 @@ export async function getDividendHistory(holdingId: string): Promise<{
   const holding = await findDividendHistorySource(holdingId, session.user.id);
   if (!holding) notFound();
 
+  // Thẻ "Trái tức" chỉ xuất hiện với vị thế trái phiếu (mockup 7d) — cổ phiếu/
+  // quỹ giữ nguyên 2 thẻ như Phase 4, không hiện một ô 0 ₫ vô nghĩa. Bám LOẠI
+  // TÀI SẢN (BOND) chứ không bám "có dòng trái tức nào chưa": trái phiếu chưa
+  // ghi kỳ nào vẫn nên thấy ô 0 kỳ, còn cổ phiếu thì không bao giờ.
+  const isBond = holding.type === "BOND";
+  const bondSummaryFields = isBond
+    ? { bondCouponNetTotal: "0", bondCouponCount: 0 }
+    : {};
+
   if (holding.dividends.length === 0) {
     return {
       holding: { symbol: holding.symbol, name: holding.name },
@@ -115,6 +129,7 @@ export async function getDividendHistory(holdingId: string): Promise<{
         stockAddedQuantityTotal: "0",
         stockCount: 0,
         unit: holding.unit,
+        ...bondSummaryFields,
       },
       rows: [],
     };
@@ -133,6 +148,8 @@ export async function getDividendHistory(holdingId: string): Promise<{
   let cashCount = 0;
   let stockAddedQuantityTotal = new Decimal(0);
   let stockCount = 0;
+  let bondCouponNetTotal = new Decimal(0);
+  let bondCouponCount = 0;
 
   // Mới nhất trước — sort trên Date GỐC (không phải chuỗi đã format, tránh
   // parse ngược locale) trước khi map sang row hiển thị.
@@ -195,14 +212,48 @@ export async function getDividendHistory(holdingId: string): Promise<{
           addedQuantity: stockQuantity.toString(),
         } satisfies DividendHistoryRow;
       }
-      case "BOND_COUPON":
-        // Chưa hỗ trợ hiển thị lịch sử trái tức — issue #101 sẽ triển khai
-        // đủ format/tổng hợp. Lỗi lường trước (AppError), không throw Error
-        // trần — cùng convention error-handling.md.
-        throw new AppError(
-          "NOT_IMPLEMENTED",
-          "Trái tức chưa được hỗ trợ ở lịch sử cổ tức — xem issue #101",
-        );
+      case "BOND_COUPON": {
+        // grossAmount/taxAmount/netAmount + 2 field đóng băng luôn có giá trị
+        // khi type === BOND_COUPON (ràng buộc ở tầng ghi, actions.ts).
+        const grossAmount = dividend.grossAmount!;
+        const taxAmount = dividend.taxAmount!;
+        const netAmount = dividend.netAmount!;
+        const couponRatePercentApplied = dividend.couponRatePercentApplied!;
+
+        bondCouponNetTotal = bondCouponNetTotal.plus(netAmount);
+        bondCouponCount += 1;
+
+        // Kỳ trả lãi suy NGƯỢC từ chính dòng này, KHÔNG đọc BondTerms hiện tại
+        // — sửa điều khoản về sau không được làm đổi nhãn của kỳ đã ghi
+        // (process/phase-7.md "Tiêu chí hoàn thành"). Xem
+        // deriveCouponFrequencyMonths (dividend-percent-label.ts).
+        const couponFrequencyMonths = deriveCouponFrequencyMonths({
+          grossAmount,
+          parValueApplied: dividend.parValueApplied!,
+          couponRatePercentApplied,
+          quantityAtDate: before,
+        });
+
+        return {
+          id: dividend.id,
+          type: "BOND_COUPON",
+          // KHÔNG suy ngược như CASH/STOCK — lãi suất đã được đóng băng nguyên
+          // vẹn lúc ghi (docs/domain/03-dividends.md "Hiển thị lịch sử").
+          percentLabel: couponRatePercentApplied.toString(),
+          couponRatePercentApplied: couponRatePercentApplied.toString(),
+          ...(couponFrequencyMonths !== null ? { couponFrequencyMonths } : {}),
+          date: dateLabel,
+          isNew,
+          grossAmount: grossAmount.toString(),
+          taxAmount: taxAmount.toString(),
+          netAmount: netAmount.toString(),
+          // Miễn thuế nhận biết bằng THUẾ ĐÃ GHI bằng 0 trên chính dòng này.
+          // Ở tầng lịch sử không có issuerType của thời điểm ghi (BondTerms
+          // sửa được), nên dùng dữ liệu đã đóng băng thay vì đọc lại điều khoản
+          // hiện tại — nhất quán với nguyên tắc "kỳ đã ghi không đổi".
+          isTaxExempt: taxAmount.isZero(),
+        } satisfies DividendHistoryRow;
+      }
       default:
         return assertNever(dividend.type);
     }
@@ -216,6 +267,12 @@ export async function getDividendHistory(holdingId: string): Promise<{
       stockAddedQuantityTotal: stockAddedQuantityTotal.toString(),
       stockCount,
       unit: holding.unit,
+      ...(isBond
+        ? {
+            bondCouponNetTotal: bondCouponNetTotal.toString(),
+            bondCouponCount,
+          }
+        : {}),
     },
     rows,
   };

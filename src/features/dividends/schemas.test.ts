@@ -72,3 +72,56 @@ describe("recordDividendSchema", () => {
     }
   });
 });
+
+// Phase 7 (issue #58) — trái tức không có ô % nào (mệnh giá/lãi suất là điều
+// khoản hợp đồng đọc từ BondTerms), nhưng CASH/STOCK thì vẫn bắt buộc.
+describe("recordDividendSchema — trái tức (BOND_COUPON)", () => {
+  const bondFields = {
+    holdingId: "holding-1",
+    type: "BOND_COUPON" as const,
+    date: "2026-07-15",
+  };
+
+  test("BOND_COUPON hợp lệ khi KHÔNG có percent", () => {
+    const result = recordDividendSchema.safeParse(bondFields);
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.percent).toBeUndefined();
+  });
+
+  test("nới lỏng percent KHÔNG lan sang CASH/STOCK", () => {
+    for (const type of ["CASH", "STOCK"] as const) {
+      const result = recordDividendSchema.safeParse({
+        holdingId: "holding-1",
+        type,
+        date: "2026-02-01",
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  test("BOND_COUPON nhận thuế sửa tay (prefill, không khoá field)", () => {
+    const result = recordDividendSchema.safeParse({
+      ...bondFields,
+      taxAmount: "430000",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.taxAmount).toBe("430000");
+  });
+
+  // "Không tin client": CASH tự tính thuế từ Setting, một request tay gửi kèm
+  // taxAmount phải bị TỪ CHỐI thay vì bị bỏ qua âm thầm.
+  test("CASH/STOCK gửi kèm taxAmount -> từ chối", () => {
+    for (const type of ["CASH", "STOCK"] as const) {
+      const result = recordDividendSchema.safeParse({
+        holdingId: "holding-1",
+        type,
+        date: "2026-02-01",
+        percent: "10",
+        taxAmount: "1",
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+});

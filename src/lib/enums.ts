@@ -26,6 +26,20 @@ type _AllDividendTypesCovered =
 // `true` đỏ ngay ở dòng dưới (compile error thật, không phải cảnh báo lint).
 export const dividendTypesCovered: _AllDividendTypesCovered = true;
 
+// Các loại Dividend SINH TIỀN MẶT thực nhận (`netAmount`) -> phải có mặt trong
+// chuỗi dòng tiền XIRR và trong tổng "đã nhận" của một Holding. STOCK không
+// nằm ở đây (cổ tức cổ phiếu chỉ tăng số lượng, không phát sinh tiền —
+// docs/domain/03-dividends.md).
+//
+// MỘT nguồn sự thật cho mọi nơi lọc "cổ tức tiền mặt": trước Phase 7 mỗi nơi
+// tự viết `type: "CASH"` (2 repository function + 1 hằng số ở queries.ts), nên
+// thêm BOND_COUPON mà quên một chỗ sẽ làm trái tức BIẾN MẤT khỏi XIRR mà không
+// test nào fail (process/phase-7.md mục 3 nêu đích danh rủi ro này).
+export const CASH_FLOW_DIVIDEND_TYPES = [
+  "CASH",
+  "BOND_COUPON",
+] as const satisfies readonly DividendType[];
+
 export const CASHFLOW_TYPES = [
   "BUY",
   "SELL",

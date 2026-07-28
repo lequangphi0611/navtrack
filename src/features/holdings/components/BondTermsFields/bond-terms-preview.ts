@@ -1,13 +1,23 @@
 import Decimal from "decimal.js";
 
+import {
+  buildCouponSchedule,
+  startOfUtcDay,
+  type BondCouponScheduleTerms,
+} from "@/lib/bond-schedule";
+
 // Preview client-side cho card "Từ điều khoản này, app suy ra" (mockup Phase 7
 // Screens 7a) — CHỈ để user đối chiếu ngay lúc gõ, cùng vai trò với phần tự
-// tính gross/tax/net trong CashDividendFields. Bản domain thật (dùng chung cho
-// Phase 8 "kỳ trả lãi tới") thuộc issue #58 và sẽ sống ở tầng server; khi có,
-// component chuyển sang nhận số qua props thay vì tự tính ở đây.
+// tính gross/tax/net trong CashDividendFields. Server Action tính lại độc lập
+// khi lưu, KHÔNG tin số ở đây.
 //
-// Ngày làm việc hoàn toàn theo UTC (cùng quy ước computeHoldingPeriodLabel,
-// src/lib/holding-period.ts) — chuỗi "yyyy-MM-dd" vào, "yyyy-MM-dd" ra.
+// Phép tính LỊCH (cộng tháng, dựng chuỗi mốc trả lãi) đã chuyển sang
+// `src/lib/bond-schedule.ts` ở issue #58 — dùng chung với tầng server
+// (recordDividend) và Phase 8. File này giữ đúng phần riêng của form: parse
+// chuỗi input thô "yyyy-MM-dd"/số người dùng đang gõ (có thể dở dang, sai định
+// dạng) rồi format ngược ra chuỗi để hiển thị.
+//
+// Ngày làm việc hoàn toàn theo UTC (cùng quy ước lib/bond-schedule.ts).
 
 type BondTermsPreviewInput = {
   parValue: string;
@@ -32,10 +42,6 @@ type BondTermsPreview = {
   nextCouponDate: string | null; // yyyy-MM-dd
 };
 
-// Trần lặp khi dò mốc coupon — chặn vòng lặp vô hạn nếu người dùng gõ ngày
-// đáo hạn cách kỳ đầu hàng thế kỷ (vd nhầm 2029 thành 2929).
-const MAX_COUPON_PERIODS = 1200;
-
 function parsePositiveDecimal(value: string): Decimal | null {
   const trimmed = value.trim();
   if (trimmed === "") return null;
@@ -57,37 +63,6 @@ function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-// Cộng tháng theo lịch, kẹp về ngày cuối tháng khi tháng đích ngắn hơn (31/01
-// + 1 tháng = 28/02, không tràn sang 03/03 như phép cộng ngày thô của JS).
-function addMonthsUtc(date: Date, months: number): Date {
-  const day = date.getUTCDate();
-  const target = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1),
-  );
-  const daysInTargetMonth = new Date(
-    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  target.setUTCDate(Math.min(day, daysInTargetMonth));
-  return target;
-}
-
-// Mọi mốc trả lãi theo lịch hợp đồng: firstCouponDate + k × frequency, dừng ở
-// ngày đáo hạn (tính cả mốc trùng đúng ngày đáo hạn — trái tức kỳ cuối thường
-// được trả cùng lúc với gốc, xem mockup 7e toast gợi ý).
-function buildCouponSchedule(
-  firstCouponDate: Date,
-  frequencyMonths: number,
-  maturityDate: Date,
-): Date[] {
-  const schedule: Date[] = [];
-  for (let index = 0; index < MAX_COUPON_PERIODS; index += 1) {
-    const date = addMonthsUtc(firstCouponDate, index * frequencyMonths);
-    if (date.getTime() > maturityDate.getTime()) break;
-    schedule.push(date);
-  }
-  return schedule;
-}
-
 function computeBondTermsPreview({
   parValue,
   couponRatePercent,
@@ -106,15 +81,22 @@ function computeBondTermsPreview({
       ? par.mul(rate).div(100).mul(frequencyMonths).div(12).toString()
       : null;
 
-  const first = parseUtcDate(firstCouponDate);
-  const maturity = parseUtcDate(maturityDate);
+  const terms: BondCouponScheduleTerms = {
+    couponFrequencyMonths: frequencyMonths,
+    firstCouponDate: parseUtcDate(firstCouponDate),
+    maturityDate: parseUtcDate(maturityDate),
+  };
 
-  if (!first || !maturity || !frequencyMonths) {
+  const schedule = buildCouponSchedule(terms);
+  if (schedule.length === 0) {
     return { couponPerPeriod, remainingPeriods: null, nextCouponDate: null };
   }
 
-  const schedule = buildCouponSchedule(first, frequencyMonths, maturity);
-  const upcoming = schedule.filter((date) => date.getTime() > today.getTime());
+  // Ngưỡng ở màn NHẬP ĐIỀU KHOẢN là "hôm nay" (khác computeNextCouponDate ở
+  // tầng ghi, nơi ngưỡng là kỳ đã trả gần nhất): card này chỉ mô tả hợp đồng,
+  // chưa biết gì về lịch sử Dividend đã ghi.
+  const todayTime = startOfUtcDay(today).getTime();
+  const upcoming = schedule.filter((date) => date.getTime() > todayTime);
   const next = upcoming[0];
 
   return {

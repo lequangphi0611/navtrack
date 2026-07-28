@@ -1,7 +1,13 @@
 "use client";
 
 import Decimal from "decimal.js";
-import { Info, Percent, ReceiptText, RefreshCw } from "lucide-react";
+import {
+  CalendarCheck,
+  Info,
+  Percent,
+  ReceiptText,
+  RefreshCw,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 
@@ -14,6 +20,7 @@ import { SymbolAvatar } from "@/components/SymbolAvatar";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
+import { cashflowActionLabel } from "@/lib/cashflow-label";
 import {
   formatDate,
   formatMoney,
@@ -207,6 +214,60 @@ function SellTaxFeeRecompute({
   );
 }
 
+// Bộ chọn loại giao dịch. Sửa một dòng TẤT TOÁN ĐÁO HẠN thì KHÔNG cho đổi
+// loại: đổi `MATURITY` -> `SELL` sẽ âm thầm chuyển sang chế độ thuế khác hẳn
+// (0,1% trên toàn bộ mệnh giá hoàn trả thay vì thuế lãi trên phần lợi tức —
+// docs/domain/07-tax.md) và đi vòng qua mọi kiểm tra của luồng tất toán (phải
+// là vị thế BOND, phải có `BondTerms`). Ngày/số lượng/giá/thuế vẫn sửa bình
+// thường — chỉ riêng LOẠI bị khoá.
+//
+// `MATURITY` cũng không xuất hiện như một lựa chọn khi TẠO giao dịch: tất toán
+// đi qua route riêng (`ROUTES.maturitySettlement`) để có prefill từ `BondTerms`.
+function TransactionTypeField({
+  value,
+  onChange,
+}: {
+  value: CashflowType;
+  onChange: (next: CashflowType) => void;
+}) {
+  if (value === "MATURITY") {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-asset-bond/35 bg-asset-bond/10 px-3.5 py-2.75">
+        <CalendarCheck className="size-4 shrink-0 text-asset-bond" />
+        <span className="text-[12.5px] font-semibold text-foreground">
+          {cashflowActionLabel(value)}
+        </span>
+        <span className="flex-1" />
+        <span className="text-[11px] text-muted-faint">
+          không đổi được loại
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <SegmentedControl
+      options={[
+        {
+          value: "BUY",
+          label: "Mua",
+          activeClassName: "text-primary-foreground",
+        },
+        {
+          value: "SELL",
+          label: "Bán",
+          activeClassName: "text-primary-foreground",
+        },
+      ]}
+      value={value}
+      onChange={onChange}
+      stretch
+      thumbClassName={value === "BUY" ? "bg-gain" : "bg-destructive"}
+      className="rounded-xl bg-card p-1 font-bold"
+    />
+  );
+}
+
 function TransactionForm(props: TransactionFormProps) {
   const router = useRouter();
   const defaults =
@@ -357,25 +418,7 @@ function TransactionForm(props: TransactionFormProps) {
     <form action={formAction} className="flex flex-col gap-4.5">
       <input type="hidden" name="cashflowType" value={cashflowType} />
 
-      <SegmentedControl
-        options={[
-          {
-            value: "BUY",
-            label: "Mua",
-            activeClassName: "text-primary-foreground",
-          },
-          {
-            value: "SELL",
-            label: "Bán",
-            activeClassName: "text-primary-foreground",
-          },
-        ]}
-        value={cashflowType}
-        onChange={setCashflowType}
-        stretch
-        thumbClassName={isBuy ? "bg-gain" : "bg-destructive"}
-        className="rounded-xl bg-card p-1 font-bold"
-      />
+      <TransactionTypeField value={cashflowType} onChange={setCashflowType} />
 
       <div>
         <FieldLabel>Vị thế</FieldLabel>

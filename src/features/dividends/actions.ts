@@ -10,6 +10,7 @@ import {
   type PriceAdjustment,
 } from "@/features/dividends/build-dividend-form-state";
 import {
+  computeBondCoupon,
   computeCashDividend,
   computeCashDividendPriceAdjustment,
   computeStockDividend,
@@ -18,6 +19,10 @@ import {
 } from "@/features/dividends/dividend-math";
 import { getTotalCashDividendReceived } from "@/features/dividends/queries";
 import { recordDividendSchema } from "@/features/dividends/schemas";
+// BondTerms là đặc tả của chính vị thế nên truy vấn sống ở repository của
+// feature holdings — xem comment findBondTerms ở đó.
+import { findBondTerms } from "@/features/holdings/repository";
+import type { BondTermsRow } from "@/features/holdings/repository";
 import type { DividendFormState } from "@/features/dividends/types";
 import { assertNever } from "@/lib/assert-never";
 import { getCurrentPortfolioXirrPercent } from "@/lib/portfolio-valuation";
@@ -31,7 +36,9 @@ import { revalidateHoldingDependentRoutes } from "@/lib/revalidate-holding-route
 import { ROUTES } from "@/lib/routes";
 import { handleWriteError, parseAuthenticated } from "@/lib/server-action";
 import {
+  bondInterestTaxKey,
   requireDecimalSetting,
+  resolveDecimalSetting,
   resolveSettings,
   SETTING_KEYS,
 } from "@/lib/settings";
@@ -321,10 +328,103 @@ async function recordStockDividend(
   };
 }
 
+type RecordBondCouponCtx = {
+  holdingId: string;
+  symbol: string;
+  unit: string;
+  date: Date;
+  paymentDate: Date | null;
+  terms: BondTermsRow;
+  couponRatePercent: Decimal;
+  couponFrequencyMonths: number;
+  taxRatePercent: Decimal;
+  taxAmountOverride: string | undefined;
+  quantityAtDate: Decimal;
+};
+
+type BondCouponResult = {
+  ok: true;
+  type: "BOND_COUPON";
+  symbol: string;
+  unit: string;
+  grossAmount: Decimal;
+  taxAmount: Decimal;
+  netAmount: Decimal;
+  couponRatePercentApplied: Decimal;
+  couponFrequencyMonths: number;
+};
+
+// Ghi trái tức (Phase 7, issue #58). KHÁC recordCashDividend/recordStockDividend
+// ở đúng một điểm dễ sai nhất: **KHÔNG gọi applyPriceAdjustment()**.
+//
+// Vì sao phải nói tường minh (docs/domain/03-dividends.md khối cảnh báo đầu mục
+// "Bù pha loãng NAV"): với cổ phiếu, tiền cổ tức RỜI KHỎI vốn công ty nên thị
+// giá điều chỉnh giảm. Với trái phiếu, coupon là NGHĨA VỤ TRẢ LÃI theo hợp
+// đồng, không rút vốn khỏi tổ chức phát hành — clean price (giá yết, thứ
+// NavOverride/PriceQuote đang lưu) KHÔNG giảm theo coupon. Cho nhánh này đi qua
+// bước bù pha loãng dùng chung sẽ tạo một NavOverride kéo giá trái phiếu tụt
+// SAI, và tụt TÍCH LUỸ qua từng kỳ — NAV danh mục sai dần âm thầm, không có
+// tín hiệu lỗi nào. recordDividend là hàm dùng chung nên đây là bẫy MẶC ĐỊNH.
+//
+// Cũng KHÔNG ghi ngược gì vào BondTerms: "kỳ trả lãi tới" luôn suy runtime
+// (lib/bond-schedule.ts::computeNextCouponDate), xem docs/domain/10-cashflow-calendar.md.
+async function recordBondCouponDividend(
+  tx: Prisma.TransactionClient,
+  ctx: RecordBondCouponCtx,
+): Promise<BondCouponResult> {
+  const computed = computeBondCoupon({
+    parValue: ctx.terms.parValue,
+    couponRatePercent: ctx.couponRatePercent,
+    couponFrequencyMonths: ctx.couponFrequencyMonths,
+    taxRatePercent: ctx.taxRatePercent,
+    quantity: ctx.quantityAtDate,
+  });
+
+  // Thuế chỉ PREFILL, user sửa tay được để khớp số tổ chức phát hành thực khấu
+  // trừ (docs/domain/07-tax.md). netAmount phải tính lại theo thuế HIỆU LỰC,
+  // không dùng netAmount tính từ thuế tự động.
+  const taxAmount =
+    ctx.taxAmountOverride !== undefined
+      ? new Decimal(ctx.taxAmountOverride)
+      : computed.taxAmount;
+  const netAmount = computed.grossAmount.minus(taxAmount);
+
+  await insertDividend(
+    {
+      holdingId: ctx.holdingId,
+      type: "BOND_COUPON",
+      date: ctx.date,
+      // Như CASH: mốc dòng tiền XIRR là paymentDate khi có (tiền lãi thực về
+      // tay), fallback `date` — xem buildXirrCashflows (lib/xirr-cashflow.ts).
+      paymentDate: ctx.paymentDate,
+      grossAmount: computed.grossAmount.toString(),
+      taxAmount: taxAmount.toString(),
+      netAmount: netAmount.toString(),
+      // Đóng băng thông số đã dùng — xem comment insertDividend (repository.ts).
+      parValueApplied: ctx.terms.parValue.toString(),
+      couponRatePercentApplied: ctx.couponRatePercent.toString(),
+    },
+    tx,
+  );
+
+  return {
+    ok: true,
+    type: "BOND_COUPON",
+    symbol: ctx.symbol,
+    unit: ctx.unit,
+    grossAmount: computed.grossAmount,
+    taxAmount,
+    netAmount,
+    couponRatePercentApplied: ctx.couponRatePercent,
+    couponFrequencyMonths: ctx.couponFrequencyMonths,
+  };
+}
+
 // Resolve Setting NGOÀI transaction (cùng pattern inviteMember,
 // features/members/actions.ts) — Setting đọc thuần từ bảng riêng, không phụ
 // thuộc Holding/Cashflow đang ghi, không cần nằm trong phạm vi Serializable.
-// Chỉ CASH cần mệnh giá/thuế suất — STOCK/BOND_COUPON trả undefined cả hai.
+// Chỉ CASH cần mệnh giá/thuế suất — STOCK/BOND_COUPON trả undefined cả hai
+// (BOND_COUPON resolve thuế riêng theo issuerType, xem resolveBondCouponContext).
 async function resolveCashDividendSettings(
   type: DividendType,
   date: Date,
@@ -347,6 +447,62 @@ async function resolveCashDividendSettings(
   };
 }
 
+type BondCouponContext = {
+  terms: BondTermsRow;
+  couponRatePercent: Decimal;
+  couponFrequencyMonths: number;
+  taxRatePercent: Decimal;
+};
+
+// Điều khoản + thuế suất cần để ghi trái tức, đọc NGOÀI transaction (cùng lý do
+// resolveCashDividendSettings: BondTerms là dữ liệu hợp đồng tĩnh, không phải
+// trạng thái suy ra từ Cashflow/Dividend đang ghi).
+//
+// Trả lỗi LƯỜNG TRƯỚC (ActionResult) chứ không throw khi thiếu điều khoản:
+// "ghi trái tức cho Holding chưa có BondTerms -> chặn với thông báo rõ, không
+// tự đoán mệnh giá" (docs/domain/03-dividends.md "Ca biên"). Khác nguyên tắc
+// "thiếu field optional là bình thường" của lịch dòng tiền — ở đó thiếu field
+// chỉ làm holding không xuất hiện, còn ở đây thiếu field thì KHÔNG TÍNH ĐƯỢC
+// số tiền.
+async function resolveBondCouponContext(
+  holdingId: string,
+  userId: string,
+  date: Date,
+): Promise<
+  { ok: true; data: BondCouponContext } | { ok: false; error: string }
+> {
+  const terms = await findBondTerms(holdingId, userId);
+  if (!terms) {
+    return {
+      ok: false,
+      error:
+        "Chưa có điều khoản trái phiếu cho vị thế này — nhập mệnh giá và lãi suất trước khi ghi trái tức.",
+    };
+  }
+  if (!terms.couponRatePercent || !terms.couponFrequencyMonths) {
+    return {
+      ok: false,
+      error:
+        "Điều khoản trái phiếu thiếu lãi suất coupon hoặc kỳ trả lãi — không tính được số tiền trái tức.",
+    };
+  }
+
+  const taxRatePercent = await resolveDecimalSetting(
+    bondInterestTaxKey(terms.issuerType),
+    date,
+  );
+
+  return {
+    ok: true,
+    data: {
+      terms,
+      couponRatePercent: terms.couponRatePercent,
+      couponFrequencyMonths: terms.couponFrequencyMonths,
+      taxRatePercent,
+    },
+  };
+}
+
 type RecordDividendTxCtx = {
   holdingId: string;
   userId: string;
@@ -358,6 +514,9 @@ type RecordDividendTxCtx = {
   taxRatePercent: Decimal | undefined;
   stockQuantityOverride: string | undefined;
   priceAlreadyReflectsMarket: boolean;
+  // Chỉ có mặt khi type === "BOND_COUPON" (đã resolve NGOÀI transaction).
+  bond: BondCouponContext | undefined;
+  taxAmountOverride: string | undefined;
 };
 
 // Thân transaction của recordDividend (dòng tiền + ghi Dividend, atomic với
@@ -423,12 +582,24 @@ async function runRecordDividendTransaction(
         priceAlreadyReflectsMarket: ctx.priceAlreadyReflectsMarket,
       });
     case "BOND_COUPON":
-      // Lỗi lường trước (ActionResult), không throw — chưa triển khai (issue
-      // #101), xem process/phase-7.md.
-      return {
-        ok: false as const,
-        error: "Trái tức chưa được hỗ trợ — sẽ có ở phần sau.",
-      };
+      // ctx.bond luôn có giá trị khi type === "BOND_COUPON" (resolve NGOÀI
+      // transaction ở recordDividend, thiếu điều khoản đã return lỗi từ trước).
+      return recordBondCouponDividend(tx, {
+        holdingId: ctx.holdingId,
+        symbol: holding.symbol,
+        unit: holding.unit,
+        date: ctx.date,
+        paymentDate: ctx.paymentDate,
+        terms: ctx.bond!.terms,
+        couponRatePercent: ctx.bond!.couponRatePercent,
+        couponFrequencyMonths: ctx.bond!.couponFrequencyMonths,
+        taxRatePercent: ctx.bond!.taxRatePercent,
+        taxAmountOverride: ctx.taxAmountOverride,
+        // SL đang giữ TẠI NGÀY TRẢ LÃI — quy ước thứ tự (lib/position-trail.ts)
+        // đảm bảo con số này đọc TRƯỚC Cashflow{MATURITY} cùng ngày, nên trái
+        // tức kỳ cuối không ra 0 đồng khi user đã ghi tất toán trước.
+        quantityAtDate,
+      });
     default:
       return assertNever(ctx.type);
   }
@@ -455,16 +626,28 @@ export async function recordDividend(
     paymentDate: formData.get("paymentDate") || undefined,
     priceAlreadyReflectsMarket:
       formData.get("priceAlreadyReflectsMarket") || undefined,
+    // Chỉ BOND_COUPON gửi field này (AutoFilledAmountCard "Thuế lãi trái
+    // phiếu") — schema từ chối nếu loại khác gửi lên.
+    taxAmount: formData.get("taxAmount") || undefined,
   });
   if (!ctx.ok) return ctx;
   const { userId } = ctx;
 
   const { holdingId, type, date, percent } = ctx.data;
-  const percentDecimal = new Decimal(percent);
+  // BOND_COUPON không có % (schema cho phép vắng) — Decimal(0) chỉ để giữ kiểu,
+  // nhánh đó không đọc tới giá trị này.
+  const percentDecimal = new Decimal(percent ?? 0);
   const { parValue, taxRatePercent } = await resolveCashDividendSettings(
     type,
     date,
   );
+
+  let bond: BondCouponContext | undefined;
+  if (type === "BOND_COUPON") {
+    const bondCtx = await resolveBondCouponContext(holdingId, userId, date);
+    if (!bondCtx.ok) return bondCtx;
+    bond = bondCtx.data;
+  }
 
   // XIRR danh mục TRƯỚC khi ghi — đọc NGOÀI transaction (cùng lý do parValue/
   // taxRatePercent ở trên: chỉ cần chính xác tại thời điểm ngay trước/sau ghi,
@@ -484,6 +667,8 @@ export async function recordDividend(
     taxRatePercent,
     stockQuantityOverride: ctx.data.stockQuantityOverride,
     priceAlreadyReflectsMarket: ctx.data.priceAlreadyReflectsMarket,
+    bond,
+    taxAmountOverride: ctx.data.taxAmount,
   };
 
   try {
@@ -505,16 +690,24 @@ export async function recordDividend(
       getTotalCashDividendReceived(holdingId, userId),
     ]);
 
-    return buildDividendFormState({
-      ...result,
-      percent,
+    // Phần chung của mọi loại; phần riêng (`percent` cho CASH/STOCK) ghép ở
+    // từng nhánh — RecordedDividend là union, spread một `percent` không tồn
+    // tại vào nhánh BOND_COUPON là lỗi kiểu, không phải chi tiết vô hại.
+    const shared = {
       date,
       paymentDate: ctx.data.paymentDate ?? null,
       xirrBeforePercent,
       xirrAfterPercent,
       totalDividendReceived,
       holdingId,
-    });
+    };
+
+    return buildDividendFormState(
+      result.type === "BOND_COUPON"
+        ? { ...result, ...shared }
+        : // percent luôn có giá trị khi type là CASH/STOCK (schema refine).
+          { ...result, ...shared, percent: percent! },
+    );
   } catch (err) {
     return handleWriteError(err, { action: "recordDividend", holdingId });
   }

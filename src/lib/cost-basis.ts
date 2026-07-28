@@ -4,7 +4,9 @@ import type { CashflowType } from "@prisma/client";
 import { assertNever } from "@/lib/assert-never";
 import {
   buildQuantityTimeline,
+  cashflowEventRank,
   cashflowPositionDelta,
+  DEFAULT_EVENT_RANK,
   sortByPositionTrailOrder,
 } from "@/lib/position-trail";
 import type { PositionTrailEvent } from "@/lib/position-trail";
@@ -119,12 +121,17 @@ export function derivePosition(
       id: cf.id,
       date: cf.date,
       createdAt: cf.createdAt,
+      // Tất toán đáo hạn xếp sau mọi sự kiện cùng ngày (issue #101) — nếu
+      // không, một lệnh MATURITY ghi trước trái tức kỳ cuối cùng ngày sẽ làm
+      // wentNegative báo "bán vượt" sai.
+      rank: cashflowEventRank(cf.type),
       delta: cashflowPositionDelta(cf),
     })),
     ...stockDividends.map((dividend) => ({
       id: dividend.id,
       date: dividend.date,
       createdAt: dividend.createdAt,
+      rank: DEFAULT_EVENT_RANK,
       delta: dividend.quantity,
     })),
   ];

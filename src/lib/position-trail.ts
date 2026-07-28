@@ -21,9 +21,12 @@ export type PositionTrailEvent = {
   id: string;
   date: Date;
   createdAt: Date;
-  // BUY: +quantity, SELL: -quantity, Dividend STOCK: +stockQuantity,
-  // Dividend CASH: 0 (chỉ giữ chỗ trong dòng thời gian, không đổi SL).
+  // BUY: +quantity, SELL/MATURITY: -quantity, Dividend STOCK: +stockQuantity,
+  // Dividend CASH/BOND_COUPON: 0 (chỉ giữ chỗ trong dòng thời gian, không đổi SL).
   delta: Decimal;
+  // Thứ tự trong CÙNG một ngày, thắng cả `createdAt` — xem SETTLEMENT_RANK.
+  // Vắng mặt = DEFAULT_EVENT_RANK (mọi sự kiện thường).
+  rank?: number;
 };
 
 export type PositionTrailEntry = {
@@ -31,22 +34,56 @@ export type PositionTrailEntry = {
   after: Decimal;
 };
 
-// Sort theo (date, createdAt, id) — khớp tie-break convention đã dùng ở
+// Hạng mặc định của mọi sự kiện vị thế (mua/bán/cổ tức/trái tức) — trùng ngày
+// thì tie-break tiếp theo `createdAt` như trước.
+export const DEFAULT_EVENT_RANK = 0;
+
+// Cashflow{type: MATURITY} xếp SAU MỌI sự kiện khác cùng ngày (process/phase-7.md
+// mục 3, docs/domain/03-dividends.md "Ca biên", issue #101). Trái tức kỳ cuối
+// thường trả ĐÚNG ngày đáo hạn; nếu user ghi tất toán trước rồi mới ghi trái
+// tức, tie-break theo `createdAt` sẽ đặt MATURITY trước -> "SL đang giữ tại
+// ngày trả lãi" đã về 0 -> grossAmount ra 0 đồng, SAI ÂM THẦM (không lỗi, không
+// cảnh báo). Tie-break theo BẢN CHẤT sự kiện (lãi phát sinh trên số dư TRƯỚC
+// khi tất toán), không theo thứ tự người dùng bấm nút.
+export const SETTLEMENT_RANK = 1;
+
+// Sort theo (date, rank, createdAt, id) — khớp tie-break convention đã dùng ở
 // features/holdings/actions.ts/queries.ts (orderBy [date asc, createdAt asc, id asc])
 // khi trùng ngày, để before/after nhất quán với cách Holding.quantity cache được
-// materialize. Tách riêng (không inline trong buildQuantityTimeline) vì
-// lib/realized-pnl.ts cũng cần đúng quy ước tiebreak này khi trộn Cashflow +
-// cổ tức cổ phiếu thành 1 dòng thời gian.
+// materialize. `rank` chèn TRƯỚC createdAt: đây là quy ước domain (tất toán đáo
+// hạn luôn là sự kiện CUỐI trong ngày), phải thắng thứ tự ghi nhận thực tế.
+// Tách riêng (không inline trong buildQuantityTimeline) vì lib/realized-pnl.ts
+// cũng cần đúng quy ước tiebreak này khi trộn Cashflow + cổ tức cổ phiếu thành
+// 1 dòng thời gian.
 export function sortByPositionTrailOrder<
-  T extends { date: Date; createdAt: Date; id: string },
+  T extends { date: Date; createdAt: Date; id: string; rank?: number },
 >(items: T[]): T[] {
   return [...items].sort((a, b) => {
     const dateDiff = a.date.getTime() - b.date.getTime();
     if (dateDiff !== 0) return dateDiff;
+    const rankDiff =
+      (a.rank ?? DEFAULT_EVENT_RANK) - (b.rank ?? DEFAULT_EVENT_RANK);
+    if (rankDiff !== 0) return rankDiff;
     const createdDiff = a.createdAt.getTime() - b.createdAt.getTime();
     if (createdDiff !== 0) return createdDiff;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
+}
+
+// Hạng của một Cashflow trong dòng thời gian cùng ngày — nguồn DUY NHẤT, dùng
+// ở buildPositionEvents() lẫn derivePosition()/computeRealizedGainForHolding()
+// (không nơi nào tự so `type === "MATURITY"` để suy hạng). switch exhaustive:
+// thêm CashflowType mới mà quên xếp hạng là lỗi compile.
+export function cashflowEventRank(type: CashflowType): number {
+  switch (type) {
+    case "BUY":
+    case "SELL":
+      return DEFAULT_EVENT_RANK;
+    case "MATURITY":
+      return SETTLEMENT_RANK;
+    default:
+      return assertNever(type);
+  }
 }
 
 export function buildQuantityTimeline(
@@ -154,7 +191,12 @@ type RawPositionDividend = {
   stockQuantity: Decimal | null;
 };
 
-export type PositionMarkerInput = { id: string; date: Date; createdAt: Date };
+export type PositionMarkerInput = {
+  id: string;
+  date: Date;
+  createdAt: Date;
+  rank?: number;
+};
 
 // Chủ sở hữu DUY NHẤT của việc TRỘN Cashflow + Dividend thành một dòng thời
 // gian sự kiện (PositionTrailEvent[]) khi cả hai nguồn cần trộn cùng lúc —
@@ -175,6 +217,7 @@ export function buildPositionEvents(input: {
       id: cf.id,
       date: cf.date,
       createdAt: cf.createdAt,
+      rank: cashflowEventRank(cf.type),
       delta: cashflowPositionDelta({
         type: cf.type,
         quantity: cf.quantity,
@@ -184,6 +227,9 @@ export function buildPositionEvents(input: {
       id: dividend.id,
       date: dividend.date,
       createdAt: dividend.createdAt,
+      // Mọi loại Dividend giữ hạng mặc định -> luôn đứng TRƯỚC MATURITY cùng
+      // ngày (SETTLEMENT_RANK), kể cả khi được ghi sau về mặt thời gian.
+      rank: DEFAULT_EVENT_RANK,
       delta: dividendPositionDelta({
         type: dividend.type,
         stockQuantity: dividend.stockQuantity,
@@ -193,6 +239,10 @@ export function buildPositionEvents(input: {
       id: marker.id,
       date: marker.date,
       createdAt: marker.createdAt,
+      // Marker "sự kiện đang xử lý" mang hạng do caller quyết định: probe ghi
+      // trái tức giữ hạng mặc định (đọc SL TRƯỚC tất toán cùng ngày), candidate
+      // Cashflow{MATURITY} truyền SETTLEMENT_RANK.
+      rank: marker.rank ?? DEFAULT_EVENT_RANK,
       delta: new Decimal(0),
     })),
   ];

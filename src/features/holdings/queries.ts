@@ -27,6 +27,18 @@ export {
 
 export { getOpenHoldingsWithValuation } from "./queries/holdings-valuation";
 
+// Phase 7 — điều khoản trái phiếu, ngữ cảnh trái tức, prefill tất toán đáo hạn.
+export {
+  getBondCouponFormData,
+  getBondHoldingActions,
+  getBondTermsFormData,
+  getMaturitySettlementData,
+  type BondCouponFormData,
+  type BondHoldingActions,
+  type BondTermsFormData,
+  type MaturitySettlementData,
+} from "./queries/bond-terms";
+
 export {
   getClosedHoldingsDetail,
   type ClosedHoldingRow,
