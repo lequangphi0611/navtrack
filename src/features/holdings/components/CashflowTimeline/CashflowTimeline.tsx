@@ -2,9 +2,9 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  CalendarCheck,
   Coins,
   Flag,
-  Landmark,
 } from "lucide-react";
 
 import type { CashflowType } from "@prisma/client";
@@ -36,14 +36,17 @@ type CashflowTimelineProps = {
   className?: string;
 };
 
-// MATURITY: placeholder tạm (design-implementer sẽ polish ở #57) — tông primary
-// để phân biệt với BUY (đỏ)/SELL (xanh), khác CUTOFF_NAV (primary đậm hơn).
+// MATURITY dùng tông asset-bond (#5b6b8c) — cùng dòng tiền DƯƠNG như SELL
+// nhưng KHÔNG phải bán: tổ chức phát hành trả lại gốc, không chịu thuế chuyển
+// nhượng 0,1% (mockup Phase 7, docs/domain/07-tax.md). Để chung màu xanh với
+// SELL thì người dùng đọc lịch sử sẽ tưởng mình đã bán trái phiếu ra thị
+// trường, nên tách màu là phần của nghiệp vụ chứ không phải trang trí.
 const ICON_CLASS: Record<CashflowTimelineRow["kind"], string> = {
   BUY: "bg-destructive/12 text-destructive",
   SELL: "bg-gain/12 text-gain",
   DIVIDEND: "bg-accent/14 text-accent",
   CUTOFF_NAV: "bg-primary/18 text-primary",
-  MATURITY: "bg-primary/12 text-primary",
+  MATURITY: "bg-asset-bond/24 text-asset-bond",
 };
 
 const KIND_ICON: Record<CashflowTimelineRow["kind"], LucideIcon> = {
@@ -51,7 +54,7 @@ const KIND_ICON: Record<CashflowTimelineRow["kind"], LucideIcon> = {
   SELL: ArrowUpRight,
   DIVIDEND: Coins,
   CUTOFF_NAV: Flag,
-  MATURITY: Landmark,
+  MATURITY: CalendarCheck,
 };
 
 function CashflowTimeline({

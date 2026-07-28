@@ -17,11 +17,13 @@ import { Alert } from "@/components/Alert";
 import { PageHeader } from "@/components/PageHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { BondTermsMissingNotice } from "@/features/dividends/components/BondTermsMissingNotice";
 import {
   HoldingSwitcher,
   type HoldingSwitcherProps,
 } from "@/features/dividends/components/HoldingSwitcher";
 import type {
+  BondCouponContext,
   DividendFormState,
   DividendHolding,
   DividendRecordedResult,
@@ -31,6 +33,7 @@ import { dividendTypeName } from "@/lib/dividend-label";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+import { BondCouponFields } from "./BondCouponFields";
 import { CashDividendFields } from "./CashDividendFields";
 import { parseDecimalOrNull } from "./parse-decimal";
 import { PriceAdjustmentCheckbox } from "./PriceAdjustmentCheckbox";
@@ -49,6 +52,9 @@ type DividendFormProps = {
   historyHref: string; // icon "history" góc phải header — lịch sử cổ tức của holding này
   closeHref: string;
   hidden?: boolean;
+  // Chỉ có mặt khi Holding là trái phiếu (Phase 7) — vắng mặt thì KHÔNG hiện
+  // tab "Trái tức", form giữ nguyên hai loại của Phase 4.
+  bond?: BondCouponContext;
   action: (
     prevState: DividendFormState,
     formData: FormData,
@@ -58,14 +64,48 @@ type DividendFormProps = {
 const DIVIDEND_FORM_SUBTITLE: Record<DividendType, string> = {
   CASH: "Nhập % → tự tính tiền nhận về",
   STOCK: "Cổ phiếu → tăng số lượng nắm giữ",
-  BOND_COUPON: "Chưa hỗ trợ",
+  BOND_COUPON: "Điều khoản có sẵn → chỉ nhập ngày",
 };
 
 const SUBMIT_BUTTON_CLASS: Record<DividendType, string> = {
   CASH: "bg-gain text-primary-foreground hover:bg-gain/85",
   STOCK: "bg-accent text-accent-foreground hover:bg-accent/85",
-  BOND_COUPON: "bg-muted text-muted-foreground",
+  BOND_COUPON: "bg-asset-bond text-primary-foreground hover:bg-asset-bond/85",
 };
+
+const SUBMIT_BUTTON_LABEL: Record<DividendType, string> = {
+  CASH: "Ghi cổ tức",
+  STOCK: "Ghi cổ tức",
+  BOND_COUPON: "Ghi trái tức",
+};
+
+// Điều kiện chặn submit khác hẳn nhau theo loại: CASH/STOCK bắt buộc có % > 0,
+// còn BOND_COUPON KHÔNG có ô % nào (mệnh giá/lãi suất đọc từ BondTerms) nên
+// chỉ cần ngày trả lãi. switch exhaustive để thêm loại mới là đỏ ngay, không
+// âm thầm rơi vào điều kiện của loại khác.
+function isSubmitDisabled(
+  type: DividendType,
+  input: {
+    percentDecimal: ReturnType<typeof parseDecimalOrNull>;
+    overrideInvalid: boolean;
+    date: string;
+  },
+): boolean {
+  switch (type) {
+    case "CASH":
+      return !input.percentDecimal || input.percentDecimal.lte(0);
+    case "STOCK":
+      return (
+        !input.percentDecimal ||
+        input.percentDecimal.lte(0) ||
+        input.overrideInvalid
+      );
+    case "BOND_COUPON":
+      return input.date === "";
+    default:
+      return assertNever(type);
+  }
+}
 
 // Form ghi nhận cổ tức (mockup Phase 4 Screens, 4a Tiền mặt / 4c Cổ phiếu).
 // Container chỉ giữ phần THẬT SỰ dùng chung (header, switcher, checkbox điều
@@ -86,9 +126,13 @@ function DividendForm({
   historyHref,
   closeHref,
   hidden = false,
+  bond,
   action,
 }: DividendFormProps) {
-  const [type, setType] = useState<DividendType>("CASH");
+  // Vị thế trái phiếu mở thẳng tab "Trái tức" (mockup 7b vẽ loại thứ ba đang
+  // active) — đó là loại thu nhập duy nhất trái phiếu thực sự phát sinh; hai
+  // tab kia vẫn còn đó cho ca hiếm, chỉ là không phải mặc định.
+  const [type, setType] = useState<DividendType>(bond ? "BOND_COUPON" : "CASH");
   const [percent, setPercent] = useState("");
   const [date, setDate] = useState(defaultDateInputValue);
   // Issue #61: ngày tiền/CP thực về TK — thuần thông tin, optional (không có
@@ -112,7 +156,12 @@ function DividendForm({
   const isDone = state?.ok === true;
 
   const percentDecimal = parseDecimalOrNull(percent);
-  const subtitle = DIVIDEND_FORM_SUBTITLE[type];
+  const isBondTermsMissing = type === "BOND_COUPON" && !bond?.terms;
+  // "Điều khoản có sẵn → chỉ nhập ngày" sẽ nói dối ở đúng màn báo THIẾU điều
+  // khoản (7g) — bỏ subtitle ở ca đó, để nội dung màn tự nói.
+  const subtitle = isBondTermsMissing
+    ? undefined
+    : DIVIDEND_FORM_SUBTITLE[type];
 
   const priceAdjustmentCheckbox = (
     <PriceAdjustmentCheckbox
@@ -125,7 +174,10 @@ function DividendForm({
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4.5 p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
       <PageHeader
-        title="Ghi cổ tức"
+        // Trái phiếu gộp chung ba loại thu nhập (cổ tức tiền mặt/cổ phiếu/trái
+        // tức) nên tiêu đề rộng hơn — bám `bond` chứ không bám tab đang chọn,
+        // để tiêu đề không nhảy chữ mỗi lần user đổi tab.
+        title={bond ? "Ghi thu nhập" : "Ghi cổ tức"}
         subtitle={isDone ? undefined : subtitle}
         backHref={closeHref}
         variant="close"
@@ -158,6 +210,11 @@ function DividendForm({
             options={[
               { value: "CASH", label: "Tiền mặt" },
               { value: "STOCK", label: "Cổ phiếu" },
+              // Chỉ trái phiếu mới có loại thứ ba (mockup 7b) — mã cổ phiếu/
+              // quỹ không hiện tab này.
+              ...(bond
+                ? [{ value: "BOND_COUPON" as const, label: "Trái tức" }]
+                : []),
             ]}
             value={type}
             onChange={setType}
@@ -205,10 +262,28 @@ function DividendForm({
                   </StockDividendFields>
                 );
               case "BOND_COUPON":
-                // Placeholder — không thể chạm tới qua UI (SegmentedControl
-                // chỉ CASH/STOCK). Thêm BondCouponDividendFields khi #101
-                // thật sự làm UI trái tức.
-                return null;
+                // Không thể chạm tới khi `bond` vắng mặt (tab không tồn tại) —
+                // guard này chỉ để TS thu hẹp kiểu, không phải nhánh UI thật.
+                if (!bond) return null;
+                // Chưa nhập điều khoản -> CHẶN hẳn form, dẫn sang màn nhập
+                // (mockup 7g). App không đoán mệnh giá/lãi suất.
+                return bond.terms ? (
+                  <BondCouponFields
+                    holding={holding}
+                    bond={{ ...bond, terms: bond.terms }}
+                    date={date}
+                    onDateChange={setDate}
+                    paymentDate={paymentDate}
+                    onPaymentDateChange={setPaymentDate}
+                    isPending={isPending}
+                  />
+                ) : (
+                  <BondTermsMissingNotice
+                    symbol={holding.symbol}
+                    bondTermsHref={bond.bondTermsHref}
+                    dismissHref={closeHref}
+                  />
+                );
               default:
                 return assertNever(type);
             }
@@ -222,22 +297,29 @@ function DividendForm({
             />
           ) : null}
 
-          <Button
-            type="submit"
-            disabled={
-              isPending ||
-              !percentDecimal ||
-              percentDecimal.lte(0) ||
-              (type === "STOCK" && overrideInvalid)
-            }
-            className={cn(
-              "h-13 w-full gap-2 rounded-2xl text-[14.5px] font-bold",
-              SUBMIT_BUTTON_CLASS[type],
-            )}
-          >
-            <Check className="size-5" />
-            {isPending ? "Đang ghi…" : "Ghi cổ tức"}
-          </Button>
+          {/* Màn chặn "chưa có điều khoản" (7g) tự mang CTA riêng dẫn sang màn
+              nhập — không có gì để submit nên ẩn hẳn nút, thay vì hiện một nút
+              disabled không giải thích được vì sao. */}
+          {isBondTermsMissing ? null : (
+            <Button
+              type="submit"
+              disabled={
+                isPending ||
+                isSubmitDisabled(type, {
+                  percentDecimal,
+                  overrideInvalid,
+                  date,
+                })
+              }
+              className={cn(
+                "h-13 w-full gap-2 rounded-2xl text-[14.5px] font-bold",
+                SUBMIT_BUTTON_CLASS[type],
+              )}
+            >
+              <Check className="size-5" />
+              {isPending ? "Đang ghi…" : SUBMIT_BUTTON_LABEL[type]}
+            </Button>
+          )}
         </form>
       )}
     </div>

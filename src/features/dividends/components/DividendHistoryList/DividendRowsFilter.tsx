@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Coins, Landmark, Layers } from "lucide-react";
+import { Coins, Layers, ReceiptText } from "lucide-react";
 import { useState } from "react";
 
 import type { DividendType } from "@prisma/client";
@@ -19,16 +19,15 @@ type DividendFilterValue = "ALL" | DividendType;
 const DIVIDEND_TYPE_ICON: Record<DividendType, LucideIcon> = {
   CASH: Coins,
   STOCK: Layers,
-  BOND_COUPON: Landmark,
+  BOND_COUPON: ReceiptText,
 };
 
 const DIVIDEND_TYPE_ICON_CLASS: Record<DividendType, string> = {
   CASH: "bg-gain/14 text-gain",
   STOCK: "bg-accent/14 text-accent",
-  // Khác CASH (gain) để phân biệt trực quan dù cùng cấu trúc dữ liệu
-  // gross/tax/net (getDividendHistory hiện throw NOT_IMPLEMENTED cho
-  // BOND_COUPON — issue #101 — nhưng Record phải đủ case để compile).
-  BOND_COUPON: "bg-warning/14 text-warning",
+  // Tông asset-bond (mockup 7d) — khác CASH (gain) dù cùng cấu trúc dữ liệu
+  // gross/tax/net, để ba loại xếp chung một danh sách vẫn phân biệt được ngay.
+  BOND_COUPON: "bg-asset-bond/24 text-asset-bond",
 };
 
 const FILTER_OPTIONS: { value: DividendFilterValue; label: string }[] = [
@@ -44,18 +43,40 @@ type DividendRowsFilterProps = {
   hidden: boolean;
 };
 
-// Dòng phụ (ngày · chi tiết) khác cấu trúc thật sự theo loại — CASH hiện gộp/
-// thuế, STOCK hiện SL trước → sau. switch exhaustive (KHÔNG ternary nhị phân,
-// xem docs/rules/typescript-style.md mục "Enum") vì BOND_COUPON (Phase 7 sau)
-// sẽ cần một nhánh riêng, không được âm thầm rơi vào nhánh STOCK.
-function dividendDetailLine(row: DividendHistoryRow): string {
+function grossMinusTaxLine(row: DividendHistoryRow): string {
+  return `gộp ${row.grossAmount ? formatMoney(row.grossAmount, { compact: true }) : "—"} − thuế ${row.taxAmount ? formatMoney(row.taxAmount, { compact: true }) : "—"}`;
+}
+
+// Dòng phụ khác cấu trúc thật sự theo loại — CASH hiện gộp/thuế, STOCK hiện SL
+// trước → sau, BOND_COUPON cần HAI dòng (điều khoản đã áp dụng, rồi gộp/thuế)
+// nên hàm trả về mảng. switch exhaustive (KHÔNG ternary nhị phân, xem
+// docs/rules/typescript-style.md mục "Enum").
+function dividendDetailLines(row: DividendHistoryRow): string[] {
   switch (row.type) {
     case "CASH":
-    case "BOND_COUPON":
-      // Cùng cấu trúc field (gross/tax) với CASH — không phải placeholder.
-      return `${row.date} · gộp ${row.grossAmount ? formatMoney(row.grossAmount, { compact: true }) : "—"} − thuế ${row.taxAmount ? formatMoney(row.taxAmount, { compact: true }) : "—"}`;
+      return [`${row.date} · ${grossMinusTaxLine(row)}`];
+    case "BOND_COUPON": {
+      // Điều khoản ĐÃ ĐÓNG BĂNG lúc ghi (mockup 7d: "9%/năm · kỳ 6 tháng") —
+      // đọc từ field của chính dòng đó, không phải BondTerms hiện tại.
+      const terms = [
+        row.couponRatePercentApplied
+          ? `${row.couponRatePercentApplied}%/năm`
+          : null,
+        row.couponFrequencyMonths
+          ? `kỳ ${row.couponFrequencyMonths} tháng`
+          : null,
+      ].filter((part) => part !== null);
+      return [
+        [row.date, ...terms].join(" · "),
+        row.isTaxExempt
+          ? `gộp ${row.grossAmount ? formatMoney(row.grossAmount, { compact: true }) : "—"} − miễn thuế`
+          : grossMinusTaxLine(row),
+      ];
+    }
     case "STOCK":
-      return `${row.date} · ${row.quantityBefore && row.unit ? formatQuantity(row.quantityBefore, row.unit) : "—"} → ${row.quantityAfter && row.unit ? formatQuantity(row.quantityAfter, row.unit) : "—"}`;
+      return [
+        `${row.date} · ${row.quantityBefore && row.unit ? formatQuantity(row.quantityBefore, row.unit) : "—"} → ${row.quantityAfter && row.unit ? formatQuantity(row.quantityAfter, row.unit) : "—"}`,
+      ];
     default:
       return assertNever(row.type);
   }
@@ -151,15 +172,25 @@ function DividendRowsFilter({ rows, hidden }: DividendRowsFilterProps) {
                   <span className="truncate text-[13.5px] font-semibold text-foreground">
                     {dividendTypeName(row.type)} {row.percentLabel}%
                   </span>
+                  {row.isTaxExempt ? (
+                    <Badge variant="accent" className="px-1.5 py-0 text-[9px]">
+                      MIỄN THUẾ
+                    </Badge>
+                  ) : null}
                   {row.isNew ? (
                     <Badge variant="gain" className="px-1.5 py-0 text-[9px]">
                       MỚI
                     </Badge>
                   ) : null}
                 </div>
-                <div className="mt-0.5 font-mono text-[11px] text-muted-faint">
-                  {dividendDetailLine(row)}
-                </div>
+                {dividendDetailLines(row).map((line) => (
+                  <div
+                    key={line}
+                    className="mt-0.5 font-mono text-[11px] text-muted-faint"
+                  >
+                    {line}
+                  </div>
+                ))}
               </div>
               <div className="text-right">
                 <DividendRowAmount row={row} hidden={hidden} />

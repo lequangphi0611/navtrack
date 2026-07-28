@@ -1,6 +1,34 @@
-import type { DividendType } from "@prisma/client";
+import type { BondIssuerType, DividendType } from "@prisma/client";
 
 import type { AssetType } from "@/components/AssetTypeBadge";
+
+// Điều khoản trái phiếu đã lưu (BondTerms, issue #56) ở dạng chỉ-đọc cho
+// DividendForm loại BOND_COUPON — mockup Phase 7 Screens 7b/7c hiện thẻ tóm
+// tắt thay vì hỏi lại mệnh giá/% mỗi kỳ. Decimal đã serialize thành string ở
+// biên server; `null` ở couponRatePercent/couponFrequencyMonths = zero-coupon.
+export type BondTermsSummary = {
+  issuerType: BondIssuerType;
+  parValue: string;
+  couponRatePercent: string | null;
+  couponFrequencyMonths: number | null;
+};
+
+// Gói dữ liệu riêng của loại trái tức truyền vào DividendForm — gom thành MỘT
+// object thay vì rải 4 prop phẳng, vì cả cụm chỉ có nghĩa khi Holding là trái
+// phiếu (vắng mặt = không hiện tab "Trái tức").
+export type BondCouponContext = {
+  // null = vị thế trái phiếu CHƯA nhập điều khoản -> DividendForm hiện màn
+  // chặn (mockup 7g) thay vì form, app không đoán mệnh giá.
+  terms: BondTermsSummary | null;
+  // "5" (CORPORATE) | "0" (GOVERNMENT) — resolve từ Setting ở tầng server
+  // (BOND_INTEREST_TAX_RATE_*, issue #58), UI không tự quyết con số.
+  taxRatePercent: string;
+  // "KỲ 2 · TỰ ĐIỀN" — nhãn badge cạnh ngày trả lãi tự điền; vắng mặt = ẩn badge.
+  couponPeriodLabel?: string;
+  // Link tới form sửa vị thế (nơi có BondTermsFields) — dùng cho cả link "Sửa
+  // điều khoản" ở thẻ tóm tắt lẫn CTA "Nhập điều khoản ngay" của màn chặn.
+  bondTermsHref: string;
+};
 
 // Nguồn sự thật cho state của DividendForm (@/features/dividends/components/DividendForm)
 // — component chỉ import + re-export lại, không tự định nghĩa (cùng pattern

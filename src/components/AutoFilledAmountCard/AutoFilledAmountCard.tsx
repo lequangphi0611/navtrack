@@ -24,12 +24,27 @@ type AutoFilledAmountCardProps = {
   // nên card Thuế/Phí không vô tình ghi đè lẫn nhau khi field còn lại đổi).
   computedAmount: string;
   // Dòng công thức mờ dưới số, đã compose sẵn bởi form cha (vd
-  // "369.000.000 × 0,1% — SALE_TAX_STOCK @ 15/07/2026").
-  formulaLabel: string;
+  // "369.000.000 × 0,1% — SALE_TAX_STOCK @ 15/07/2026"). Bỏ trống khi không có
+  // công thức để khoe (vd thuế đáo hạn = 0 vì không phải chuyển nhượng — lý do
+  // nằm ở reasonBadge/note, không phải phép nhân).
+  formulaLabel?: string;
   // Viền/nền nổi bật hơn — dùng cho card Thuế (mockup 5a), card Phí phẳng hơn.
   emphasized?: boolean;
   disabled?: boolean;
   className?: string;
+  // Badge lý do ngay dưới số — dùng khi một khoản bằng 0 VÌ LUẬT quy định thế
+  // ("Miễn thuế · NĐ 253/2026" ở mockup 7c, "Không phải chuyển nhượng" ở 7e).
+  // Quy ước sản phẩm: thuế 0 vẫn hiện thẻ kèm lý do, không ẩn thẻ đi (tiền lệ
+  // màn bán vàng Phase 5).
+  reasonBadge?: React.ReactNode;
+  // Thay câu gợi ý mặc định ở chân thẻ khi ngữ cảnh cần giải thích khác (vd
+  // giải thích vì sao đáo hạn không chịu thuế chuyển nhượng 0,1%).
+  note?: React.ReactNode;
+  // Báo ngược giá trị hiệu lực lên cha MỖI KHI nó đổi (gõ tay hoặc bấm "Đặt
+  // lại") — chỉ cần khi cha phải hiển thị con số dẫn xuất từ giá trị này (vd
+  // dòng "Thực nhận" trong breakdown Phase 7). Không truyền = giữ nguyên hành
+  // vi cũ: state sống trọn trong card, cha không biết gì (Phase 5).
+  onValueChange?: (value: string) => void;
 };
 
 // Card "tự điền, sửa được" dùng chung cho Thuế bán & Phí giao dịch trong
@@ -46,10 +61,21 @@ function AutoFilledAmountCard({
   emphasized = false,
   disabled = false,
   className,
+  reasonBadge,
+  note,
+  onValueChange,
 }: AutoFilledAmountCardProps) {
   const [manualValue, setManualValue] = useState<string | null>(null);
   const value = manualValue ?? computedAmount;
   const isManual = manualValue !== null;
+
+  // Một chỗ đổi giá trị cho cả ô nhập lẫn nút "Đặt lại" — gọi onValueChange
+  // trong handler (không phải lúc render) để cha không bị set state khi đang
+  // render, và để cả hai lối đổi giá trị không lệch nhau.
+  function changeManualValue(next: string | null) {
+    setManualValue(next);
+    onValueChange?.(next ?? computedAmount);
+  }
 
   return (
     <div
@@ -77,29 +103,33 @@ function AutoFilledAmountCard({
           inputMode="decimal"
           aria-label={label}
           value={value}
-          onChange={(event) => setManualValue(event.target.value)}
+          onChange={(event) => changeManualValue(event.target.value)}
           disabled={disabled}
           className="h-auto flex-1 border-none bg-transparent px-0 py-0 font-mono text-[22px] font-semibold text-foreground shadow-none tabular-nums focus-visible:ring-0"
         />
         <Pencil className="size-4.5 shrink-0 text-primary" />
       </div>
 
-      <div className="flex items-center gap-1.75 px-3.75 pb-3">
-        <Sigma className="size-3.5 shrink-0 text-muted-faint" />
-        <span className="font-mono text-[11px] text-muted-faint">
-          {formulaLabel}
-        </span>
-      </div>
+      {reasonBadge ? <div className="px-3.75 pb-3">{reasonBadge}</div> : null}
+
+      {formulaLabel ? (
+        <div className="flex items-center gap-1.75 px-3.75 pb-3">
+          <Sigma className="size-3.5 shrink-0 text-muted-faint" />
+          <span className="font-mono text-[11px] text-muted-faint">
+            {formulaLabel}
+          </span>
+        </div>
+      ) : null}
 
       <div className="flex items-start gap-2.25 border-t border-white/5 bg-white/2 px-3.75 py-2.75">
         <Lightbulb className="mt-0.5 size-3.75 shrink-0 text-muted-faint" />
         <span className="flex-1 text-[10.5px] leading-relaxed text-muted-faint">
-          Số tự tính chỉ là gợi ý (giống Giá tự nhập). Sửa tay để khớp đúng số
-          trên sao kê.
+          {note ??
+            "Số tự tính chỉ là gợi ý (giống Giá tự nhập). Sửa tay để khớp đúng số trên sao kê."}
         </span>
         <button
           type="button"
-          onClick={() => setManualValue(null)}
+          onClick={() => changeManualValue(null)}
           disabled={!isManual || disabled}
           className="shrink-0 text-[10.5px] font-bold text-primary disabled:opacity-40"
         >
