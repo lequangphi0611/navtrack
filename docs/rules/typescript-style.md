@@ -217,6 +217,8 @@ const DIVIDEND_TYPE_LABELS: Record<DividendType, string> = {
 };
 ```
 
+- **Giới hạn:** rule này bắt lỗi tốt tại **từng điểm rẽ nhánh**, nhưng không phải lý do để rẽ nhánh **vô hạn lần trên cùng một biến trong cùng một component**. Dấu hiệu: cùng một biến enum (vd `type: DividendType`) bị `switch`/IIFE ≥ 3 lần trong một file/component để chọn JSX khác nhau → dừng thêm switch tại chỗ, tách theo **variant component** (xem [`component-architecture.md`](./component-architecture.md) mục "Biến thiên theo enum nghiệp vụ lặp lại → tách variant component"), rẽ nhánh **đúng một lần** ở container để chọn component nào render. Ca thực tế: `DividendForm.tsx` (PR #102, review sau khi #100 merge) — 9 chỗ `switch(type)`/IIFE cho cùng một biến trong 1 component 884 dòng, gồm cả nhánh chết `BOND_COUPON` (giá trị UI chưa cho chọn) lặp lại ở từng chỗ thay vì chỉ nằm ở một nơi.
+
 > `eslint.config.mjs` **bật type-aware linting** (`languageOptions.parserOptions.projectService: true`, áp cho `**/*.{ts,tsx}`) và rule `@typescript-eslint/switch-exhaustiveness-check` ("error") — đo thật ngày 2026-07-28: `pnpm lint` không type-aware ~11.4-11.6s, bật type-aware ~23.6-24.7s (~2.1x, vẫn trong ngưỡng chấp nhận được), nên giữ bật thật thay vì chỉ `assertNever`. Giờ có **hai cơ chế song song**: `assertNever` bắt lỗi ở compile time (`tsc --noEmit`, không cần switch thiếu `default`), `switch-exhaustiveness-check` bắt ngay trong ESLint/editor (nhanh hơn vòng lặp, không cần chờ build) — dùng cả hai, không thay thế nhau. Gói `typescript-eslint` (meta package, không chỉ `@typescript-eslint/parser`/`@typescript-eslint/eslint-plugin` riêng lẻ) khai tường minh trong `package.json` `devDependencies`.
 
 ## Đường dẫn nội bộ (route) qua constants

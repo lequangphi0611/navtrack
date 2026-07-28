@@ -109,6 +109,42 @@ Container **là Server Component** nên truyền JSX xuống **không tốn gì*
 />
 ```
 
+### Biến thiên theo enum nghiệp vụ lặp lại → tách variant component
+
+Khác với mục trên (nhiều **vùng UI độc lập** trong một layout): ở đây một **enum nghiệp vụ** (`DividendType`, `AssetType`...) quyết định cấu trúc JSX lặp lại ở **nhiều vùng không liền kề** trong cùng một component — không phải một vùng content duy nhất, nên không giải quyết bằng một `children` slot.
+
+Dấu hiệu: cùng một biến enum bị `switch`/ternary/IIFE để chọn JSX khác nhau ở **≥ 3 chỗ** trong một component (xem [`typescript-style.md`](./typescript-style.md) mục "Phân nhánh theo enum" phần Giới hạn). Xử lý: rẽ nhánh **đúng một lần** ở container/cha — chọn hẳn **component riêng cho mỗi giá trị** enum (`CashDividendFields`/`StockDividendFields`), không rẽ nhánh lại tại từng vùng con. Phần thật sự dùng chung giữa các biến thể (header, nút submit, field không phụ thuộc loại...) tách thành atom/molecule nhỏ (props thuần, không biết enum) để cả hai variant component cùng gọi — không nhân đôi JSX của phần chung.
+
+```tsx
+// ❌ Bad — 1 biến `type`, switch/IIFE lặp lại ở nhiều vùng rời rạc trong 1 component
+function DividendForm({ ... }) {
+  const [type, setType] = useState<DividendType>("CASH");
+  // ... switch(type) chọn công thức preview
+  // ... switch(type) chọn khối override
+  // ... switch(type) chọn field ngày
+  // ... switch(type) chọn card breakdown
+  // ... switch(type) chọn alert cuối
+  // mỗi switch đều có case "BOND_COUPON": return null (chết, UI chưa cho chọn)
+}
+
+// ✅ Good — container rẽ nhánh MỘT lần, mỗi variant tự chứa phần khác biệt của mình
+function DividendForm({ ... }) {
+  const [type, setType] = useState<DividendType>("CASH");
+  return (
+    <form>
+      {/* phần dùng chung: header, switcher, checkbox, submit */}
+      {type === "CASH" ? (
+        <CashDividendFields {...sharedProps} />
+      ) : (
+        <StockDividendFields {...sharedProps} onValidityChange={setOverrideInvalid} />
+      )}
+    </form>
+  );
+}
+```
+
+Ca thực tế: `DividendForm.tsx` (PR #102) — xem `process/DECISION.md` mục "Tách variant component thay vì switch lặp lại theo enum" để biết lý do và cách chia cụ thể (atom dùng chung `PreviewBreakdownCard`/`PreviewFormulaRow`/`InfoNote`/`PaymentDateField`, biến trạng thái nào cần báo ngược lên cha qua callback).
+
 ### Tách component theo ranh giới stream, không chỉ theo tái dùng
 
 Trong RSC, đơn vị tách component không chỉ là "có tái dùng được không" — nó còn là **ranh giới stream** (vùng nào hiện trước, vùng nào chờ) và **ranh giới cache/revalidate**.
