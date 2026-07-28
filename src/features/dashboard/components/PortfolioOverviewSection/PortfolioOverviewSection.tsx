@@ -45,10 +45,20 @@ async function PortfolioOverviewSection() {
     getNavTrend("ALL", valuation.navValue),
   ]);
 
+  // Props gộp theo vùng UI (issue #110) — `valuation` (PortfolioValuation, lib/
+  // portfolio-valuation.ts) vẫn giữ NGUYÊN 25 field phẳng ở tầng lib, chỉ tầng
+  // component nhóm lại. Truyền thẳng `valuation` cho từng nhóm (thay vì liệt kê
+  // tay từng field) — TypeScript structural typing cho phép object có DƯ field
+  // so với Props nhóm yêu cầu, miễn đủ field cần.
   return (
     <DashboardScreenClient
       displayName={session?.user?.name ?? ""}
-      {...valuation}
+      cutoff={valuation}
+      hero={valuation}
+      pnl={valuation}
+      xirr={valuation.xirr}
+      allocation={valuation.allocation}
+      priceStatus={valuation}
       initialHidden={hideAmountsByDefault}
       snapshotToday={{
         alreadySnapshotToday: snapshotToday !== null,

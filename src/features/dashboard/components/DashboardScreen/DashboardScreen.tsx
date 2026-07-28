@@ -1,13 +1,4 @@
-import {
-  ArrowDown,
-  ArrowUp,
-  CalendarClock,
-  ChevronRight,
-  History,
-  Sigma,
-  SlidersHorizontal,
-  Zap,
-} from "lucide-react";
+import { CalendarClock, Sigma, SlidersHorizontal, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { MoneyValueToggleButton } from "@/components/MoneyValue";
@@ -22,6 +13,10 @@ import {
   type MissingPriceHolding,
 } from "@/features/dashboard/components/MissingPriceList";
 import {
+  NavHeroCard,
+  type NavHeroCardProps,
+} from "@/features/dashboard/components/NavHeroCard";
+import {
   NavTrendChart,
   type NavTrendPeriod,
   type NavTrendPeriodData,
@@ -32,53 +27,64 @@ import {
   SnapshotTodayCard,
   type SnapshotTodayCardProps,
 } from "@/features/dashboard/components/SnapshotTodayCard";
-import { formatMoney, formatSignedPercent, signColorClass } from "@/lib/format";
 import type { CostDragBreakdownEntry } from "@/lib/portfolio-valuation";
 import { ROUTES } from "@/lib/routes";
-import { cn } from "@/lib/utils";
 
-type DashboardScreenProps = {
-  displayName: string;
-  // Mốc chốt định giá đang chọn (docs/domain/05: hôm nay/cuối tháng/cuối năm/tùy
-  // chỉnh) — lựa chọn thật diễn ra ở Cài đặt (mockup 2e); chip này chỉ hiển thị +
-  // điều hướng sang đó (Link thật, không giữ state riêng).
+// Nhóm "Mốc chốt" (mockup 2e/chip điều hướng, docs/domain/05) — chip chỉ hiển
+// thị + điều hướng, lựa chọn thật diễn ra ở Cài đặt.
+type CutoffGroup = {
   cutoffLabel: string;
   cutoffDate: string;
   cutoffHref: string;
-  // NAV toàn danh mục tại mốc chốt — Decimal đã serialize thành string.
-  navValue: string;
-  // true khi NAV trên chưa gồm các mã thiếu giá (docs/domain/04 "Thiếu giá" — không
-  // được mặc định 0) — ẩn dòng delta, hiện dấu * + ghi chú (mockup 2f).
-  navValueIsPartial: boolean;
-  navDeltaAmount: string;
-  navDeltaPercent: number;
-  xirr: XirrResult;
+};
+
+// Nhóm dữ liệu cho PnlCostDragCard (mockup 5d) — giữ dạng RAW (không phải
+// pnlNote/splitNote đã ghép câu) để khớp NGUYÊN VĂN shape của
+// PortfolioValuation (lib/portfolio-valuation.ts): PortfolioOverviewSection
+// truyền thẳng `pnl={valuation}` nhờ structural typing, không cần liệt kê tay
+// từng field. Thân DashboardScreen tự ghép pnlNote/splitNote từ 2 cờ `*IsPartial`
+// (issue #110 — xem lịch sử ghép câu ở bản DashboardScreenProps 25-field cũ).
+type PnlGroup = {
+  // Decimal đã serialize — lãi/lỗ thực nhận (đã trừ thuế + phí), có thể âm.
   absolutePnl: string;
   // true khi lãi/lỗ chỉ tính trên phần đã có giá (mockup 2f "Lãi/lỗ (tạm)").
   absolutePnlIsPartial: boolean;
-  // Bất biến (issue #67): realizedPnl + unrealizedPnl ≈ absolutePnl. Khớp field
-  // mới trên PortfolioValuation (lib/portfolio-valuation.ts), page.tsx không cần
-  // sửa vì đã `{...valuation}`.
+  // Bất biến (issue #67): realizedPnl + unrealizedPnl ≈ absolutePnl.
   realizedPnl: string;
   unrealizedPnl: string;
   // true khi mốc chốt đang chọn khác "hôm nay" — phần tách realized/unrealized
-  // ở trên chỉ là ước tính (docs/domain giới hạn cutoff-accuracy đã chốt), hiện
-  // ghi chú phụ dưới PnlCostDragCard khi true (finding #2, PR #87 review).
+  // ở trên chỉ là ước tính (docs/domain giới hạn cutoff-accuracy đã chốt).
   pnlSplitIsApproximate: boolean;
-  // Chi phí ăn mòn (Phase 5, docs/domain/07-tax.md mục "Chi phí ăn mòn") — khớp
-  // field mới trên PortfolioValuation (lib/portfolio-valuation.ts), page.tsx
-  // không cần sửa vì đã `{...valuation}`.
+  // Chi phí ăn mòn (Phase 5, docs/domain/07-tax.md mục "Chi phí ăn mòn").
   costDragAmount: string;
   costDragPercent: number;
   // Vốn GỘP đã triển khai (Σ|BUY.amount|) — KHÁC totalCostBasis (vốn ròng),
-  // hiển thị trực tiếp thành chỉ số "Vốn đã bỏ ra mua" (mockup 5d).
+  // hiển thị trực tiếp thành chỉ số "Vốn đã bỏ ra mua" (mockup 5d) VÀ dùng lại
+  // ở PortfolioStatsRow bên dưới (cùng một nguồn, không lặp field ở nhóm khác).
   grossInvested: string;
   costDragBreakdown: CostDragBreakdownEntry[];
-  allocation: AllocationSlice[];
+};
+
+// Nhóm "Thiếu giá thị trường" (mockup 2f) — dùng cho note nguồn giá,
+// MissingPriceList, VÀ số đếm truyền vào NavHeroCard (navValueIsPartial note).
+type PriceStatusGroup = {
   // "Giá tự động cập nhật EOD hôm nay 15:05 · 2 mã dùng giá nhập tay".
   priceFreshnessNote: string;
   // Rỗng = happy path (2a); có phần tử = biến thể "không tính được XIRR" (2f).
   missingPriceHoldings: MissingPriceHolding[];
+};
+
+type DashboardScreenProps = {
+  displayName: string;
+  cutoff: CutoffGroup;
+  // Omit hidden/missingCount — DashboardScreen tự tính missingCount từ
+  // priceStatus.missingPriceHoldings.length và tự truyền hidden xuống (mirror
+  // cách PnlCostDragCard nhận `hidden` riêng, không nhét vào nhóm dữ liệu).
+  hero: Omit<NavHeroCardProps, "hidden" | "missingCount">;
+  pnl: PnlGroup;
+  xirr: XirrResult;
+  allocation: AllocationSlice[];
+  priceStatus: PriceStatusGroup;
   hidden?: boolean;
   // Có mặt = header hiện nút mắt bật/tắt (mockup 6e) — vắng mặt = ẩn nút (vd
   // preview không cần tương tác). Do DashboardScreenClient truyền xuống.
@@ -96,37 +102,36 @@ type DashboardScreenProps = {
 // biến thể "không tính được XIRR" (2f) khi missingPriceHoldings không rỗng, thay
 // vì tách 2 component riêng (cùng một khung dữ liệu, chỉ khác nhánh hiển thị).
 //
+// Props gộp theo VÙNG UI (issue #110, thay vì 25 field phẳng sao y
+// PortfolioValuation) — CHỈ nhóm DATA thuần (string/number/object), KHÔNG dùng
+// JSX slot: subtree này nằm trong DashboardScreenClient (giữ state `hidden`
+// cho nút mắt) — nếu một vùng được truyền vào dưới dạng JSX Server Component
+// đã render sẵn, vùng đó sẽ "đông cứng" tại giá trị `hidden` lúc stream, không
+// re-render khi bấm nút mắt (xem ghi chú kiến trúc ở DashboardScreenClient.tsx
+// và PortfolioOverviewSection.tsx). DashboardScreen vẫn tự render JSX của mọi
+// vùng bên trong nó như cũ.
+//
 // Route "/" (`src/app/(dashboard)/page.tsx`) render component này trực tiếp,
 // truyền props từ `getPortfolioValuation` + `getManualSnapshotToday`.
 function DashboardScreen({
   displayName,
-  cutoffLabel,
-  cutoffDate,
-  cutoffHref,
-  navValue,
-  navValueIsPartial,
-  navDeltaAmount,
-  navDeltaPercent,
+  cutoff,
+  hero,
+  pnl,
   xirr,
-  absolutePnl,
-  absolutePnlIsPartial,
-  realizedPnl,
-  unrealizedPnl,
-  pnlSplitIsApproximate,
-  costDragAmount,
-  costDragPercent,
-  grossInvested,
-  costDragBreakdown,
   allocation,
-  priceFreshnessNote,
-  missingPriceHoldings,
+  priceStatus,
   hidden = false,
   onToggleHidden,
   snapshotToday,
   navTrend,
 }: DashboardScreenProps) {
-  const navDeltaNumber = Number(navDeltaAmount);
-  const NavDeltaIcon = navDeltaNumber < 0 ? ArrowDown : ArrowUp;
+  const pnlNote = pnl.absolutePnlIsPartial
+    ? "Chỉ trên phần có giá — đã trừ thuế & phí."
+    : "Đã trừ cả thuế lẫn phí — số thực nhận, không phải trên giấy.";
+  const splitNote = pnl.pnlSplitIsApproximate
+    ? "*Ước tính — có thể lệch khi xem theo mốc chốt khác hôm nay."
+    : undefined;
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 p-5 pb-28 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
@@ -154,7 +159,7 @@ function DashboardScreen({
       </div>
 
       <Link
-        href={cutoffHref}
+        href={cutoff.cutoffHref}
         className="flex items-center gap-2.25 rounded-xl border border-border bg-card px-3.25 py-2.5"
       >
         <CalendarClock className="size-4.25 text-primary" />
@@ -162,61 +167,20 @@ function DashboardScreen({
           Mốc chốt
         </span>
         <span className="text-[13px] font-semibold text-foreground">
-          {cutoffLabel}
+          {cutoff.cutoffLabel}
         </span>
         <span className="flex-1" />
         <span className="font-mono text-[11.5px] text-muted-faint tabular-nums">
-          {cutoffDate}
+          {cutoff.cutoffDate}
         </span>
         <SlidersHorizontal className="size-4 text-muted-faint" />
       </Link>
 
-      <div className="rounded-2xl border border-primary/28 bg-linear-to-br from-primary/16 to-card p-5">
-        <div className="mb-1.75 flex items-center justify-between gap-2">
-          <div className="text-[12.5px] font-semibold text-muted-foreground">
-            Giá trị thị trường (NAV)
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Link
-              href={ROUTES.snapshots}
-              className="flex items-center gap-1 rounded-full bg-primary/14 px-2.5 py-1 text-[11px] font-semibold text-primary"
-            >
-              <History className="size-3.25" />
-              Lịch sử
-              <ChevronRight className="size-3.25" />
-            </Link>
-          </div>
-        </div>
-        <div className="font-mono text-[28px] leading-none font-semibold tracking-tight text-foreground tabular-nums">
-          {formatMoney(navValue, { hidden })}
-          {navValueIsPartial ? (
-            <span className="text-base font-medium text-muted-faint">*</span>
-          ) : null}
-        </div>
-        {navValueIsPartial ? (
-          <div className="mt-2.5 text-[11px] text-muted-faint">
-            * Chưa gồm {missingPriceHoldings.length} mã thiếu giá bên dưới.
-          </div>
-        ) : (
-          <div className="mt-3 flex items-center gap-2">
-            <NavDeltaIcon
-              className={cn("size-4", signColorClass(navDeltaNumber))}
-            />
-            <span
-              className={cn(
-                "font-mono text-sm font-semibold tabular-nums",
-                signColorClass(navDeltaNumber),
-              )}
-            >
-              {formatMoney(navDeltaAmount, { hidden })} (
-              {formatSignedPercent(navDeltaPercent)})
-            </span>
-            <span className="text-xs text-muted-faint">
-              so với vốn đã bỏ vào
-            </span>
-          </div>
-        )}
-      </div>
+      <NavHeroCard
+        {...hero}
+        missingCount={priceStatus.missingPriceHoldings.length}
+        hidden={hidden}
+      />
 
       {snapshotToday ? (
         <SnapshotTodayCard id="snapshot-today-card" {...snapshotToday} />
@@ -225,29 +189,21 @@ function DashboardScreen({
       {navTrend ? <NavTrendChart data={navTrend} hidden={hidden} /> : null}
 
       <PnlCostDragCard
-        pnlValue={absolutePnl}
-        pnlNote={
-          absolutePnlIsPartial
-            ? "Chỉ trên phần có giá — đã trừ thuế & phí."
-            : "Đã trừ cả thuế lẫn phí — số thực nhận, không phải trên giấy."
-        }
-        realizedPnl={realizedPnl}
-        unrealizedPnl={unrealizedPnl}
-        splitNote={
-          pnlSplitIsApproximate
-            ? "*Ước tính — có thể lệch khi xem theo mốc chốt khác hôm nay."
-            : undefined
-        }
-        costDragAmount={costDragAmount}
-        costDragPercent={costDragPercent}
-        grossInvested={grossInvested}
-        costDragBreakdown={costDragBreakdown}
+        pnlValue={pnl.absolutePnl}
+        pnlNote={pnlNote}
+        realizedPnl={pnl.realizedPnl}
+        unrealizedPnl={pnl.unrealizedPnl}
+        splitNote={splitNote}
+        costDragAmount={pnl.costDragAmount}
+        costDragPercent={pnl.costDragPercent}
+        grossInvested={pnl.grossInvested}
+        costDragBreakdown={pnl.costDragBreakdown}
         hidden={hidden}
       />
 
       <PortfolioStatsRow
         xirr={xirr}
-        grossInvested={grossInvested}
+        grossInvested={pnl.grossInvested}
         hidden={hidden}
       />
 
@@ -255,16 +211,16 @@ function DashboardScreen({
         <AllocationBar slices={allocation} />
       </Link>
 
-      {priceFreshnessNote ? (
+      {priceStatus.priceFreshnessNote ? (
         <div className="flex items-center gap-2.25 rounded-xl border border-border bg-card px-3.25 py-2.75">
           <Zap className="size-4.25 text-gain" />
           <div className="flex-1 text-[11.5px] leading-relaxed text-muted-foreground">
-            {priceFreshnessNote}
+            {priceStatus.priceFreshnessNote}
           </div>
         </div>
       ) : null}
 
-      <MissingPriceList holdings={missingPriceHoldings} />
+      <MissingPriceList holdings={priceStatus.missingPriceHoldings} />
 
       {xirr.status === "NO_CONVERGE" ? (
         <div className="flex gap-2.5 rounded-2xl border border-border bg-card p-3.75">
