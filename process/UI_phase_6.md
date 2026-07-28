@@ -377,7 +377,7 @@ Bottom sheet mở từ 1 dòng ở 6g (dùng atom `Sheet` đã có, tiền lệ
   chỉ là entry point tiện lợi); nút phụ "Đóng" (đóng sheet). Footnote nhỏ nhắc
   lại "Mở lại vị thế chỉ mở form Mua... không đụng tới lịch sử đã chốt."
 
-**Props phác thảo:**
+**Props phác thảo (bản gốc, KHÔNG còn khớp code thật — xem cập nhật bên dưới):**
 
 ```ts
 // src/features/holdings/components/ClosedPositionSheet/ClosedPositionSheet.tsx
@@ -409,6 +409,28 @@ type ClosedPositionSheetProps = {
   hidden?: boolean;
 };
 ```
+
+> **Cập nhật (issue #110):** khi wiring thật, `orders` đổi sang
+> `CashflowTimelineRow[]` (tái dùng type có sẵn của `CashflowTimeline`, không
+> viết `ClosedPositionOrderEntry` riêng), thêm `detailHref` (sửa/xoá giao dịch
+> đã ghi) và `totalDividends` (cổ tức tiền mặt nhận lúc vị thế còn mở, tách
+> riêng khỏi `realizedPnl` để "Tổng mua/Tổng bán/Cổ tức/Chênh lệch" khớp phép
+> cộng trừ hiển thị — code review #3). 18 field phẳng sau đó được **nhóm lại
+> theo vùng UI** (→ 9 field) — shape THẬT hiện tại:
+>
+> ```ts
+> type ClosedPositionSheetProps = {
+>   open: boolean;
+>   onOpenChange: (open: boolean) => void;
+>   identity: { symbol: string; name: string | null; type: AssetType };
+>   pnl: { realizedPnl: string; realizedPnlPercent: number; xirrRealized: XirrResult };
+>   holdingPeriod: { holdingPeriodLabel: string; startMonthLabel: string; endMonthLabel: string };
+>   breakdown: { totalInvested: string; totalProceeds: string; totalDividends: string };
+>   orders: CashflowTimelineRow[]; // từ @/features/holdings/components/CashflowTimeline
+>   actions: { reopenHref: string; detailHref: string };
+>   hidden?: boolean;
+> };
+> ```
 
 ---
 

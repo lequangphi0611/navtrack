@@ -30,6 +30,38 @@ Mockup nguồn: Claude Design project "Web app design mobile first"
 - File: `src/features/dashboard/components/DashboardScreen/DashboardScreen.tsx` (+ `DashboardScreenSkeleton.tsx`, `index.ts`)
 - Cũng là component cho **2f** (biến thể "không tính được XIRR") — cùng Props, khác nhánh hiển thị theo `xirr.status`/`missingPriceHoldings`, không tách 2 component.
 
+> **Cập nhật (issue #110, sau Phase 5/6):** Props dưới đây là bản Phase 2 gốc,
+> đã lỗi thời — `DashboardScreenProps` thật sự đã thêm nhiều field qua Phase
+> 5/6 (`realizedPnl`/`unrealizedPnl`/cost drag/`snapshotToday`/`navTrend`...)
+> rồi được **nhóm lại theo vùng UI** (25 field phẳng → ~11 field, KHÔNG dùng
+> JSX slot vì DashboardScreen nằm trong `DashboardScreenClient` giữ state
+> `hidden` cho nút mắt — xem comment trong `DashboardScreen.tsx`). Xem shape
+> THẬT hiện tại trực tiếp ở
+> `src/features/dashboard/components/DashboardScreen/DashboardScreen.tsx`:
+>
+> ```ts
+> type DashboardScreenProps = {
+>   displayName: string;
+>   cutoff: { cutoffLabel: string; cutoffDate: string; cutoffHref: string };
+>   hero: Omit<NavHeroCardProps, "hidden" | "missingCount">; // navValue, navValueIsPartial, navDeltaAmount, navDeltaPercent
+>   pnl: {
+>     absolutePnl: string; absolutePnlIsPartial: boolean;
+>     realizedPnl: string; unrealizedPnl: string; pnlSplitIsApproximate: boolean;
+>     costDragAmount: string; costDragPercent: number;
+>     grossInvested: string; costDragBreakdown: CostDragBreakdownEntry[];
+>   };
+>   xirr: XirrResult;
+>   allocation: AllocationSlice[];
+>   priceStatus: { priceFreshnessNote: string; missingPriceHoldings: MissingPriceHolding[] };
+>   hidden?: boolean;
+>   onToggleHidden?: () => void;
+>   snapshotToday?: SnapshotTodayCardProps;
+>   navTrend?: Record<NavTrendPeriod, NavTrendPeriodData>;
+> };
+> ```
+
+Props Phase 2 gốc (tham khảo lịch sử, KHÔNG còn khớp code thật):
+
 ```ts
 type DashboardScreenProps = {
   displayName: string;
