@@ -50,17 +50,21 @@ Thêm giá trị vào `DividendType`/`CashflowType` sẽ **sai âm thầm** ở 
 - [x] Không còn điểm rẽ nhánh nhị phân theo `DividendType`/`CashflowType` trong `src/` (đã chuyển sang `switch` + `assertNever` / `Record`).
 - [x] Docs domain (`03-dividends.md`, `07-tax.md`, `09-settings.md`, `10-cashflow-calendar.md`, `02-data-model.md`) đồng bộ với quyết định thật lúc implement.
 
-## Trạng thái verify (2026-07-28, issue #58 + #101)
+## Trạng thái verify (cập nhật 2026-07-29 sau review vòng 2 PR #102)
 
 Tiêu chí ở trên đã tick theo bằng chứng thật (code + unit test), nhưng **hai việc hạ tầng chưa chạy được trên Claude Cloud** — phải làm trên Claude Local trước khi coi Phase 7 là xong tuyệt đối (xem `TOOLS.md`):
 
 - ❌ **`prisma migrate dev` thật** — treo từ issue #56, chưa chạy (thiếu Postgres/Docker). Schema đã `prisma validate`/`generate` sạch.
 - ❌ **`pnpm e2e` (Playwright)** — cần Docker. Chưa có e2e cho luồng trái tức/đáo hạn; đây là nơi duy nhất kiểm chứng được đường ghi thật (Server Action + DB), vì unit test không chạm DB.
-- ✅ `pnpm lint` / `pnpm typecheck` / `pnpm test` (369/369) / `pnpm build` sạch.
+
+**Hai kịch bản e2e BẮT BUỘC** (cả hai bắt đúng lỗi đã sửa ngày 2026-07-29, và cả hai đều nằm ngoài tầm unit test):
+1. **Ghi bù một kỳ trái tức cũ sau khi đã mua thêm** — `grossAmount`/`taxAmount`/`netAmount` phải cùng một cơ sở SL (SL **tại ngày trả lãi**), không lẫn SL hiện tại.
+2. **Trái tức kỳ cuối trả đúng ngày đáo hạn, ghi tất toán TRƯỚC rồi mới ghi trái tức** — bất biến `SETTLEMENT_RANK`; sai thì trái tức ra 0 đồng, im lặng.
+- ✅ `pnpm lint` / `pnpm typecheck` / `pnpm test` (**372/372**, 36 file) / `pnpm build` sạch.
 
 Cách các tiêu chí "khó test" được khoá lại khi chưa có e2e:
 - *"Ghi trái tức KHÔNG tạo `NavOverride`"* — khoá bằng **kiểu**: union `RecordedDividend` (`build-dividend-form-state.ts`) cố ý không có field `priceAdjustment` ở nhánh `BOND_COUPON`, nên "quên bỏ qua" là lỗi compile; cộng test đầu ra khẳng định không có `navOverrideAdjusted`/`oldPrice`/`newPrice`.
-- *"Trái tức được đưa vào chuỗi XIRR"* — bộ lọc dòng tiền dùng chung hằng số `CASH_FLOW_DIVIDEND_TYPES` (`lib/enums.ts`) thay vì 3 chỗ tự viết `type: "CASH"`.
+- *"Trái tức được đưa vào chuỗi XIRR"* — bộ lọc dòng tiền dùng chung hằng số `CASH_FLOW_DIVIDEND_TYPES` (`lib/enums.ts`) thay vì 3 chỗ tự viết `type: "CASH"`. **Bản đầu bỏ sót chỗ thứ 3** (`getAllCashDividendsForXirr()` ở `lib/portfolio-valuation.ts`, ngoài tầng repository) nên trái tức vào XIRR từng vị thế mà biến mất khỏi XIRR cấp danh mục — sửa 2026-07-29, xem `DECISION.md`. Lưu ý: hằng số là dữ liệu, **không** phải cơ chế compiler; thêm call site mới vẫn phải grep cả `src/lib/`.
 - *"Trái tức kỳ cuối trùng ngày đáo hạn"* — khoá bằng test thứ tự ở `lib/position-trail.test.ts` (3 ca: MATURITY ghi trước trái tức, probe đang ghi, candidate đang ghi).
 - *"Sửa `BondTerms` không đổi nhãn kỳ đã ghi"* — khoá bằng **schema**: cả 3 thành phần của nhãn đọc thẳng từ `parValueApplied`/`couponRatePercentApplied`/`couponFrequencyMonthsApplied`, không có phép tính nào ở đường đọc nên không có gì để trôi. (Bản đầu suy ngược kỳ trả lãi từ `grossAmount` đã bị bỏ — mẫu số của phép đảo chứa SL-tại-ngày-ghi, không đóng băng; xem `DECISION.md` 2026-07-28 (3).)
 
