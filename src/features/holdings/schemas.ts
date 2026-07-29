@@ -7,6 +7,27 @@ import { CASHFLOW_TYPES } from "@/lib/enums";
 export const assetTypeEnum = z.enum(["STOCK", "FUND", "BOND", "GOLD"]);
 export const cashflowTypeEnum = z.enum(CASHFLOW_TYPES);
 
+// Loại giao dịch TẠO MỚI bằng tay được — cố ý KHÔNG phải `cashflowTypeEnum`.
+// Cho tới Phase 6, `CASHFLOW_TYPES` chỉ có BUY/SELL nên dùng chung là an toàn;
+// Phase 7 (#56) thêm `MATURITY` vào mảng đó và mọi schema dựa trên
+// `transactionFields` LẶNG LẼ nhận thêm một loại mà form không bao giờ hiển thị.
+//
+// `MATURITY` chỉ được sinh ra bởi chính luồng tất toán đáo hạn
+// (settleMaturitySchema + settleMaturity), nơi có đủ kiểm tra `holding.type
+// === "BOND"` và `BondTerms` tồn tại, và nơi thuế đánh trên PHẦN LỢI TỨC. Cho
+// client tạo mới một dòng `MATURITY` qua form giao dịch thường là ghi thẳng
+// `Cashflow{MATURITY}` lên một vị thế bất kỳ (kể cả vàng), bỏ qua toàn bộ kiểm
+// tra trên — mà nó vẫn được `cashflowEventRank()` xếp cuối ngày và
+// `computeRealizedGainForHolding()` tính như SELL (docs/domain/07-tax.md "Bán
+// trước hạn vs đáo hạn"). `TransactionForm` đã khoá ở UI, nhưng
+// `<input type="hidden">` sửa được — "không tin client" (CLAUDE.md), cùng lý do
+// `buyHasNoTax` bên dưới.
+//
+// SỬA thì khác: `updateTransactionSchema` vẫn phải nhận `MATURITY` (form gửi
+// nguyên loại của dòng đang sửa lên), nên việc chặn ĐỔI loại nằm ở
+// `updateTransaction` — chỉ ở đó mới đọc được loại đang lưu trong DB.
+const manualCashflowTypeEnum = z.enum(["BUY", "SELL"]);
+
 function decimalString(message: string) {
   return z
     .string()
@@ -46,7 +67,7 @@ export function nonNegativeDecimal(message: string) {
 }
 
 const transactionFields = {
-  cashflowType: cashflowTypeEnum,
+  cashflowType: manualCashflowTypeEnum,
   date: z.coerce.date({ error: "Ngày không hợp lệ" }),
   quantity: positiveDecimal("Số lượng phải lớn hơn 0"),
   pricePerUnit: positiveDecimal("Giá phải lớn hơn 0"),
@@ -97,6 +118,11 @@ export const updateTransactionSchema = z
   .object({
     cashflowId: z.string().min(1, "Thiếu giao dịch"),
     ...transactionFields,
+    // Ghi đè `manualCashflowTypeEnum` của `transactionFields`: form sửa giao
+    // dịch gửi lên nguyên loại của dòng đang sửa, nên một dòng `MATURITY` hợp
+    // lệ phải qua được validate thì mới sửa được ngày/số lượng/giá của nó.
+    // Chặn ĐỔI loại là việc của `updateTransaction` (xem comment ở đó).
+    cashflowType: cashflowTypeEnum,
   })
   .refine(buyHasNoTax, BUY_HAS_NO_TAX_ISSUE);
 

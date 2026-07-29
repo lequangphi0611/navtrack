@@ -371,7 +371,7 @@ type BondCouponResult = {
 async function recordBondCouponDividend(
   tx: Prisma.TransactionClient,
   ctx: RecordBondCouponCtx,
-): Promise<BondCouponResult> {
+): Promise<BondCouponResult | { ok: false; error: string }> {
   const computed = computeBondCoupon({
     parValue: ctx.terms.parValue,
     couponRatePercent: ctx.couponRatePercent,
@@ -383,10 +383,27 @@ async function recordBondCouponDividend(
   // Thuế chỉ PREFILL, user sửa tay được để khớp số tổ chức phát hành thực khấu
   // trừ (docs/domain/07-tax.md). netAmount phải tính lại theo thuế HIỆU LỰC,
   // không dùng netAmount tính từ thuế tự động.
+  //
+  // `taxAmountOverride` CHỈ có mặt khi user thật sự gõ tay: card thuế ở
+  // BondCouponFields đặt `submitWhenAuto={false}` nên số tự tính của client
+  // (theo SL hiện tại) không bao giờ lấn át `computed.taxAmount` (theo
+  // `quantityAtDate`) — xem review PR #102.
   const taxAmount =
     ctx.taxAmountOverride !== undefined
       ? new Decimal(ctx.taxAmountOverride)
       : computed.taxAmount;
+
+  // Chặn thuế > gộp: `netAmount` là dòng tiền DƯƠNG đưa vào XIRR (cùng nhóm
+  // với CASH, xem CASH_FLOW_DIVIDEND_TYPES), một giá trị âm ở đây sẽ trôi vào
+  // XIRR/tổng đã nhận như thể trái tức làm MẤT tiền. Đây là lỗi lường trước
+  // (ActionResult) — gõ nhầm số trên form là chuyện thường, không phải sự cố.
+  if (taxAmount.gt(computed.grossAmount)) {
+    return {
+      ok: false,
+      error: "Thuế không thể lớn hơn tiền lãi gộp của kỳ này",
+    };
+  }
+
   const netAmount = computed.grossAmount.minus(taxAmount);
 
   await insertDividend(
@@ -507,10 +524,9 @@ async function resolveBondCouponContext(
   };
 }
 
-type RecordDividendTxCtx = {
+type RecordDividendTxCtxBase = {
   holdingId: string;
   userId: string;
-  type: DividendType;
   date: Date;
   paymentDate: Date | null;
   percentDecimal: Decimal;
@@ -518,10 +534,66 @@ type RecordDividendTxCtx = {
   taxRatePercent: Decimal | undefined;
   stockQuantityOverride: string | undefined;
   priceAlreadyReflectsMarket: boolean;
-  // Chỉ có mặt khi type === "BOND_COUPON" (đã resolve NGOÀI transaction).
-  bond: BondCouponContext | undefined;
-  taxAmountOverride: string | undefined;
 };
+
+// Union theo `type` chứ KHÔNG phải object phẳng với `bond?: BondCouponContext`:
+// bất biến "BOND_COUPON thì luôn có `bond`" (resolve NGOÀI transaction ở
+// recordDividend) khi đó do compiler giữ, không phải do một comment + 4 dấu `!`
+// ở call site. Cùng lý do union `RecordedDividend` cố ý không có
+// `priceAdjustment` ở nhánh BOND_COUPON: quên set là lỗi COMPILE, không phải
+// TypeError lúc chạy (review PR #102, docs/rules/typescript-style.md).
+type RecordDividendTxCtx = RecordDividendTxCtxBase &
+  (
+    | { type: "CASH" | "STOCK"; bond?: never; taxAmountOverride?: never }
+    | {
+        type: "BOND_COUPON";
+        bond: BondCouponContext;
+        taxAmountOverride: string | undefined;
+      }
+  );
+
+// Dựng `RecordDividendTxCtx` đúng nhánh union theo `type`, và resolve luôn
+// điều khoản trái phiếu cho nhánh BOND_COUPON.
+//
+// Tách ra khỏi recordDividend chỉ vì MỘT lý do kiểu: `switch` ở đây thu hẹp
+// `type` về đúng literal trong từng case, nên mỗi nhánh union được dựng mà
+// không cần `as`/`!` nào. Viết inline bằng if/ternary trong recordDividend thì
+// TypeScript không giữ được liên hệ "type === BOND_COUPON <=> bond khác
+// undefined" qua một biến `let` — và đó chính là chỗ 4 dấu `!` cũ đã nấp.
+async function buildRecordDividendTxCtx(input: {
+  type: DividendType;
+  userId: string;
+  taxAmountOverride: string | undefined;
+  base: RecordDividendTxCtxBase;
+}): Promise<
+  { ok: true; data: RecordDividendTxCtx } | { ok: false; error: string }
+> {
+  const { type, base } = input;
+  switch (type) {
+    case "CASH":
+    case "STOCK":
+      return { ok: true, data: { ...base, type } };
+    case "BOND_COUPON": {
+      const bondCtx = await resolveBondCouponContext(
+        base.holdingId,
+        input.userId,
+        base.date,
+      );
+      if (!bondCtx.ok) return bondCtx;
+      return {
+        ok: true,
+        data: {
+          ...base,
+          type,
+          bond: bondCtx.data,
+          taxAmountOverride: input.taxAmountOverride,
+        },
+      };
+    }
+    default:
+      return assertNever(type);
+  }
+}
 
 // Thân transaction của recordDividend (dòng tiền + ghi Dividend, atomic với
 // đọc lịch sử vị thế — xem comment isolationLevel ở nơi gọi runInTransaction)
@@ -586,18 +658,18 @@ async function runRecordDividendTransaction(
         priceAlreadyReflectsMarket: ctx.priceAlreadyReflectsMarket,
       });
     case "BOND_COUPON":
-      // ctx.bond luôn có giá trị khi type === "BOND_COUPON" (resolve NGOÀI
-      // transaction ở recordDividend, thiếu điều khoản đã return lỗi từ trước).
+      // `ctx.bond` non-nullable ở nhánh này nhờ union RecordDividendTxCtx —
+      // compiler tự thu hẹp, không cần `!` cũng không cần comment trấn an.
       return recordBondCouponDividend(tx, {
         holdingId: ctx.holdingId,
         symbol: holding.symbol,
         unit: holding.unit,
         date: ctx.date,
         paymentDate: ctx.paymentDate,
-        terms: ctx.bond!.terms,
-        couponRatePercent: ctx.bond!.couponRatePercent,
-        couponFrequencyMonths: ctx.bond!.couponFrequencyMonths,
-        taxRatePercent: ctx.bond!.taxRatePercent,
+        terms: ctx.bond.terms,
+        couponRatePercent: ctx.bond.couponRatePercent,
+        couponFrequencyMonths: ctx.bond.couponFrequencyMonths,
+        taxRatePercent: ctx.bond.taxRatePercent,
         taxAmountOverride: ctx.taxAmountOverride,
         // SL đang giữ TẠI NGÀY TRẢ LÃI — quy ước thứ tự (lib/position-trail.ts)
         // đảm bảo con số này đọc TRƯỚC Cashflow{MATURITY} cùng ngày, nên trái
@@ -605,7 +677,9 @@ async function runRecordDividendTransaction(
         quantityAtDate,
       });
     default:
-      return assertNever(ctx.type);
+      // `ctx` (không phải `ctx.type`) — switch trên union RecordDividendTxCtx
+      // vắt cạn CẢ object, nên chính `ctx` mới là `never` ở đây.
+      return assertNever(ctx);
   }
 }
 
@@ -638,20 +712,46 @@ export async function recordDividend(
   const { userId } = ctx;
 
   const { holdingId, type, date, percent } = ctx.data;
-  // BOND_COUPON không có % (schema cho phép vắng) — Decimal(0) chỉ để giữ kiểu,
-  // nhánh đó không đọc tới giá trị này.
+
+  // `percent` là `string | undefined` ở tầng field (BOND_COUPON không có ô %)
+  // và chỉ bắt buộc lại qua `.refine()` theo `type` — mà refine của zod KHÔNG
+  // thu hẹp kiểu suy ra được. Guard thật ở đây để `percent!` phía dưới dựa vào
+  // một kiểm tra runtime đã chạy, thay vì chỉ dựa vào một refine ở file khác.
+  // Đưa hẳn về union theo `type` như RecordDividendTxCtx là cách duy nhất bỏ
+  // được `!` — nhưng phải đổi recordDividendSchema sang discriminatedUnion,
+  // ngoài phạm vi lần sửa này (ghi lại ở process/DECISION.md).
+  if (type !== "BOND_COUPON" && percent === undefined) {
+    return { ok: false, error: "Nhập tỷ lệ cổ tức" };
+  }
+
+  // BOND_COUPON không có % — Decimal(0) chỉ để giữ kiểu, nhánh đó không đọc tới
+  // giá trị này (mệnh giá/lãi suất đọc từ BondTerms).
   const percentDecimal = new Decimal(percent ?? 0);
   const { parValue, taxRatePercent } = await resolveCashDividendSettings(
     type,
     date,
   );
 
-  let bond: BondCouponContext | undefined;
-  if (type === "BOND_COUPON") {
-    const bondCtx = await resolveBondCouponContext(holdingId, userId, date);
-    if (!bondCtx.ok) return bondCtx;
-    bond = bondCtx.data;
-  }
+  // Điều khoản trái phiếu resolve NGOÀI transaction, TRƯỚC khi đọc XIRR —
+  // thiếu điều khoản là lỗi lường trước, chặn ngay chứ không làm thêm việc.
+  const txCtxResult = await buildRecordDividendTxCtx({
+    type,
+    userId,
+    taxAmountOverride: ctx.data.taxAmount,
+    base: {
+      holdingId,
+      userId,
+      date,
+      paymentDate: ctx.data.paymentDate ?? null,
+      percentDecimal,
+      parValue,
+      taxRatePercent,
+      stockQuantityOverride: ctx.data.stockQuantityOverride,
+      priceAlreadyReflectsMarket: ctx.data.priceAlreadyReflectsMarket,
+    },
+  });
+  if (!txCtxResult.ok) return txCtxResult;
+  const txCtx = txCtxResult.data;
 
   // XIRR danh mục TRƯỚC khi ghi — đọc NGOÀI transaction (cùng lý do parValue/
   // taxRatePercent ở trên: chỉ cần chính xác tại thời điểm ngay trước/sau ghi,
@@ -659,21 +759,6 @@ export async function recordDividend(
   // đọc Holding trực tiếp từ DB (không cache() theo request) nên gọi lại lần
   // nữa SAU transaction (dưới) vẫn phản ánh đúng thay đổi vừa ghi.
   const xirrBeforePercent = await getCurrentPortfolioXirrPercent(userId);
-
-  const txCtx: RecordDividendTxCtx = {
-    holdingId,
-    userId,
-    type,
-    date,
-    paymentDate: ctx.data.paymentDate ?? null,
-    percentDecimal,
-    parValue,
-    taxRatePercent,
-    stockQuantityOverride: ctx.data.stockQuantityOverride,
-    priceAlreadyReflectsMarket: ctx.data.priceAlreadyReflectsMarket,
-    bond,
-    taxAmountOverride: ctx.data.taxAmount,
-  };
 
   try {
     const result = await runInTransaction(
@@ -709,7 +794,8 @@ export async function recordDividend(
     return buildDividendFormState(
       result.type === "BOND_COUPON"
         ? { ...result, ...shared }
-        : // percent luôn có giá trị khi type là CASH/STOCK (schema refine).
+        : // Guard ở đầu hàm đã loại ca `undefined` cho CASH/STOCK bằng một
+          // kiểm tra runtime thật — `!` ở đây chỉ nói lại điều đó cho compiler.
           { ...result, ...shared, percent: percent! },
     );
   } catch (err) {

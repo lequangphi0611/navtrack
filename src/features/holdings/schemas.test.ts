@@ -43,6 +43,19 @@ describe("newHoldingSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  // Cùng bất biến với addTransactionSchema — `transactionFields` dùng chung
+  // nên cả hai phải cùng từ chối (xem comment ở đó).
+  test("cashflowType = MATURITY bị từ chối khi tạo vị thế mới", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "VCB2028",
+      type: "BOND",
+      unit: "trái phiếu",
+      ...validTransactionFields,
+      cashflowType: "MATURITY",
+    });
+    expect(result.success).toBe(false);
+  });
+
   test("type ngoài enum AssetType bị từ chối", () => {
     const result = newHoldingSchema.safeParse({
       symbol: "FPT",
@@ -229,6 +242,20 @@ describe("addTransactionSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // `MATURITY` có trong CASHFLOW_TYPES (Prisma enum) nhưng KHÔNG được tạo mới
+  // qua form giao dịch thường: đường đó bỏ qua kiểm tra `holding.type ===
+  // "BOND"` + `BondTerms` tồn tại của settleMaturity, và cho ghi một dòng đáo
+  // hạn lên vị thế bất kỳ (kể cả vàng). Form đã khoá ở UI — đây là chốt chặn
+  // server (review PR #102).
+  test("tạo mới cashflowType = MATURITY bị từ chối", () => {
+    const result = addTransactionSchema.safeParse({
+      holdingId: "holding-1",
+      ...validTransactionFields,
+      cashflowType: "MATURITY",
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("updateTransactionSchema", () => {
@@ -260,6 +287,19 @@ describe("updateTransactionSchema", () => {
       taxAmount: "5200",
     });
     expect(result.success).toBe(false);
+  });
+
+  // Khác addTransactionSchema: schema SỬA phải NHẬN `MATURITY`, vì form gửi
+  // lên nguyên loại của dòng đang sửa — chặn ở tầng schema thì không sửa nổi
+  // ngày/số lượng của một dòng đáo hạn. Việc chặn ĐỔI loại nằm ở
+  // updateTransaction (cần đọc loại đang lưu trong DB).
+  test("sửa một dòng MATURITY (giữ nguyên loại) được schema chấp nhận", () => {
+    const result = updateTransactionSchema.safeParse({
+      cashflowId: "cf-1",
+      ...validTransactionFields,
+      cashflowType: "MATURITY",
+    });
+    expect(result.success).toBe(true);
   });
 });
 

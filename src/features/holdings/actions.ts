@@ -8,7 +8,6 @@ import { redirect } from "next/navigation";
 // (chỉ holdings/queries.ts, xem features/snapshots/actions.ts) nên import chiều này không tạo vòng.
 import { freezeManualSnapshot } from "@/features/snapshots/actions";
 import type { ActionResult } from "@/lib/action-result";
-import { assertBondHoldingType } from "@/lib/bond-terms";
 import { derivePosition } from "@/lib/cost-basis";
 import { computeCashflowAmount } from "@/lib/cost-basis";
 import type { CashflowInputWithEvent } from "@/lib/cost-basis";
@@ -21,11 +20,7 @@ import {
 import { revalidateHoldingDependentRoutes } from "@/lib/revalidate-holding-routes";
 import { ROUTES } from "@/lib/routes";
 import { handleWriteError, parseAuthenticated } from "@/lib/server-action";
-import {
-  bondInterestTaxKey,
-  resolveDecimalSetting,
-  transactionFeeKey,
-} from "@/lib/settings";
+import { bondInterestTaxKey, resolveDecimalSetting } from "@/lib/settings";
 
 import {
   deleteCashflowRow,
@@ -292,6 +287,34 @@ export async function updateTransaction(
         return { ok: false as const, error: "Không tìm thấy giao dịch" };
       }
 
+      // Không cho ĐỔI loại khi một trong hai đầu là `MATURITY` — cả hai chiều
+      // đều nguy hiểm và cả hai đều đi vòng qua luồng tất toán đáo hạn
+      // (`settleMaturity`, nơi có kiểm tra `holding.type === "BOND"` +
+      // `BondTerms` tồn tại):
+      //  - MATURITY -> SELL: nhảy sang thuế 0,1% trên TOÀN BỘ mệnh giá hoàn trả
+      //    thay vì thuế lãi trên phần lợi tức (docs/domain/07-tax.md).
+      //  - BUY/SELL -> MATURITY: dựng một dòng đáo hạn trên vị thế bất kỳ (kể
+      //    cả vàng), rồi được `cashflowEventRank()` xếp cuối ngày và
+      //    `computeRealizedGainForHolding()` tính như SELL.
+      // `TransactionForm` đã khoá bộ chọn loại ở UI, nhưng
+      // `<input type="hidden">` sửa được — đây mới là chỗ chặn thật ("không tin
+      // client", CLAUDE.md, cùng lý do `buyHasNoTax` ở schemas.ts).
+      //
+      // Đổi BUY <-> SELL vẫn cho phép như trước, và ngày/số lượng/giá/phí/thuế
+      // của dòng MATURITY cũng sửa bình thường — chỉ riêng LOẠI bị khoá.
+      const currentType = source.cashflows.find(
+        (cf) => cf.id === cashflowId,
+      )?.type;
+      if (
+        currentType !== cashflowType &&
+        (currentType === "MATURITY" || cashflowType === "MATURITY")
+      ) {
+        return {
+          ok: false as const,
+          error: "Không thể đổi loại của một giao dịch tất toán đáo hạn",
+        };
+      }
+
       const candidate: CashflowInputWithEvent = {
         id: "__candidate__",
         type: cashflowType,
@@ -430,7 +453,6 @@ export async function saveBondTerms(
       error: "Điều khoản trái phiếu chỉ áp dụng cho vị thế loại trái phiếu",
     };
   }
-  assertBondHoldingType(holding.type);
 
   try {
     await upsertBondTerms(holdingId, {
@@ -449,8 +471,8 @@ export async function saveBondTerms(
   return { ok: true, data: { holdingId } };
 }
 
-// Điều khoản + thuế suất + phí cần để ghi tất toán đáo hạn, resolve NGOÀI
-// transaction (cùng lý do resolveCashDividendSettings ở dividends/actions.ts).
+// Điều khoản + thuế suất cần để ghi tất toán đáo hạn, resolve NGOÀI transaction
+// (cùng lý do resolveCashDividendSettings ở dividends/actions.ts).
 // Thiếu `BondTerms` -> chặn với thông báo rõ thay vì đoán `issuerType`: không
 // biết tổ chức phát hành thì không biết áp 5% hay 0% (docs/domain/07-tax.md).
 async function resolveMaturitySettlementContext(
@@ -462,7 +484,6 @@ async function resolveMaturitySettlementContext(
       ok: true;
       source: BondSettlementSource;
       interestTaxRatePercent: Decimal;
-      feeRatePercent: Decimal;
     }
   | { ok: false; error: string }
 > {
@@ -482,17 +503,20 @@ async function resolveMaturitySettlementContext(
     };
   }
 
-  const [interestTaxRatePercent, feeRatePercent] = await Promise.all([
-    resolveDecimalSetting(
-      bondInterestTaxKey(source.bondTerms.issuerType),
-      date,
-    ),
-    // Đáo hạn thường KHÔNG qua lệnh khớp CTCK nên phí thực tế là 0, nhưng vẫn
-    // prefill từ Setting để nhất quán với mọi giao dịch khác (docs/domain/07-tax.md).
-    resolveDecimalSetting(transactionFeeKey("SELL", source.type), date),
-  ]);
+  // CỐ Ý không resolve `TRANSACTION_FEE_SELL_BOND`: đáo hạn là nhận lại gốc
+  // TỪ tổ chức phát hành, không qua lệnh khớp CTCK nên không phát sinh phí
+  // giao dịch (docs/domain/07-tax.md). Bản trước prefill từ Setting đó "cho
+  // nhất quán", nhưng màn 7e/7f không hiện và không cho sửa ô phí nào — nên
+  // một Setting khác 0 sẽ trừ vào `Cashflow.amount` một khoản user không hề
+  // thấy, lệch hẳn với dòng "Thực nhận" vừa xác nhận trên form (review PR
+  // #102). Muốn ghi phí thật thì `settleMaturitySchema.feeAmount` vẫn nhận —
+  // chỉ là không còn số tự điền vô hình.
+  const interestTaxRatePercent = await resolveDecimalSetting(
+    bondInterestTaxKey(source.bondTerms.issuerType),
+    date,
+  );
 
-  return { ok: true, source, interestTaxRatePercent, feeRatePercent };
+  return { ok: true, source, interestTaxRatePercent };
 }
 
 // Tất toán đáo hạn trái phiếu (Phase 7, issue #101) — ghi `Cashflow{type:
@@ -501,8 +525,9 @@ async function resolveMaturitySettlementContext(
 // MATURITY chỉ đánh thuế lãi trên phần lợi tức (xem lib/maturity-settlement.ts).
 //
 // Mọi con số client gửi lên là giá trị user đã xác nhận trên form "tự điền, sửa
-// được"; server vẫn tự tính lại thuế/phí gợi ý và chỉ dùng số client gửi khi
-// user thực sự sửa (nguyên tắc "prefill, không khoá" — docs/domain/07-tax.md).
+// được"; server vẫn tự tính lại thuế gợi ý và chỉ dùng số client gửi khi user
+// thực sự sửa (nguyên tắc "prefill, không khoá" — docs/domain/07-tax.md). Phí
+// mặc định 0 và không có số tự điền — đáo hạn không qua lệnh khớp.
 export async function settleMaturity(
   input: unknown,
 ): Promise<ActionResult<{ holdingId: string; cashflowId: string }>> {
@@ -534,13 +559,12 @@ export async function settleMaturity(
     ctx.data.taxAmount !== undefined
       ? new Decimal(ctx.data.taxAmount)
       : computed.taxAmount;
+  // Mặc định 0, KHÔNG suy từ `TRANSACTION_FEE_SELL_BOND` — xem
+  // resolveMaturitySettlementContext.
   const feeAmount =
     ctx.data.feeAmount !== undefined
       ? new Decimal(ctx.data.feeAmount)
-      : quantityDecimal
-          .mul(pricePerUnitDecimal)
-          .mul(settlementCtx.feeRatePercent)
-          .div(100);
+      : new Decimal(0);
 
   try {
     const result = await runInTransaction(async (tx) => {

@@ -154,6 +154,12 @@ function BondCouponFields({
         onValueChange={setEffectiveTaxAmount}
         emphasized={!isTaxExempt}
         disabled={isPending}
+        // Chưa sửa tay -> KHÔNG gửi `taxAmount`, để `recordDividend` tự tính
+        // theo `quantityAtDate`. Số ở đây tính theo `holding.quantity` (SL
+        // HIỆN TẠI) nên lệch khi ghi bù một kỳ cũ mà SL đã đổi từ đó tới nay —
+        // gửi lên sẽ ra `netAmount = gross(theo ngày trả lãi) − tax(theo SL
+        // hiện tại)`, sai tiền không tín hiệu (review PR #102).
+        submitWhenAuto={false}
       />
 
       <PreviewBreakdownCard

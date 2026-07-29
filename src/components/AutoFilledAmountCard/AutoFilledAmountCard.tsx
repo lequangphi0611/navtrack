@@ -45,6 +45,21 @@ type AutoFilledAmountCardProps = {
   // dòng "Thực nhận" trong breakdown Phase 7). Không truyền = giữ nguyên hành
   // vi cũ: state sống trọn trong card, cha không biết gì (Phase 5).
   onValueChange?: (value: string) => void;
+  // Có gửi field lên server khi user CHƯA sửa gì không.
+  //
+  // `true` (mặc định, hành vi Phase 5): luôn gửi. Đúng cho `TransactionForm` —
+  // `addTransactionSchema` khai `taxAmount`/`feeAmount` với `.default("0")`,
+  // nên field vắng mặt sẽ âm thầm thành 0 thay vì thành "số app tự tính".
+  //
+  // `false`: chỉ gửi khi user thật sự gõ tay. Dùng khi server tính lại được
+  // con số này CHÍNH XÁC HƠN client, và giá trị auto của client có thể lệch —
+  // vd thuế trái tức: card tính theo `holding.quantity` (SL hiện tại) còn
+  // `recordDividend` tính gross theo `quantityAtDate` (SL tại ngày trả lãi).
+  // Luôn gửi ở ca đó khiến `netAmount = gross(theo ngày) − tax(theo hiện tại)`,
+  // sai tiền âm thầm khi ghi bù một kỳ cũ (review PR #102). Schema nhận field
+  // này phải để `.optional()` (KHÔNG `.default()`) để "vắng mặt" mang đúng
+  // nghĩa "dùng số server tự tính".
+  submitWhenAuto?: boolean;
 };
 
 // Card "tự điền, sửa được" dùng chung cho Thuế bán & Phí giao dịch trong
@@ -64,6 +79,7 @@ function AutoFilledAmountCard({
   reasonBadge,
   note,
   onValueChange,
+  submitWhenAuto = true,
 }: AutoFilledAmountCardProps) {
   const [manualValue, setManualValue] = useState<string | null>(null);
   const value = manualValue ?? computedAmount;
@@ -137,7 +153,12 @@ function AutoFilledAmountCard({
         </button>
       </div>
 
-      <input type="hidden" name={fieldName} value={value} />
+      {/* Bỏ hẳn input (không phải để value="") khi cha chọn không gửi số tự
+          tính: server phân biệt "user cố ý nhập số này" với "chưa động vào"
+          bằng chính sự VẮNG MẶT của field trong FormData. */}
+      {isManual || submitWhenAuto ? (
+        <input type="hidden" name={fieldName} value={value} />
+      ) : null}
     </div>
   );
 }

@@ -32,9 +32,16 @@ export const dividendTypesCovered: _AllDividendTypesCovered = true;
 // docs/domain/03-dividends.md).
 //
 // MỘT nguồn sự thật cho mọi nơi lọc "cổ tức tiền mặt": trước Phase 7 mỗi nơi
-// tự viết `type: "CASH"` (2 repository function + 1 hằng số ở queries.ts), nên
-// thêm BOND_COUPON mà quên một chỗ sẽ làm trái tức BIẾN MẤT khỏi XIRR mà không
-// test nào fail (process/phase-7.md mục 3 nêu đích danh rủi ro này).
+// tự viết `type: "CASH"` (3 truy vấn + 1 hằng số ở queries.ts), nên thêm
+// BOND_COUPON mà quên một chỗ sẽ làm trái tức BIẾN MẤT khỏi XIRR mà không test
+// nào fail (process/phase-7.md mục 3 nêu đích danh rủi ro này).
+//
+// Đếm cho đủ: lần rà đầu của #58 chỉ thấy 2 hàm trong `features/holdings/
+// repository.ts` và bỏ sót `getAllCashDividendsForXirr()` ở
+// `lib/portfolio-valuation.ts` (truy vấn `db.dividend` thẳng, ngoài tầng
+// repository) — trái tức vào XIRR của TỪNG vị thế nhưng biến mất khỏi XIRR/PnL
+// cấp DANH MỤC. Thêm call site mới thì grep CẢ `src/lib/`, không chỉ
+// `features/*/repository.ts`.
 export const CASH_FLOW_DIVIDEND_TYPES = [
   "CASH",
   "BOND_COUPON",
