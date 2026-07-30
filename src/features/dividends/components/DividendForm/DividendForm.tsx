@@ -33,11 +33,11 @@ import type {
 import { assertNever } from "@/lib/assert-never";
 import { dividendTypeName } from "@/lib/dividend-label";
 import { formatMoney, formatQuantity } from "@/lib/format";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 import { cn } from "@/lib/utils";
 
 import { BondCouponFields } from "./BondCouponFields";
 import { CashDividendFields } from "./CashDividendFields";
-import { parseDecimalOrNull } from "./parse-decimal";
 import { PriceAdjustmentCheckbox } from "./PriceAdjustmentCheckbox";
 import { StockDividendFields } from "./StockDividendFields";
 

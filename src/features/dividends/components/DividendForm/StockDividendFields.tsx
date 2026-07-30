@@ -10,10 +10,10 @@ import {
 } from "@/features/dividends/dividend-math";
 import type { DividendHolding } from "@/features/dividends/types";
 import { formatQuantity } from "@/lib/format";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 
 import { FieldLabel } from "./FieldLabel";
 import { InfoNote } from "./InfoNote";
-import { parseDecimalOrNull } from "./parse-decimal";
 import { PaymentDateField } from "./PaymentDateField";
 import { PercentInputField } from "./PercentInputField";
 import { PreviewBreakdownCard } from "./PreviewBreakdownCard";

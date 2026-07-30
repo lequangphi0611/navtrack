@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import { z } from "zod";
 
 import { CASHFLOW_TYPES } from "@/lib/enums";
+import { normalizeDecimalInput } from "@/lib/parse-decimal";
 
 export const assetTypeEnum = z.enum(["STOCK", "FUND", "BOND", "GOLD"]);
 export const cashflowTypeEnum = z.enum(CASHFLOW_TYPES);
@@ -34,12 +35,13 @@ function decimalString(message: string) {
       .string()
       .trim()
       // decimal.js chỉ chấp nhận dấu chấm làm phân cách thập phân — bàn phím số
-      // "inputMode=decimal" trên nhiều máy (locale VN) gõ ra dấu phẩy, nên chuẩn
-      // hoá "," -> "." trước khi parse. Cùng chuẩn hoá client-side preview đã
-      // làm ở bond-terms-preview.ts, nhưng ở đó chỉ để hiển thị — thiếu bước này
-      // ở schema khiến "9,8" hiện đúng ở preview nhưng bị validate từ chối lúc
-      // lưu thật (issue phát hiện khi debug BondTermsForm).
-      .transform((value) => value.replace(",", "."))
+      // "inputMode=decimal" trên nhiều máy (locale VN) gõ ra dấu phẩy.
+      // `normalizeDecimalInput()` (lib/parse-decimal.ts) là chỗ DUY NHẤT định
+      // nghĩa phép chuẩn hoá này — dùng chung với preview client-side (đã từng
+      // lệch nhau: preview tự chuẩn hoá riêng, schema thì không, khiến "9,8"
+      // hiện đúng số ở preview nhưng bị validate từ chối lúc lưu thật, phát
+      // hiện khi debug BondTermsForm).
+      .transform((value) => normalizeDecimalInput(value))
       .refine((value) => {
         try {
           return new Decimal(value).isFinite();
