@@ -1,7 +1,7 @@
 "use client";
 
 import { Popover } from "@base-ui/react/popover";
-import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarIcon, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { DayPicker } from "react-day-picker";
 
@@ -36,6 +36,15 @@ function toDateValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// Biên năm cho dropdown "Tháng/Năm" (thay nút next/prev — nhảy nhiều năm để
+// bấm next hàng chục lần rất mệt, vd chọn ngày đáo hạn trái phiếu). Rộng hơn
+// HẲN mọi ca dùng thật của DatePicker (giao dịch cũ nhất lẫn trái phiếu Chính
+// phủ kỳ hạn dài ~20-30 năm), không cấu hình theo từng nơi gọi vì component
+// này dùng chung cho nhiều field khác nhau (ngày giao dịch, ngày trả lãi,
+// ngày đáo hạn...) mà chưa nơi nào cần giới hạn hẹp hơn.
+const DROPDOWN_YEARS_BACK = 20;
+const DROPDOWN_YEARS_FORWARD = 30;
+
 // Thay thế `<input type="date">` native — Safari iOS thật không cho style lại
 // control ngày/giờ native đầy đủ (quirk WebKit đã biết, PR #71-73 fix CSS
 // không giải quyết được). Dựng UI ngày tự vẽ bằng Popover (@base-ui/react,
@@ -55,6 +64,9 @@ function DatePicker({
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const selected = parseDateValue(value);
+  const thisYear = new Date().getFullYear();
+  const startMonth = new Date(thisYear - DROPDOWN_YEARS_BACK, 0, 1);
+  const endMonth = new Date(thisYear + DROPDOWN_YEARS_FORWARD, 11, 1);
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -79,30 +91,45 @@ function DatePicker({
               selected={selected}
               defaultMonth={selected}
               showOutsideDays
+              captionLayout="dropdown"
+              startMonth={startMonth}
+              endMonth={endMonth}
+              // Bỏ hẳn nút mũi tên tháng trước/sau — dropdown thay thế hoàn
+              // toàn vai trò điều hướng (nhảy thẳng tới tháng/năm bất kỳ).
+              hideNavigation
+              // Nhãn tháng mặc định là tên đầy đủ theo locale ("LLLL", vd
+              // "September") — quá dài, dễ vỡ layout cạnh dropdown năm trong
+              // popup hẹp trên mobile. Rút gọn "Th 9" (ngắn, không phụ thuộc
+              // locale nào đã cài).
+              formatters={{
+                formatMonthDropdown: (month) => `Th ${month.getMonth() + 1}`,
+              }}
               onSelect={(date) => {
                 if (!date) return;
                 onChange(toDateValue(date));
                 setOpen(false);
               }}
               components={{
-                Chevron: ({ orientation, className: chevronClassName }) =>
-                  orientation === "left" ? (
-                    <ChevronLeft className={cn("size-4", chevronClassName)} />
-                  ) : (
-                    <ChevronRight className={cn("size-4", chevronClassName)} />
-                  ),
+                // Chỉ còn dùng cho chevron nhỏ trong 2 ô dropdown (orientation
+                // luôn là "down" vì Nav trái/phải đã tắt ở trên).
+                Chevron: ({ className: chevronClassName }) => (
+                  <ChevronDown className={cn("size-3.25", chevronClassName)} />
+                ),
               }}
               classNames={{
                 root: "font-mono text-foreground",
                 months: "flex flex-col",
                 month: "flex flex-col gap-3",
-                month_caption: "relative flex items-center justify-center pt-1",
-                caption_label: "text-sm font-semibold",
-                nav: "absolute inset-x-0 top-1 flex items-center justify-between",
-                button_previous:
-                  "flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground disabled:opacity-30",
-                button_next:
-                  "flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground disabled:opacity-30",
+                month_caption: "flex items-center justify-center pt-1",
+                // Hàng chứa 2 ô dropdown tháng/năm, canh giữa cạnh nhau.
+                dropdowns: "flex items-center justify-center gap-2",
+                // Mỗi ô: <select> thật trong suốt phủ lên trên nhãn hiển thị
+                // bên dưới (react-day-picker không tự kèm CSS, phải tự style
+                // cả hai lớp — xem Dropdown.js của thư viện).
+                dropdown_root: "relative inline-flex",
+                dropdown: "absolute inset-0 z-10 cursor-pointer opacity-0",
+                caption_label:
+                  "inline-flex items-center gap-1 rounded-lg border border-input bg-card px-2.5 py-1 text-[13px] font-semibold text-foreground",
                 month_grid: "mt-2 border-collapse",
                 weekday:
                   "w-9 pb-1 text-center text-[11px] font-medium text-muted-faint",
