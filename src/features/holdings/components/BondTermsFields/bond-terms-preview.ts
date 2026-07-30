@@ -1,10 +1,11 @@
-import Decimal from "decimal.js";
+import type Decimal from "decimal.js";
 
 import {
   buildCouponSchedule,
   startOfUtcDay,
   type BondCouponScheduleTerms,
 } from "@/lib/bond-schedule";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 
 // Preview client-side cho card "Từ điều khoản này, app suy ra" (mockup Phase 7
 // Screens 7a) — CHỈ để user đối chiếu ngay lúc gõ, cùng vai trò với phần tự
@@ -43,14 +44,8 @@ type BondTermsPreview = {
 };
 
 function parsePositiveDecimal(value: string): Decimal | null {
-  const trimmed = value.trim();
-  if (trimmed === "") return null;
-  try {
-    const parsed = new Decimal(trimmed.replace(",", "."));
-    return parsed.isFinite() && parsed.gt(0) ? parsed : null;
-  } catch {
-    return null;
-  }
+  const parsed = parseDecimalOrNull(value);
+  return parsed && parsed.gt(0) ? parsed : null;
 }
 
 function parseUtcDate(value: string): Date | null {

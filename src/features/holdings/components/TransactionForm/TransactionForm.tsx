@@ -27,6 +27,7 @@ import {
   formatPercent,
   formatQuantity,
 } from "@/lib/format";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 import { holdingDetailAfterTransaction } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -89,10 +90,12 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Đi qua parseDecimalOrNull() (chuẩn hoá dấu phẩy sẵn bên trong) rồi mới đổi
+// ra number — không tự gọi Number()/normalize tay để khỏi lặp lại bug đã sửa.
 function toAmount(quantity: string, pricePerUnit: string): number {
-  const q = Number(quantity);
-  const p = Number(pricePerUnit);
-  if (!Number.isFinite(q) || !Number.isFinite(p) || q <= 0 || p <= 0) return 0;
+  const q = parseDecimalOrNull(quantity)?.toNumber() ?? 0;
+  const p = parseDecimalOrNull(pricePerUnit)?.toNumber() ?? 0;
+  if (q <= 0 || p <= 0) return 0;
   return q * p;
 }
 
@@ -102,14 +105,10 @@ function toGrossValueDecimal(
   quantity: string,
   pricePerUnit: string,
 ): Decimal | null {
-  try {
-    const q = new Decimal(quantity);
-    const p = new Decimal(pricePerUnit);
-    if (!q.isFinite() || !p.isFinite() || q.lte(0) || p.lte(0)) return null;
-    return q.mul(p);
-  } catch {
-    return null;
-  }
+  const q = parseDecimalOrNull(quantity);
+  const p = parseDecimalOrNull(pricePerUnit);
+  if (!q || !p || q.lte(0) || p.lte(0)) return null;
+  return q.mul(p);
 }
 
 // Khối "Thuế bán · tính lại" + "Phí giao dịch · tính lại" khi sửa ngày một

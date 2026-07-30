@@ -11,6 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatMoney } from "@/lib/format";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 import { holdingDetailAfterTransaction } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -91,10 +92,12 @@ function FieldHint({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Đi qua parseDecimalOrNull() (chuẩn hoá dấu phẩy sẵn bên trong) rồi mới đổi
+// ra number — không tự gọi Number()/normalize tay để khỏi lặp lại bug đã sửa.
 function toAmount(quantity: string, pricePerUnit: string): number {
-  const q = Number(quantity);
-  const p = Number(pricePerUnit);
-  if (!Number.isFinite(q) || !Number.isFinite(p) || q <= 0 || p <= 0) return 0;
+  const q = parseDecimalOrNull(quantity)?.toNumber() ?? 0;
+  const p = parseDecimalOrNull(pricePerUnit)?.toNumber() ?? 0;
+  if (q <= 0 || p <= 0) return 0;
   return q * p;
 }
 
