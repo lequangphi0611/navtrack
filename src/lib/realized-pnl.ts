@@ -1,7 +1,12 @@
 import Decimal from "decimal.js";
 
 import type { CashflowType } from "@prisma/client";
-import { sortByPositionTrailOrder } from "@/lib/position-trail";
+import { assertNever } from "@/lib/assert-never";
+import {
+  cashflowEventRank,
+  DEFAULT_EVENT_RANK,
+  sortByPositionTrailOrder,
+} from "@/lib/position-trail";
 
 // Tách thuần khỏi lib/cost-basis.ts (không đụng DB) — CỐ Ý KHÔNG mở rộng
 // CashflowInput/derivePosition() ở đó: field cần ở đây (Cashflow.amount đã
@@ -78,13 +83,21 @@ export function computeRealizedGainForHolding(
     | { kind: "CASHFLOW"; cf: RealizedGainCashflowInput }
     | { kind: "STOCK_DIVIDEND"; dividend: RealizedGainStockDividendInput };
 
-  const events: (Event & { id: string; date: Date; createdAt: Date })[] = [
+  const events: (Event & {
+    id: string;
+    date: Date;
+    createdAt: Date;
+    rank: number;
+  })[] = [
     ...cashflows.map((cf) => ({
       kind: "CASHFLOW" as const,
       cf,
       id: cf.id,
       date: cf.date,
       createdAt: cf.createdAt,
+      // Tất toán đáo hạn là sự kiện CUỐI trong ngày (issue #101) — cùng quy
+      // ước với derivePosition()/buildPositionEvents, không tự so type ở đây.
+      rank: cashflowEventRank(cf.type),
     })),
     ...stockDividends.map((dividend) => ({
       kind: "STOCK_DIVIDEND" as const,
@@ -92,6 +105,7 @@ export function computeRealizedGainForHolding(
       id: dividend.id,
       date: dividend.date,
       createdAt: dividend.createdAt,
+      rank: DEFAULT_EVENT_RANK,
     })),
   ];
   const sorted = sortByPositionTrailOrder(events);
@@ -107,17 +121,31 @@ export function computeRealizedGainForHolding(
     }
 
     const cf = event.cf;
-    if (cf.type === "BUY") {
-      const newRealQuantity = realQuantity.plus(cf.quantity);
-      avgCost = newRealQuantity.isZero()
-        ? new Decimal(0)
-        : realQuantity.mul(avgCost).plus(cf.amount.abs()).div(newRealQuantity);
-      realQuantity = newRealQuantity;
-    } else {
-      realizedGain = realizedGain.plus(
-        cf.amount.minus(cf.quantity.mul(avgCost)),
-      );
-      realQuantity = realQuantity.minus(cf.quantity);
+    switch (cf.type) {
+      case "BUY": {
+        const newRealQuantity = realQuantity.plus(cf.quantity);
+        avgCost = newRealQuantity.isZero()
+          ? new Decimal(0)
+          : realQuantity
+              .mul(avgCost)
+              .plus(cf.amount.abs())
+              .div(newRealQuantity);
+        realQuantity = newRealQuantity;
+        break;
+      }
+      case "SELL":
+      case "MATURITY": {
+        // Công thức tổng quát đúng cho cả SELL và MATURITY — cf.amount đã
+        // materialize đúng dòng tiền thực nhận từ bước computeCashflowAmount()
+        // (lib/cost-basis.ts, process/phase-7.md mục 3).
+        realizedGain = realizedGain.plus(
+          cf.amount.minus(cf.quantity.mul(avgCost)),
+        );
+        realQuantity = realQuantity.minus(cf.quantity);
+        break;
+      }
+      default:
+        assertNever(cf.type);
     }
   }
 

@@ -20,6 +20,12 @@ export const ROUTES = {
   editTransaction: (holdingId: string, cashflowId: string) =>
     `/holdings/${holdingId}/transactions/${cashflowId}/edit`,
   navOverrideNew: (holdingId: string) => `/holdings/${holdingId}/price`,
+  // Phase 7 (issue #58/#101) — điều khoản trái phiếu (mockup 7a) và tất toán
+  // đáo hạn (7e/7f). Điều khoản là route RIÊNG chứ không nhét vào form sửa vị
+  // thế: chỉ vị thế loại BOND mới có, và là nơi mọi màn thiếu điều khoản (7g,
+  // form ghi trái tức) trỏ người dùng tới.
+  bondTerms: (holdingId: string) => `/holdings/${holdingId}/bond-terms`,
+  maturitySettlement: (holdingId: string) => `/holdings/${holdingId}/maturity`,
   settings: "/settings",
   members: "/settings/members",
   inviteMember: "/settings/members/invite",

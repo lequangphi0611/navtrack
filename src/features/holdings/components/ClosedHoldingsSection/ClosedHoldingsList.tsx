@@ -52,21 +52,15 @@ function ClosedHoldingsList({ rows, hidden = false }: ClosedHoldingsListProps) {
           onOpenChange={(open) => {
             if (!open) setSelectedId(null);
           }}
-          symbol={selected.symbol}
-          name={selected.name}
-          type={selected.type}
-          realizedPnl={selected.realizedPnl}
-          realizedPnlPercent={selected.realizedPnlPercent}
-          xirrRealized={selected.xirrRealized}
-          holdingPeriodLabel={selected.holdingPeriodLabel}
-          startMonthLabel={selected.startMonthLabel}
-          endMonthLabel={selected.endMonthLabel}
-          totalInvested={selected.totalInvested}
-          totalProceeds={selected.totalProceeds}
-          totalDividends={selected.totalDividends}
+          // Props gộp theo vùng (issue #110) — `selected` (ClosedHoldingWithSheetData)
+          // vẫn giữ shape phẳng, truyền thẳng cho từng nhóm nhờ structural typing
+          // (đủ field cần, dư field không lỗi) thay vì liệt kê tay 15 field.
+          identity={selected}
+          pnl={selected}
+          holdingPeriod={selected}
+          breakdown={selected}
           orders={selected.orders}
-          reopenHref={selected.reopenHref}
-          detailHref={selected.detailHref}
+          actions={selected}
           hidden={hidden}
         />
       ) : null}

@@ -26,6 +26,7 @@ import {
 } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
+import { CASH_FLOW_DIVIDEND_TYPES } from "@/lib/enums";
 import {
   formatDate,
   formatDayMonth,
@@ -41,7 +42,7 @@ import { resolveDecimalSetting, SETTING_KEYS } from "@/lib/settings";
 import type { HoldingValuation } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
-import { buildXirrCashflows } from "@/lib/xirr-cashflow";
+import { buildXirrCashflows, sumXirrPointsAmount } from "@/lib/xirr-cashflow";
 
 // Một nguồn "chi phí ăn mòn" (docs/domain/07-tax.md mục "Chi phí ăn mòn") —
 // `source` là enum thuần, KHÔNG kèm nhãn tiếng Việt (nhất quán cách tách UI
@@ -227,10 +228,16 @@ async function getAllStockDividendsForXirr(
   }));
 }
 
-// Cổ tức tiền mặt <= cutoffDate cho toàn danh mục — cùng pattern
+// Cổ tức tiền mặt + TRÁI TỨC <= cutoffDate cho toàn danh mục — cùng pattern
 // getCashDividends trong holdings/queries.ts nhưng gộp nhiều holdingId một
 // lượt thay vì 1, tránh N+1 khi lặp qua từng vị thế. taxAmount thêm cho "chi
 // phí ăn mòn" (docs/domain/07-tax.md).
+//
+// Lọc theo CASH_FLOW_DIVIDEND_TYPES (lib/enums.ts) như 2 hàm tương ứng ở
+// features/holdings/repository.ts — hàm này nằm ở lib/ nên KHÔNG lọt vào lượt
+// rà "mọi nơi hardcode `type: CASH`" của #58, và hệ quả là trái tức vào XIRR
+// của TỪNG vị thế nhưng biến mất khỏi XIRR/PnL/chi phí ăn mòn cấp DANH MỤC —
+// hai con số lệch nhau âm thầm (review PR #102).
 async function getAllCashDividendsForXirr(
   holdingIds: string[],
   cutoffDate: Date,
@@ -247,7 +254,7 @@ async function getAllCashDividendsForXirr(
   const rows = await db.dividend.findMany({
     where: {
       holdingId: { in: holdingIds },
-      type: "CASH",
+      type: { in: [...CASH_FLOW_DIVIDEND_TYPES] },
       netAmount: { not: null },
       date: { lte: cutoffDate },
     },
@@ -499,10 +506,7 @@ async function computeXirrAndPnlCore(
   // "NAV − tổng vốn ròng đã bỏ vào" tương đương đại số với tổng có dấu của
   // đúng tập điểm đã đưa vào XIRR (Cashflow.amount mang dấu chuẩn BUY âm/SELL
   // dương + Dividend dương + NAV giả định dương) — không cần công thức riêng.
-  const absolutePnl = points.reduce(
-    (sum, p) => sum.plus(p.amount),
-    new Decimal(0),
-  );
+  const absolutePnl = sumXirrPointsAmount(points);
 
   // Tổng vốn ròng = -(Σ Cashflow.amount + Σ Dividend.netAmount) trước cutoff,
   // KHÔNG gồm điểm NAV giả định (points ở trên có thể có, nhưng cashflows/

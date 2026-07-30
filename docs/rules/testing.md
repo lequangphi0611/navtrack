@@ -34,6 +34,30 @@ test("Không tính được khi thiếu dòng tiền dương", () => {
 });
 ```
 
+## Tách core thuần ra khỏi vỏ bẩn để test được
+
+Hiện trạng cần giữ và cần sửa: **17/26 file `lib/` có unit test**, nhưng `features/*/actions.ts` và `features/*/queries.ts` có **0 test** — toàn bộ ~3.000 dòng đó chỉ được phủ bởi `pnpm e2e`, mà e2e cần Docker nên **không chạy được trên Claude Cloud** (xem `TOOLS.md`). Nghĩa là ở nửa số phiên làm việc, tầng này không có lưới an toàn nào.
+
+Cách xử **không phải** viết unit test cho action bằng cách mock Prisma — mock DB bắt được lỗi gõ sai nhưng bỏ lọt đúng thứ hay hỏng (vi phạm constraint, quan hệ sai, query sai), và mock lệch còn tạo test xanh giả.
+
+Cách đúng theo Functional Core / Imperative Shell ([`clean-code.md`](./clean-code.md#3-functional-core--imperative-shell)):
+
+- **Rút phần thuần ra khỏi action** cho tới khi phần còn lại mỏng đến mức không còn gì để test. Phần rút ra là hàm thuần ⇒ test bằng Vitest, không cần DB, chạy được mọi hạ tầng.
+- **Không viết test cho vỏ mỏng** (`persistPosition`, `triggerManualSnapshot`, wrapper `revalidatePath`) — test chúng là test Prisma/Next, không phải test Navtrack.
+- **Luồng thật đi qua DB** vẫn thuộc phạm vi e2e, không cố mô phỏng bằng unit test.
+
+```ts
+// ❌ Bad — mock db để test action; xanh nhưng không chứng minh được gì về DB thật
+vi.mock("@/lib/db", () => ({ db: { holding: { findUnique: vi.fn() } } }));
+
+// ✅ Good — rút phần thuần ra rồi test thẳng nó
+test("cổ tức CP làm tròn xuống thì báo wasRounded", () => {
+  expect(buildDividendFormState({ /* ... */ }).result.wasRounded).toBe(true);
+});
+```
+
+Tiêu chí máy móc: **hàm thuần mới viết ra thì bắt buộc có `.test.ts` colocate**; hàm có I/O thì không.
+
 ## Không test UI
 
 ```ts

@@ -1,20 +1,16 @@
 "use client";
 
 import Decimal from "decimal.js";
+
+import type { DividendType } from "@prisma/client";
 import {
-  Calculator,
   Check,
   CheckCircle2,
   Coins,
   History,
-  Info,
   Layers,
-  Lock,
-  Pencil,
   Settings2,
-  Sigma,
   TrendingUp,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState } from "react";
@@ -23,25 +19,27 @@ import { Alert } from "@/components/Alert";
 import { PageHeader } from "@/components/PageHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Input } from "@/components/ui/input";
+import { BondTermsMissingNotice } from "@/features/dividends/components/BondTermsMissingNotice";
 import {
   HoldingSwitcher,
   type HoldingSwitcherProps,
 } from "@/features/dividends/components/HoldingSwitcher";
-import {
-  computeStockDividend,
-  isStockQuantityOverrideValid,
-} from "@/features/dividends/dividend-math";
 import type {
+  BondCouponContext,
   DividendFormState,
   DividendHolding,
   DividendRecordedResult,
 } from "@/features/dividends/types";
+import { assertNever } from "@/lib/assert-never";
+import { dividendTypeName } from "@/lib/dividend-label";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type DividendKind = "CASH" | "STOCK";
+import { BondCouponFields } from "./BondCouponFields";
+import { CashDividendFields } from "./CashDividendFields";
+import { parseDecimalOrNull } from "./parse-decimal";
+import { PriceAdjustmentCheckbox } from "./PriceAdjustmentCheckbox";
+import { StockDividendFields } from "./StockDividendFields";
 
 type DividendFormProps = {
   holding: DividendHolding;
@@ -56,39 +54,71 @@ type DividendFormProps = {
   historyHref: string; // icon "history" góc phải header — lịch sử cổ tức của holding này
   closeHref: string;
   hidden?: boolean;
+  // Chỉ có mặt khi Holding là trái phiếu (Phase 7) — vắng mặt thì KHÔNG hiện
+  // tab "Trái tức", form giữ nguyên hai loại của Phase 4.
+  bond?: BondCouponContext;
   action: (
     prevState: DividendFormState,
     formData: FormData,
   ) => Promise<DividendFormState>;
 };
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <label className="mb-2 block text-[12.5px] font-semibold text-muted-foreground">
-      {children}
-    </label>
-  );
-}
+const DIVIDEND_FORM_SUBTITLE: Record<DividendType, string> = {
+  CASH: "Nhập % → tự tính tiền nhận về",
+  STOCK: "Cổ phiếu → tăng số lượng nắm giữ",
+  BOND_COUPON: "Điều khoản có sẵn → chỉ nhập ngày",
+};
 
-// Parse lenient — input "percent" gõ tay có thể rỗng/dở dang lúc user đang gõ;
-// new Decimal() throw trên chuỗi không hợp lệ (khác Number() trả NaN êm), nên
-// phải try/catch thay vì để lỗi văng ra ngoài React render (cùng pattern
-// NavOverrideForm.tsx).
-function parseDecimalOrNull(value: string): Decimal | null {
-  if (value.trim() === "") return null;
-  try {
-    const decimal = new Decimal(value);
-    return decimal.isFinite() ? decimal : null;
-  } catch {
-    return null;
+const SUBMIT_BUTTON_CLASS: Record<DividendType, string> = {
+  CASH: "bg-gain text-primary-foreground hover:bg-gain/85",
+  STOCK: "bg-accent text-accent-foreground hover:bg-accent/85",
+  BOND_COUPON: "bg-asset-bond text-primary-foreground hover:bg-asset-bond/85",
+};
+
+const SUBMIT_BUTTON_LABEL: Record<DividendType, string> = {
+  CASH: "Ghi cổ tức",
+  STOCK: "Ghi cổ tức",
+  BOND_COUPON: "Ghi trái tức",
+};
+
+// Điều kiện chặn submit khác hẳn nhau theo loại: CASH/STOCK bắt buộc có % > 0,
+// còn BOND_COUPON KHÔNG có ô % nào (mệnh giá/lãi suất đọc từ BondTerms) nên
+// chỉ cần ngày trả lãi. switch exhaustive để thêm loại mới là đỏ ngay, không
+// âm thầm rơi vào điều kiện của loại khác.
+function isSubmitDisabled(
+  type: DividendType,
+  input: {
+    percentDecimal: ReturnType<typeof parseDecimalOrNull>;
+    overrideInvalid: boolean;
+    date: string;
+  },
+): boolean {
+  switch (type) {
+    case "CASH":
+      return !input.percentDecimal || input.percentDecimal.lte(0);
+    case "STOCK":
+      return (
+        !input.percentDecimal ||
+        input.percentDecimal.lte(0) ||
+        input.overrideInvalid
+      );
+    case "BOND_COUPON":
+      return input.date === "";
+    default:
+      return assertNever(type);
   }
 }
 
-// Form ghi nhận cổ tức (mockup Phase 4 Screens, 4a Tiền mặt / 4c Cổ phiếu — MỘT
-// component dùng chung cho cả 2, chỉ khác nhánh hiển thị theo `type`). Trạng
-// thái thành công (4d) render INLINE thay vì route riêng — cùng pattern
-// SnapshotFreezeSheet.isDone/SnapshotTodayCard, tránh phải quyết định "có
-// router.push hay không" (decision (d) cũ trong plan, nay không còn cần thiết).
+// Form ghi nhận cổ tức (mockup Phase 4 Screens, 4a Tiền mặt / 4c Cổ phiếu).
+// Container chỉ giữ phần THẬT SỰ dùng chung (header, switcher, checkbox điều
+// chỉnh giá, nút submit, wiring Server Action) và rẽ nhánh theo `type` ĐÚNG
+// MỘT LẦN để chọn variant component nào render — phần biến thiên theo loại
+// (preview, field ngày, card breakdown, alert...) tự chứa trong
+// CashDividendFields/StockDividendFields, không rẽ nhánh lại ở đây (trước đây
+// 9 chỗ switch/IIFE trên cùng biến `type`, xem docs/rules/
+// component-architecture.md mục "Biến thiên theo enum nghiệp vụ lặp lại",
+// process/DECISION.md 2026-07-28). Trạng thái thành công (4d) render INLINE
+// thay vì route riêng — cùng pattern SnapshotFreezeSheet.isDone/SnapshotTodayCard.
 function DividendForm({
   holding,
   switcher,
@@ -98,9 +128,13 @@ function DividendForm({
   historyHref,
   closeHref,
   hidden = false,
+  bond,
   action,
 }: DividendFormProps) {
-  const [type, setType] = useState<DividendKind>("CASH");
+  // Vị thế trái phiếu mở thẳng tab "Trái tức" (mockup 7b vẽ loại thứ ba đang
+  // active) — đó là loại thu nhập duy nhất trái phiếu thực sự phát sinh; hai
+  // tab kia vẫn còn đó cho ca hiếm, chỉ là không phải mặc định.
+  const [type, setType] = useState<DividendType>(bond ? "BOND_COUPON" : "CASH");
   const [percent, setPercent] = useState("");
   const [date, setDate] = useState(defaultDateInputValue);
   // Issue #61: ngày tiền/CP thực về TK — thuần thông tin, optional (không có
@@ -111,59 +145,41 @@ function DividendForm({
   // (cùng pattern hidden input "type"), KHÔNG submit trực tiếp checkbox thô.
   const [priceAlreadyReflectsMarket, setPriceAlreadyReflectsMarket] =
     useState(false);
+  // Giữ ở container (không local trong StockDividendFields) để KHÔNG mất giá
+  // trị khi user chuyển sang CASH rồi quay lại STOCK — hành vi gốc trước khi
+  // tách component.
   const [stockOverride, setStockOverride] = useState("");
   const [showOverrideInput, setShowOverrideInput] = useState(false);
+  // Chỉ STOCK tính được (so lệch tolerance số làm tròn) — StockDividendFields
+  // báo ngược lên qua onValidityChange. Điều kiện disabled ở nút Submit tự bỏ
+  // qua giá trị cũ khi `type !== "STOCK"`, không cần reset khi đổi tab.
+  const [overrideInvalid, setOverrideInvalid] = useState(false);
   const [state, formAction, isPending] = useActionState(action, null);
   const isDone = state?.ok === true;
 
   const percentDecimal = parseDecimalOrNull(percent);
-  const quantity = new Decimal(holding.quantity);
-  const isCash = type === "CASH";
+  const isBondTermsMissing = type === "BOND_COUPON" && !bond?.terms;
+  // "Điều khoản có sẵn → chỉ nhập ngày" sẽ nói dối ở đúng màn báo THIẾU điều
+  // khoản (7g) — bỏ subtitle ở ca đó, để nội dung màn tự nói.
+  const subtitle = isBondTermsMissing
+    ? undefined
+    : DIVIDEND_FORM_SUBTITLE[type];
 
-  // Preview CASH — chỉ minh hoạ client-side, Server Action (#52) tự tính lại
-  // gross/tax/net độc lập, KHÔNG tin số này khi lưu.
-  const pricePerShare =
-    isCash && percentDecimal
-      ? new Decimal(faceValuePerShare).mul(percentDecimal).div(100)
-      : null;
-  const grossAmount = pricePerShare ? pricePerShare.mul(quantity) : null;
-  const taxAmount = grossAmount
-    ? grossAmount.mul(taxRatePercent).div(100)
-    : null;
-  const netAmount =
-    grossAmount && taxAmount ? grossAmount.minus(taxAmount) : null;
-
-  // Preview STOCK — dùng chung dividend-math.ts với Server Action (tránh drift
-  // giữa 2 nơi tính công thức), stockQuantity đã floor (cổ phiếu không chia
-  // lẻ). rawStockQuantity là mốc so sánh tolerance cho override.
-  const stockDividend =
-    !isCash && percentDecimal
-      ? computeStockDividend({ percent: percentDecimal, quantity })
-      : null;
-  const overrideDecimal = parseDecimalOrNull(stockOverride);
-  // User đã bật ô chỉnh sửa VÀ gõ được một số hợp lệ -> ưu tiên hiển thị số đó
-  // (kể cả khi lệch quá tolerance — disable submit lo phần chặn, không chặn preview).
-  const overrideActive = showOverrideInput && overrideDecimal !== null;
-  const overrideInvalid =
-    overrideDecimal !== null &&
-    stockDividend !== null &&
-    !isStockQuantityOverrideValid(
-      overrideDecimal,
-      stockDividend.rawStockQuantity,
-    );
-  const addedQuantity = overrideActive
-    ? overrideDecimal
-    : (stockDividend?.stockQuantity ?? null);
-  const afterQuantity = addedQuantity ? quantity.plus(addedQuantity) : null;
-
-  const subtitle = isCash
-    ? "Nhập % → tự tính tiền nhận về"
-    : "Cổ phiếu → tăng số lượng nắm giữ";
+  const priceAdjustmentCheckbox = (
+    <PriceAdjustmentCheckbox
+      checked={priceAlreadyReflectsMarket}
+      onChange={setPriceAlreadyReflectsMarket}
+      disabled={isPending}
+    />
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4.5 p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
       <PageHeader
-        title="Ghi cổ tức"
+        // Trái phiếu gộp chung ba loại thu nhập (cổ tức tiền mặt/cổ phiếu/trái
+        // tức) nên tiêu đề rộng hơn — bám `bond` chứ không bám tab đang chọn,
+        // để tiêu đề không nhảy chữ mỗi lần user đổi tab.
+        title={bond ? "Ghi thu nhập" : "Ghi cổ tức"}
         subtitle={isDone ? undefined : subtitle}
         backHref={closeHref}
         variant="close"
@@ -196,6 +212,11 @@ function DividendForm({
             options={[
               { value: "CASH", label: "Tiền mặt" },
               { value: "STOCK", label: "Cổ phiếu" },
+              // Chỉ trái phiếu mới có loại thứ ba (mockup 7b) — mã cổ phiếu/
+              // quỹ không hiện tab này.
+              ...(bond
+                ? [{ value: "BOND_COUPON" as const, label: "Trái tức" }]
+                : []),
             ]}
             value={type}
             onChange={setType}
@@ -203,345 +224,72 @@ function DividendForm({
             className="rounded-xl bg-card p-1 font-bold"
           />
 
-          <div>
-            <FieldLabel>
-              {isCash
-                ? "Tỷ lệ cổ tức (% mệnh giá)"
-                : "Tỷ lệ cổ tức cổ phiếu (%)"}
-            </FieldLabel>
-            <div className="relative">
-              <Input
-                type="text"
-                inputMode="decimal"
-                name="percent"
-                value={percent}
-                onChange={(event) => setPercent(event.target.value)}
-                placeholder="0"
-                className="h-15 rounded-2xl border-primary/40 pr-9 text-[26px] font-mono font-semibold"
-                required
-                disabled={isPending}
-              />
-              <span className="absolute top-1/2 right-4 -translate-y-1/2 text-base font-medium text-muted-foreground">
-                %
-              </span>
-            </div>
-            <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[11.5px] text-muted-faint">
-              <Sigma className="size-3.5 shrink-0" />
-              {isCash ? (
-                <span>
-                  {percent || "0"}% × {formatMoney(faceValuePerShare)} mệnh giá
-                  ={" "}
-                  <span className="text-primary">
-                    {pricePerShare
-                      ? `${formatMoney(pricePerShare.toString())}/${holding.unit}`
-                      : "—"}
-                  </span>
-                </span>
-              ) : (
-                <span>
-                  {percent || "0"}% ×{" "}
-                  {formatQuantity(holding.quantity, holding.unit)} ={" "}
-                  <span className="text-primary">
-                    {addedQuantity
-                      ? formatQuantity(addedQuantity.toString(), holding.unit)
-                      : "—"}
-                  </span>{" "}
-                  thưởng
-                </span>
-              )}
-            </div>
-
-            {!isCash ? (
-              <div className="mt-1.5 flex flex-col gap-1.5">
-                {stockDividend?.wasRounded && !overrideActive ? (
-                  <div className="flex items-start gap-1.5 font-mono text-[11px] text-muted-faint">
-                    <Info className="mt-0.5 size-3.25 shrink-0" />
-                    <span>
-                      Đã làm tròn xuống từ{" "}
-                      {formatQuantity(
-                        stockDividend.rawStockQuantity.toString(),
-                        holding.unit,
-                      )}{" "}
-                      →{" "}
-                      {formatQuantity(
-                        stockDividend.stockQuantity.toString(),
-                        holding.unit,
-                      )}{" "}
-                      · cổ phiếu không chia lẻ
-                    </span>
-                  </div>
-                ) : null}
-
-                {showOverrideInput ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowOverrideInput(false);
-                      setStockOverride("");
-                    }}
-                    className="flex w-fit items-center gap-1 text-[11.5px] font-semibold text-muted-foreground hover:text-foreground"
+          {(() => {
+            switch (type) {
+              case "CASH":
+                return (
+                  <CashDividendFields
+                    holding={holding}
+                    percent={percent}
+                    onPercentChange={setPercent}
+                    faceValuePerShare={faceValuePerShare}
+                    taxRatePercent={taxRatePercent}
+                    date={date}
+                    onDateChange={setDate}
+                    paymentDate={paymentDate}
+                    onPaymentDateChange={setPaymentDate}
+                    isPending={isPending}
                   >
-                    <X className="size-3" />
-                    Bỏ chỉnh sửa, dùng số hệ thống tính
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowOverrideInput(true)}
-                    className="flex w-fit items-center gap-1 text-[11.5px] font-semibold text-accent hover:underline"
+                    {priceAdjustmentCheckbox}
+                  </CashDividendFields>
+                );
+              case "STOCK":
+                return (
+                  <StockDividendFields
+                    holding={holding}
+                    percent={percent}
+                    onPercentChange={setPercent}
+                    date={date}
+                    onDateChange={setDate}
+                    paymentDate={paymentDate}
+                    onPaymentDateChange={setPaymentDate}
+                    isPending={isPending}
+                    stockOverride={stockOverride}
+                    onStockOverrideChange={setStockOverride}
+                    showOverrideInput={showOverrideInput}
+                    onShowOverrideInputChange={setShowOverrideInput}
+                    onValidityChange={setOverrideInvalid}
                   >
-                    <Pencil className="size-3" />
-                    Sửa số lượng nếu công ty làm tròn khác
-                  </button>
-                )}
-
-                {showOverrideInput ? (
-                  <div className="mt-0.5">
-                    <FieldLabel>
-                      Số lượng thực nhận (theo thông báo công ty)
-                    </FieldLabel>
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      name="stockQuantityOverride"
-                      value={stockOverride}
-                      onChange={(event) => setStockOverride(event.target.value)}
-                      placeholder={
-                        stockDividend
-                          ? stockDividend.stockQuantity.toString()
-                          : "0"
-                      }
-                      className="h-11 rounded-xl font-mono font-semibold"
-                      disabled={isPending}
-                    />
-                    {overrideInvalid && stockDividend ? (
-                      <p className="mt-1.5 text-[11.5px] text-destructive">
-                        Chỉ được lệch tối đa 2 đơn vị so với số tính từ % (
-                        {formatQuantity(
-                          stockDividend.rawStockQuantity.toString(),
-                          holding.unit,
-                        )}
-                        )
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-
-          {isCash ? (
-            <div className="grid grid-cols-[minmax(0,1fr)_6.75rem] gap-2.5">
-              <div>
-                <FieldLabel>Ngày nhận</FieldLabel>
-                <DatePicker
-                  name="date"
-                  value={date}
-                  onChange={setDate}
-                  required
-                  disabled={isPending}
-                />
-              </div>
-              <div>
-                <FieldLabel>Thuế</FieldLabel>
-                <div className="flex h-11 w-full items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3">
-                  <Lock className="size-3.5 shrink-0 text-muted-faint" />
-                  <span className="font-mono text-[13.5px] font-semibold text-muted-foreground">
-                    {taxRatePercent}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <FieldLabel>Ngày nhận</FieldLabel>
-              <DatePicker
-                name="date"
-                value={date}
-                onChange={setDate}
-                required
-                disabled={isPending}
-              />
-            </div>
-          )}
-
-          <div>
-            <FieldLabel>
-              Ngày thanh toán{" "}
-              <span className="font-normal text-muted-faint">· tuỳ chọn</span>
-            </FieldLabel>
-            <DatePicker
-              name="paymentDate"
-              value={paymentDate}
-              onChange={setPaymentDate}
-              disabled={isPending}
-            />
-            <div className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-faint">
-              <Info className="mt-0.5 size-3.25 shrink-0" />
-              <span>
-                {isCash ? (
-                  <>
-                    Ngày tiền thực về tài khoản. Dùng làm mốc tính XIRR (bỏ
-                    trống thì tính theo ngày chia). Không ảnh hưởng giá điều
-                    chỉnh — mốc đó vẫn luôn bám ngày chia.
-                  </>
+                    {priceAdjustmentCheckbox}
+                  </StockDividendFields>
+                );
+              case "BOND_COUPON":
+                // Không thể chạm tới khi `bond` vắng mặt (tab không tồn tại) —
+                // guard này chỉ để TS thu hẹp kiểu, không phải nhánh UI thật.
+                if (!bond) return null;
+                // Chưa nhập điều khoản -> CHẶN hẳn form, dẫn sang màn nhập
+                // (mockup 7g). App không đoán mệnh giá/lãi suất.
+                return bond.terms ? (
+                  <BondCouponFields
+                    holding={holding}
+                    bond={{ ...bond, terms: bond.terms }}
+                    date={date}
+                    onDateChange={setDate}
+                    paymentDate={paymentDate}
+                    onPaymentDateChange={setPaymentDate}
+                    isPending={isPending}
+                  />
                 ) : (
-                  <>
-                    Ngày {holding.unit} thực về tài khoản. Không dùng để tính
-                    XIRR hay giá điều chỉnh — mọi tính toán bám ngày chia.
-                  </>
-                )}
-              </span>
-            </div>
-          </div>
-
-          {isCash ? (
-            <div className="overflow-hidden rounded-2xl border border-border bg-card">
-              <div className="flex items-center gap-1.75 border-b border-white/5 px-3.75 py-2.75 text-[11.5px] font-semibold text-muted-foreground">
-                <Calculator className="size-3.75 text-primary" />
-                Tự tính số tiền nhận về
-              </div>
-              <div className="flex items-center justify-between px-3.75 py-2.75">
-                <span className="text-[13px] text-muted-foreground">
-                  Cổ tức gộp{" "}
-                  <span className="text-[11px] text-muted-faint">
-                    · {formatQuantity(holding.quantity, holding.unit)} ×{" "}
-                    {pricePerShare
-                      ? formatMoney(pricePerShare.toString())
-                      : "—"}
-                  </span>
-                </span>
-                <span className="font-mono text-sm font-semibold text-foreground">
-                  {grossAmount ? formatMoney(grossAmount.toString()) : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t border-white/4.5 px-3.75 py-2.75">
-                <span className="text-[13px] text-muted-foreground">
-                  Thuế TNCN{" "}
-                  <span className="text-[11px] text-muted-faint">
-                    · {taxRatePercent}%
-                  </span>
-                </span>
-                <span className="font-mono text-sm font-semibold text-destructive">
-                  {taxAmount ? `−${formatMoney(taxAmount.toString())}` : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t border-white/7 bg-gain/7 px-3.75 py-3.25">
-                <span className="text-[13.5px] font-semibold text-gain">
-                  Thực nhận (net)
-                </span>
-                <span className="font-mono text-lg font-bold text-gain">
-                  {netAmount ? formatMoney(netAmount.toString()) : "—"}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-2xl border border-border bg-card">
-              <div className="flex items-center gap-1.75 border-b border-white/5 px-3.75 py-2.75 text-[11.5px] font-semibold text-muted-foreground">
-                <Calculator className="size-3.75 text-accent" />
-                Số lượng nắm giữ thay đổi
-              </div>
-              <div className="flex items-center justify-between px-3.75 py-2.75">
-                <span className="text-[13px] text-muted-foreground">
-                  Đang nắm giữ
-                </span>
-                <span className="font-mono text-sm font-semibold text-foreground">
-                  {formatQuantity(holding.quantity, holding.unit)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t border-white/4.5 px-3.75 py-2.75">
-                <span className="text-[13px] text-muted-foreground">
-                  CP thưởng{" "}
-                  <span className="text-[11px] text-muted-faint">
-                    · {formatQuantity(holding.quantity, holding.unit)} ×{" "}
-                    {percent || "0"}%
-                  </span>
-                </span>
-                <span className="font-mono text-sm font-semibold text-accent">
-                  {addedQuantity
-                    ? `+${formatQuantity(addedQuantity.toString(), holding.unit)}`
-                    : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t border-white/7 bg-accent/8 px-3.75 py-3.25">
-                <span className="text-[13.5px] font-semibold text-accent">
-                  Sau khi ghi
-                </span>
-                <span className="font-mono text-lg font-bold text-accent">
-                  {afterQuantity
-                    ? formatQuantity(afterQuantity.toString(), holding.unit)
-                    : "—"}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Issue #61: checkbox điều khiển việc Server Action có tự tạo
-              NavOverride bù pha loãng hay không — áp dụng cho cả CASH/STOCK.
-              Submit qua hidden input "true"/"false" ở đầu form, không phải
-              chính input này. */}
-          <div className="overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="flex items-center gap-1.75 border-b border-white/5 px-3.75 py-2.75 text-[11.5px] font-semibold text-muted-foreground">
-              <Settings2 className="size-3.75 text-accent" />
-              Giá điều chỉnh kỹ thuật
-              <span className="ml-auto text-[10.5px] font-medium text-muted-faint">
-                ngày chia
-              </span>
-            </div>
-            <label className="relative flex cursor-pointer items-start gap-2.75 px-3.75 py-3.25">
-              <input
-                type="checkbox"
-                checked={priceAlreadyReflectsMarket}
-                onChange={(event) =>
-                  setPriceAlreadyReflectsMarket(event.target.checked)
-                }
-                className="peer sr-only"
-                disabled={isPending}
-              />
-              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border border-border bg-white/4 transition-colors peer-checked:border-accent peer-checked:bg-accent">
-                <Check className="size-3.5 text-accent-foreground opacity-0 transition-opacity peer-checked:opacity-100" />
-              </span>
-              <span className="flex-1">
-                <span className="block text-[12.5px] font-semibold text-muted-foreground">
-                  Giá hiện tại đã phản ánh đợt chia này
-                </span>
-                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-faint">
-                  Bỏ trống → hệ thống tự tính và ghi giá điều chỉnh tại ngày
-                  chia. Tick nếu giá đang niêm yết đã đúng (vd job cập nhật giá
-                  đã chạy lại).
-                </span>
-              </span>
-            </label>
-          </div>
-
-          {isCash ? (
-            <div className="flex gap-2.25 rounded-xl border border-gain/22 bg-gain/7 p-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
-              <TrendingUp className="mt-0.5 size-4.25 shrink-0 text-gain" />
-              <div className="text-[11.5px] leading-relaxed text-muted-foreground">
-                Net{" "}
-                <span className="text-foreground-soft">
-                  {netAmount
-                    ? formatMoney(netAmount.toString(), { compact: true })
-                    : "—"}
-                </span>{" "}
-                ghi làm{" "}
-                <span className="text-foreground-soft">dòng tiền dương</span>{" "}
-                trong chuỗi XIRR — số minh hoạ, Server Action sẽ tính lại.
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-2.25 rounded-xl border border-border bg-card p-3">
-              <Info className="mt-0.5 size-4.25 shrink-0 text-muted-faint" />
-              <div className="text-[11.5px] leading-relaxed text-muted-foreground">
-                Cổ tức cổ phiếu{" "}
-                <span className="text-foreground-soft">
-                  không phát sinh dòng tiền
-                </span>{" "}
-                → không vào XIRR. Giá vốn/{holding.unit} giữ nguyên, số lượng{" "}
-                {holding.unit} tăng thêm tương ứng.
-              </div>
-            </div>
-          )}
+                  <BondTermsMissingNotice
+                    symbol={holding.symbol}
+                    bondTermsHref={bond.bondTermsHref}
+                    dismissHref={closeHref}
+                  />
+                );
+              default:
+                return assertNever(type);
+            }
+          })()}
 
           {state && !state.ok ? (
             <Alert
@@ -551,64 +299,96 @@ function DividendForm({
             />
           ) : null}
 
-          <Button
-            type="submit"
-            disabled={
-              isPending ||
-              !percentDecimal ||
-              percentDecimal.lte(0) ||
-              overrideInvalid
-            }
-            className={cn(
-              "h-13 w-full gap-2 rounded-2xl text-[14.5px] font-bold",
-              isCash
-                ? "bg-gain text-primary-foreground hover:bg-gain/85"
-                : "bg-accent text-accent-foreground hover:bg-accent/85",
-            )}
-          >
-            <Check className="size-5" />
-            {isPending ? "Đang ghi…" : "Ghi cổ tức"}
-          </Button>
+          {/* Màn chặn "chưa có điều khoản" (7g) tự mang CTA riêng dẫn sang màn
+              nhập — không có gì để submit nên ẩn hẳn nút, thay vì hiện một nút
+              disabled không giải thích được vì sao. */}
+          {isBondTermsMissing ? null : (
+            <Button
+              type="submit"
+              disabled={
+                isPending ||
+                isSubmitDisabled(type, {
+                  percentDecimal,
+                  overrideInvalid,
+                  date,
+                })
+              }
+              className={cn(
+                "h-13 w-full gap-2 rounded-2xl text-[14.5px] font-bold",
+                SUBMIT_BUTTON_CLASS[type],
+              )}
+            >
+              <Check className="size-5" />
+              {isPending ? "Đang ghi…" : SUBMIT_BUTTON_LABEL[type]}
+            </Button>
+          )}
         </form>
       )}
     </div>
   );
 }
 
-// Nội dung "Đã ghi cổ tức" (mockup 4d) — render inline thay vì route riêng
-// (xem docstring DividendForm). Không hiển thị dòng "Snapshot MANUAL đã chốt
-// tự động" của mockup — thuộc Phase 3, việc auto-snapshot khi ghi cổ tức chưa
-// được xác nhận trong scope Phase 4 (xem process/UI_phase_4.md).
-function DividendSuccessContent({
-  result,
-}: {
-  result: DividendRecordedResult;
-}) {
-  const isCash = result.type === "CASH";
+// Nhãn "Cổ tức tiền mặt"/"Cổ tức cổ phiếu" theo DividendType — ghép từ
+// dividendTypeName() (src/lib/dividend-label.ts, MỘT nguồn sự thật cho tên
+// loại), không tự khai lại tên loại ở đây. BOND_COUPON không ghép "Cổ tức"
+// (đây là trái tức, không phải cổ tức) — giữ switch exhaustive để compiler
+// bắt lỗi ngay khi thêm giá trị DividendType mới.
+function dividendTypeLabel(type: DividendType): string {
+  switch (type) {
+    case "CASH":
+    case "STOCK":
+      return `Cổ tức ${dividendTypeName(type).toLowerCase()}`;
+    case "BOND_COUPON":
+      return dividendTypeName(type);
+    default:
+      return assertNever(type);
+  }
+}
 
-  return (
-    <div className="flex flex-1 flex-col gap-4.5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
-      <div className="mt-2 flex flex-col items-center gap-3.5">
-        <div className="flex size-19 items-center justify-center rounded-full border border-gain/35 bg-gain/14">
-          <CheckCircle2 className="size-10.5 text-gain" />
-        </div>
-        <div className="text-center">
-          <div className="text-xl font-bold text-foreground">
-            Đã ghi cổ tức {result.symbol}
-          </div>
-          <div className="mt-0.75 text-[12.5px] text-muted-faint">
-            {isCash ? "Cổ tức tiền mặt" : "Cổ tức cổ phiếu"}{" "}
-            {result.percentLabel}% · {result.dateLabel}
-          </div>
-          {result.paymentDateLabel ? (
-            <div className="mt-0.5 text-[11px] text-muted-faint">
-              Thanh toán {result.paymentDateLabel}
-            </div>
-          ) : null}
-        </div>
-      </div>
+// Dòng mô tả dưới tiêu đề màn thành công. CASH/STOCK là "% cổ tức" của đợt
+// chia; BOND_COUPON là LÃI SUẤT DANH NGHĨA THEO NĂM + kỳ trả lãi — đọc "Trái
+// tức 9%" trơ trọi sẽ bị hiểu nhầm là 9% cho riêng kỳ này (thực tế kỳ 6 tháng
+// chỉ trả 4,5%).
+function dividendResultSubtitle(result: DividendRecordedResult): string {
+  switch (result.type) {
+    case "CASH":
+    case "STOCK":
+      return `${dividendTypeLabel(result.type)} ${result.percentLabel}%`;
+    case "BOND_COUPON":
+      return [
+        `${dividendTypeLabel(result.type)} ${result.percentLabel}%/năm`,
+        result.couponFrequencyMonths
+          ? `kỳ ${result.couponFrequencyMonths} tháng`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    default:
+      return assertNever(result.type);
+  }
+}
 
-      {isCash ? (
+// Icon minh hoạ dòng "Tổng cổ tức đã nhận" — cùng lý do exhaustive như trên.
+function DividendReceivedIcon({ type }: { type: DividendType }) {
+  switch (type) {
+    case "CASH":
+      return <Coins className="size-4.5 shrink-0 text-accent" />;
+    case "STOCK":
+      return <Layers className="size-4.5 shrink-0 text-accent" />;
+    case "BOND_COUPON":
+      return <Coins className="size-4.5 shrink-0 text-accent" />;
+    default:
+      return assertNever(type);
+  }
+}
+
+// Khối số liệu chính (net CASH hoặc số lượng sau nhận STOCK) — tách theo
+// switch exhaustive trên result.type, giữ nguyên 100% nội dung hiển thị của
+// từng nhánh cũ.
+function DividendMainCard({ result }: { result: DividendRecordedResult }) {
+  switch (result.type) {
+    case "CASH":
+      return (
         <div className="rounded-2xl border border-gain/28 bg-linear-to-br from-gain/12 to-card p-4.5 text-center">
           <div className="text-xs font-semibold text-gain">
             Thực nhận vào tài khoản
@@ -623,7 +403,9 @@ function DividendSuccessContent({
             </div>
           ) : null}
         </div>
-      ) : (
+      );
+    case "STOCK":
+      return (
         <div className="rounded-2xl border border-accent/28 bg-linear-to-br from-accent/12 to-card p-4.5 text-center">
           <div className="text-xs font-semibold text-accent">
             Số lượng sau khi nhận
@@ -645,7 +427,69 @@ function DividendSuccessContent({
             </div>
           ) : null}
         </div>
-      )}
+      );
+    case "BOND_COUPON":
+      // Cùng khung số liệu với CASH (đều là tiền thực nhận), khác ở TÔNG MÀU
+      // trái phiếu và ở chỗ thuế 0 được nói rõ là "miễn thuế" thay vì để trống
+      // — người dùng trái phiếu Chính phủ nhìn 0 ₫ mà không có lời giải thích
+      // sẽ tưởng app tính thiếu (mockup 7c).
+      return (
+        <div className="rounded-2xl border border-asset-bond/34 bg-linear-to-br from-asset-bond/14 to-card p-4.5 text-center">
+          <div className="text-xs font-semibold text-asset-bond">
+            Thực nhận vào tài khoản
+          </div>
+          <div className="mt-1.25 font-mono text-[28px] font-bold tracking-tight text-gain">
+            {result.netAmount ? formatMoney(result.netAmount) : "—"}
+          </div>
+          {result.grossAmount && result.taxAmount ? (
+            <div className="mt-1.25 font-mono text-[11px] text-muted-faint">
+              gộp {formatMoney(result.grossAmount)}
+              {new Decimal(result.taxAmount).isZero()
+                ? " · miễn thuế"
+                : ` − thuế ${formatMoney(result.taxAmount)}`}
+            </div>
+          ) : null}
+        </div>
+      );
+    default:
+      return assertNever(result.type);
+  }
+}
+
+// Nội dung "Đã ghi cổ tức" (mockup 4d) — render inline thay vì route riêng
+// (xem docstring DividendForm). Không hiển thị dòng "Snapshot MANUAL đã chốt
+// tự động" của mockup — thuộc Phase 3, việc auto-snapshot khi ghi cổ tức chưa
+// được xác nhận trong scope Phase 4 (xem process/UI_phase_4.md).
+function DividendSuccessContent({
+  result,
+}: {
+  result: DividendRecordedResult;
+}) {
+  return (
+    <div className="flex flex-1 flex-col gap-4.5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
+      <div className="mt-2 flex flex-col items-center gap-3.5">
+        <div className="flex size-19 items-center justify-center rounded-full border border-gain/35 bg-gain/14">
+          <CheckCircle2 className="size-10.5 text-gain" />
+        </div>
+        <div className="text-center">
+          <div className="text-xl font-bold text-foreground">
+            {result.type === "BOND_COUPON"
+              ? "Đã ghi trái tức"
+              : "Đã ghi cổ tức"}{" "}
+            {result.symbol}
+          </div>
+          <div className="mt-0.75 text-[12.5px] text-muted-faint">
+            {dividendResultSubtitle(result)} · {result.dateLabel}
+          </div>
+          {result.paymentDateLabel ? (
+            <div className="mt-0.5 text-[11px] text-muted-faint">
+              Thanh toán {result.paymentDateLabel}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <DividendMainCard result={result} />
 
       {/* Issue #61: chỉ hiện khi Server Action thực sự tự tạo/ghi đè
           NavOverride (navOverrideAdjusted=true) — không hiện gì khi user đã
@@ -683,11 +527,7 @@ function DividendSuccessContent({
           </div>
           {result.totalDividendReceived ? (
             <div className="flex items-center gap-2.5 border-t border-white/4.5 px-3.75 py-3.25">
-              {isCash ? (
-                <Coins className="size-4.5 shrink-0 text-accent" />
-              ) : (
-                <Layers className="size-4.5 shrink-0 text-accent" />
-              )}
+              <DividendReceivedIcon type={result.type} />
               <span className="flex-1 text-[13px] text-muted-foreground">
                 Tổng cổ tức {result.symbol} đã nhận
               </span>

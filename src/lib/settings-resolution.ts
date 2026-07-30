@@ -76,3 +76,21 @@ export function parseSettingValue(
       return value;
   }
 }
+
+// Guard dùng chung cho MỌI chỗ cần thu hẹp kết quả parseSettingValue() về
+// Decimal (resolveDecimalSetting/requireDecimalSetting trong settings.ts,
+// resolveParValueAt trong features/dividends/dividend-percent-label.ts) —
+// tránh viết lại 3 lần cùng một `if (!(value instanceof Decimal)) throw`.
+// Sai valueType ở DB là dữ liệu hỏng (không phải input người dùng) -> throw
+// ra ngoài (lỗi bất ngờ, xem docs/rules/error-handling.md), không nuốt/mặc định.
+export function assertDecimalSettingValue(
+  value: Decimal | number | boolean | Date | string | undefined,
+  keyLabel: string,
+): asserts value is Decimal {
+  if (!(value instanceof Decimal)) {
+    throw new AppError(
+      "INVALID_SETTING_VALUE",
+      `Setting "${keyLabel}" không phải kiểu DECIMAL`,
+    );
+  }
+}

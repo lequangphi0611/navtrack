@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { describe, expect, test } from "vitest";
 
 import {
+  computeBondCoupon,
   computeCashDividend,
   computeCashDividendPriceAdjustment,
   computeStockDividend,
@@ -214,5 +215,72 @@ describe("computeCashDividendPriceAdjustment", () => {
     });
 
     expect(result).toBeNull();
+  });
+});
+
+// Phase 7 (issue #58) — trái tức. Bộ số bám đúng ví dụ docs/domain/07-tax.md
+// mục "Ví dụ": 2 trái phiếu mệnh giá 100tr, coupon 9%/năm trả 6 tháng/lần.
+describe("computeBondCoupon", () => {
+  const TCB2528 = {
+    parValue: new Decimal("100000000"),
+    couponRatePercent: new Decimal("9"),
+    couponFrequencyMonths: 6,
+    quantity: new Decimal(2),
+  };
+
+  test("trái phiếu doanh nghiệp: gộp 9tr − thuế 5% 450k = thực nhận 8,55tr", () => {
+    const result = computeBondCoupon({
+      ...TCB2528,
+      taxRatePercent: new Decimal("5"),
+    });
+
+    expect(result.grossAmount.toString()).toBe("9000000");
+    expect(result.taxAmount.toString()).toBe("450000");
+    expect(result.netAmount.toString()).toBe("8550000");
+  });
+
+  // Miễn thuế theo NĐ 253/2026 — thực nhận bằng ĐÚNG lãi gộp, không phải
+  // "app quên tính thuế".
+  test("trái phiếu Chính phủ: thuế 0 -> thực nhận đủ 9tr", () => {
+    const result = computeBondCoupon({
+      ...TCB2528,
+      taxRatePercent: new Decimal("0"),
+    });
+
+    expect(result.grossAmount.toString()).toBe("9000000");
+    expect(result.taxAmount.toString()).toBe("0");
+    expect(result.netAmount.toString()).toBe("9000000");
+  });
+
+  // Hệ số kỳ/12 là chỗ dễ bỏ sót nhất: bỏ đi thì mỗi kỳ ra 9tr thay vì 4,5tr
+  // trên một trái phiếu — sai gấp đôi mà không có tín hiệu lỗi nào.
+  test("lãi suất DANH NGHĨA THEO NĂM được quy đổi về một kỳ trả lãi", () => {
+    const nuaNam = computeBondCoupon({
+      parValue: new Decimal("100000000"),
+      couponRatePercent: new Decimal("9"),
+      couponFrequencyMonths: 6,
+      taxRatePercent: new Decimal("0"),
+      quantity: new Decimal(1),
+    });
+    const caNam = computeBondCoupon({
+      parValue: new Decimal("100000000"),
+      couponRatePercent: new Decimal("9"),
+      couponFrequencyMonths: 12,
+      taxRatePercent: new Decimal("0"),
+      quantity: new Decimal(1),
+    });
+
+    expect(nuaNam.grossAmount.toString()).toBe("4500000");
+    expect(caNam.grossAmount.toString()).toBe("9000000");
+  });
+
+  test("net = gross − tax với mọi mức thuế", () => {
+    const result = computeBondCoupon({
+      ...TCB2528,
+      taxRatePercent: new Decimal("5"),
+    });
+    expect(result.netAmount.toString()).toBe(
+      result.grossAmount.minus(result.taxAmount).toString(),
+    );
   });
 });

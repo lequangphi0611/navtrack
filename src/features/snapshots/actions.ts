@@ -5,13 +5,13 @@ import { revalidatePath } from "next/cache";
 
 import { Prisma } from "@prisma/client";
 import type { ActionResult } from "@/lib/action-result";
-import { getSession } from "@/lib/auth";
 import { resolveCutoffDate, todayIctDateOnly } from "@/lib/cutoff";
 import { db } from "@/lib/db";
 import { formatTime } from "@/lib/format";
 import { logger } from "@/lib/logger";
 import { planManualSnapshot } from "@/lib/manual-snapshot";
 import { ROUTES } from "@/lib/routes";
+import { handleWriteError, requireUserId } from "@/lib/server-action";
 import { toFrozenSnapshotListRow } from "@/lib/snapshot-history";
 import { valuateHoldings } from "@/lib/valuation";
 
@@ -35,9 +35,9 @@ import type { SnapshotHistoryPage, SnapshotTodayState } from "./types";
 export async function freezeManualSnapshot(): Promise<
   ActionResult<{ value: string; snapshotAt: string }>
 > {
-  const session = await getSession();
-  if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
-  const userId = session.user.id;
+  const auth = await requireUserId();
+  if (!auth.ok) return auth;
+  const { userId } = auth;
 
   const openHoldings = await getOpenHoldings();
   const cutoffDate = resolveCutoffDate({ key: "TODAY" });
@@ -157,22 +157,14 @@ export async function freezeManualSnapshot(): Promise<
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError) {
-      if (err.code === "P2002" || err.code === "P2034") {
-        // Hai request chốt đồng thời — request thua trong đua tranh gặp lỗi ràng buộc
-        // unique (P2002) hoặc serialization conflict (P2034), không phải bug.
-        logger.warn(
-          { userId, code: err.code },
-          "freezeManualSnapshot race, ask to retry",
-        );
-        return {
-          ok: false,
-          error: "Có yêu cầu chốt số liệu khác đang xử lý, vui lòng thử lại",
-        };
-      }
-    }
-    logger.error({ err, userId }, "freezeManualSnapshot failed");
-    throw err;
+    return handleWriteError(err, {
+      action: "freezeManualSnapshot",
+      userId,
+      messages: {
+        p2002: "Có yêu cầu chốt số liệu khác đang xử lý, vui lòng thử lại",
+        p2034: "Có yêu cầu chốt số liệu khác đang xử lý, vui lòng thử lại",
+      },
+    });
   }
 
   revalidatePath(ROUTES.dashboard);
@@ -193,8 +185,8 @@ export async function freezeManualSnapshot(): Promise<
 export async function loadMoreSnapshotHistory(
   cursor: string,
 ): Promise<ActionResult<SnapshotHistoryPage>> {
-  const session = await getSession();
-  if (!session?.user?.id) return { ok: false, error: "Chưa đăng nhập" };
+  const auth = await requireUserId();
+  if (!auth.ok) return auth;
 
   const { rows, nextCursor } = await getMoreSnapshotHistory(cursor);
   return {

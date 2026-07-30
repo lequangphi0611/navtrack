@@ -1,4 +1,11 @@
-import { Coins, History, Pencil, Plus } from "lucide-react";
+import {
+  CalendarCheck,
+  Coins,
+  FileText,
+  History,
+  Pencil,
+  Plus,
+} from "lucide-react";
 import Link from "next/link";
 
 import { type AssetType, AssetTypeBadge } from "@/components/AssetTypeBadge";
@@ -14,6 +21,7 @@ import {
   CashflowTimeline,
   type CashflowTimelineRow,
 } from "@/features/holdings/components/CashflowTimeline";
+import { OverdueMaturityCallout } from "@/features/holdings/components/OverdueMaturityCallout";
 import { TransactionHistoryList } from "@/features/holdings/components/TransactionHistoryList";
 import {
   TransactionSnapshotBanner,
@@ -63,7 +71,19 @@ type HoldingDetailScreenProps = {
   // biết "vừa giao dịch xong" (TBD, xem process/UI_phase_3.md) — page.tsx/
   // TransactionForm.tsx CHƯA wiring cờ này, chỉ Props sẵn sàng ở đây.
   justRecorded?: TransactionSnapshotBannerProps;
+  // Phase 7 — chỉ có mặt khi holding.type === "BOND". Vắng mặt = không hiện
+  // hàng thao tác trái phiếu (cổ phiếu/quỹ/vàng không có điều khoản lẫn đáo hạn).
+  bond?: BondActions;
   hidden?: boolean;
+};
+
+type BondActions = {
+  // false = chưa nhập điều khoản -> nút tất toán bị chặn (app không đoán mệnh
+  // giá/loại phát hành) và hàng thao tác đổi sang lời mời nhập điều khoản.
+  hasTerms: boolean;
+  // Có mặt khi maturityDate đã qua mà vị thế vẫn còn số lượng (mockup 7h) —
+  // app chỉ NÊU SỰ THẬT dữ liệu, không tự ghi tất toán thay người dùng.
+  overdue?: { maturityDateLabel: string; lateDays: number };
 };
 
 // Organism cho /holdings/[id] — extract từ page.tsx (Phase 1 nhồi JSX trực tiếp,
@@ -75,6 +95,7 @@ function HoldingDetailScreen({
   cashflows,
   valuation,
   justRecorded,
+  bond,
   hidden = false,
 }: HoldingDetailScreenProps) {
   return (
@@ -170,6 +191,8 @@ function HoldingDetailScreen({
         </div>
       )}
 
+      {bond ? <BondActionsRow holdingId={holding.id} bond={bond} /> : null}
+
       <div className="flex items-center justify-between gap-2">
         <h2 className="min-w-0 truncate text-sm font-semibold text-foreground">
           Lịch sử giao dịch
@@ -215,6 +238,62 @@ function HoldingDetailScreen({
         unit={holding.unit}
         cashflows={cashflows}
       />
+    </div>
+  );
+}
+
+// Hàng thao tác riêng của vị thế trái phiếu (Phase 7): điều khoản (7a) và tất
+// toán đáo hạn (7e/7f), kèm cảnh báo quá đáo hạn (7h).
+//
+// Chưa có điều khoản -> KHÔNG hiện nút tất toán: không có mệnh giá thì không
+// prefill được giá nhận về, không có loại tổ chức phát hành thì không biết áp
+// thuế lãi 5% hay 0% (docs/domain/07-tax.md). Dẫn thẳng sang màn nhập thay vì
+// hiện một nút bấm vào là báo lỗi.
+function BondActionsRow({
+  holdingId,
+  bond,
+}: {
+  holdingId: string;
+  bond: BondActions;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      {bond.overdue ? (
+        <div className="flex flex-col gap-1">
+          <OverdueMaturityCallout count={1} />
+          <div className="px-1 text-[11px] text-muted-faint">
+            Đáo hạn {bond.overdue.maturityDateLabel} · trễ{" "}
+            {bond.overdue.lateDays} ngày
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex items-center gap-1.5">
+        <Link
+          href={ROUTES.bondTerms(holdingId)}
+          className={cn(
+            buttonVariants({ size: "sm", variant: "outline" }),
+            "gap-1 font-semibold",
+          )}
+        >
+          <FileText className="size-3.5" />
+          {bond.hasTerms ? "Điều khoản" : "Nhập điều khoản"}
+        </Link>
+        <span className="flex-1" />
+        {bond.hasTerms ? (
+          <Link
+            href={ROUTES.maturitySettlement(holdingId)}
+            className={cn(
+              buttonVariants({ size: "sm", variant: "outline" }),
+              "gap-1 font-semibold",
+              bond.overdue ? "border-warning/45 text-warning" : undefined,
+            )}
+          >
+            <CalendarCheck className="size-3.5" />
+            Tất toán đáo hạn
+          </Link>
+        ) : null}
+      </div>
     </div>
   );
 }

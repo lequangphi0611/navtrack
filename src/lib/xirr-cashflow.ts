@@ -52,3 +52,12 @@ export function buildXirrCashflows(input: XirrCashflowInput): CashflowPoint[] {
 
   return points;
 }
+
+// "NAV/exit − vốn ròng đã bỏ vào" tương đương đại số với tổng có dấu của
+// đúng tập điểm đã đưa vào XIRR (BUY âm/SELL+Dividend dương theo quy ước
+// docs/domain/02-transactions-and-cost-basis.md) — MỘT nguồn sự thật cho
+// phép tính này, dùng chung giữa computeXirrAndPnlCore() (lib/portfolio-valuation.ts)
+// và getClosedHoldingsDetail() (features/holdings/queries/closed-holdings.ts).
+export function sumXirrPointsAmount(points: CashflowPoint[]): Decimal {
+  return points.reduce((sum, p) => sum.plus(p.amount), new Decimal(0));
+}

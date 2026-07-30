@@ -95,6 +95,24 @@ await resolveSetting(SETTING_KEYS.MAX_MEMBERS, new Date());
 ## Migration
 - Mỗi thay đổi schema = **một migration**, tên mô tả (`add_allowed_user_can_invite`). **Không sửa migration đã áp dụng** — tạo migration mới. Commit file migration (xem `data-prisma.md`).
 
+### Backfill dữ liệu dẫn xuất
+
+- **SQL trong migration chỉ được làm việc cơ học:** thêm/xoá/đổi cột, đổi kiểu, copy nguyên giá trị, set default. **Cấm chứa công thức nghiệp vụ** (giá vốn bình quân, XIRR, thuế, quy tắc cộng/trừ số lượng...).
+- Backfill một giá trị **dẫn xuất** phải viết bằng **TypeScript, gọi thẳng hàm thật** trong `lib/` — không chép công thức sang SQL.
+
+Lý do (ca thật đã xảy ra): `20260711092933_backfill_holding_position/migration.sql` tự khai ngay ở header rằng nó là *"a hand-written SQL REPLICA of derivePosition()"*, kèm dặn dò *"if that logic changes, add a NEW migration"*. Sau đó `derivePosition()` **đã đổi** (issue #59 — biết thêm cổ tức cổ phiếu) và **không có migration mới nào được thêm**. Lần này hậu quả bằng 0 nhờ may mắn về thứ tự thời gian (tính năng cổ tức ra đời sau, lúc backfill chạy chưa có `Dividend` nào; trên DB mới thì nó chạy trên bảng rỗng) — nhưng **cơ chế bảo vệ đã thất bại**: một quy tắc chỉ được ép bằng comment trong file bất biến thì không ai tuân thủ.
+
+Đây là **Connascence of Algorithm xuyên ngôn ngữ** — dạng lặp tri thức mà compiler không với tới được ([`clean-code.md`](./clean-code.md#giới-hạn-phải-thừa-nhận)). Không có công cụ nào dò được lệch loại này (công cụ drift detection hiện có chỉ dò lệch **schema**, không dò lệch **logic**), nên cách duy nhất là **không tạo ra nó**.
+
+Lý do duy nhất chính đáng để viết SQL thuần — hiệu năng trên bảng cực lớn — **không tồn tại ở Navtrack** (danh mục cá nhân, vài user). Nếu về sau có ca thật sự cần, phải ghi rõ lý do trong migration **và** kèm integration test so khớp kết quả SQL với hàm TS.
+
+```
+❌ Bad — migration.sql chứa WITH RECURSIVE phát lại BUY/SELL để tính avgCost (bản sao derivePosition)
+✅ Good — migration.sql chỉ thêm cột; scripts/backfill-holding-position.ts import derivePosition() rồi ghi
+```
+
+> Migration cũ giữ nguyên (bất biến — không sửa lại). Luật này áp cho migration **mới**.
+
 ## Nguyên tắc khác
 - **Nullable tường minh:** chỉ để `?` khi thực sự optional; có default hợp lý cho field bắt buộc.
 - **Không nhét logic nghiệp vụ vào DB** (trigger/stored proc) — giữ ở tầng app để test được và nhất quán với domain spec.

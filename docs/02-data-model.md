@@ -186,6 +186,10 @@ model Dividend {
   // lịch sử, vì mệnh giá/coupon rate có thể được sửa về sau (nhập sai, trái phiếu thả nổi).
   parValueApplied          Decimal? @db.Decimal(20, 4)
   couponRatePercentApplied Decimal? @db.Decimal(20, 4)
+  // Kỳ trả lãi đã dùng (thêm ở #58). Nhãn lịch sử là "9%/năm · kỳ 6 tháng" nên kỳ trả lãi
+  // nằm TRONG nhãn -> phải bất biến như 2 field trên. KHÔNG suy ngược từ grossAmount: mẫu số
+  // của phép đảo chứa SL-tại-ngày-ghi, mà SL đó phát lại từ lịch sử giao dịch mỗi lần đọc.
+  couponFrequencyMonthsApplied Int?
   note          String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

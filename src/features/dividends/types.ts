@@ -1,4 +1,34 @@
+import type { BondIssuerType, DividendType } from "@prisma/client";
+
 import type { AssetType } from "@/components/AssetTypeBadge";
+
+// Điều khoản trái phiếu đã lưu (BondTerms, issue #56) ở dạng chỉ-đọc cho
+// DividendForm loại BOND_COUPON — mockup Phase 7 Screens 7b/7c hiện thẻ tóm
+// tắt thay vì hỏi lại mệnh giá/% mỗi kỳ. Decimal đã serialize thành string ở
+// biên server; `null` ở couponRatePercent/couponFrequencyMonths = zero-coupon.
+export type BondTermsSummary = {
+  issuerType: BondIssuerType;
+  parValue: string;
+  couponRatePercent: string | null;
+  couponFrequencyMonths: number | null;
+};
+
+// Gói dữ liệu riêng của loại trái tức truyền vào DividendForm — gom thành MỘT
+// object thay vì rải 4 prop phẳng, vì cả cụm chỉ có nghĩa khi Holding là trái
+// phiếu (vắng mặt = không hiện tab "Trái tức").
+export type BondCouponContext = {
+  // null = vị thế trái phiếu CHƯA nhập điều khoản -> DividendForm hiện màn
+  // chặn (mockup 7g) thay vì form, app không đoán mệnh giá.
+  terms: BondTermsSummary | null;
+  // "5" (CORPORATE) | "0" (GOVERNMENT) — resolve từ Setting ở tầng server
+  // (BOND_INTEREST_TAX_RATE_*, issue #58), UI không tự quyết con số.
+  taxRatePercent: string;
+  // "KỲ 2 · TỰ ĐIỀN" — nhãn badge cạnh ngày trả lãi tự điền; vắng mặt = ẩn badge.
+  couponPeriodLabel?: string;
+  // Link tới form sửa vị thế (nơi có BondTermsFields) — dùng cho cả link "Sửa
+  // điều khoản" ở thẻ tóm tắt lẫn CTA "Nhập điều khoản ngay" của màn chặn.
+  bondTermsHref: string;
+};
 
 // Nguồn sự thật cho state của DividendForm (@/features/dividends/components/DividendForm)
 // — component chỉ import + re-export lại, không tự định nghĩa (cùng pattern
@@ -13,8 +43,12 @@ export type DividendFormState =
 // XIRR), component chỉ hiển thị lại, KHÔNG tự tính lại lần 2.
 export type DividendRecordedResult = {
   symbol: string;
-  type: "CASH" | "STOCK";
-  percentLabel: string; // "20" — hiển thị "Cổ tức tiền mặt 20%"
+  type: DividendType;
+  // CASH/STOCK: "20" — hiển thị "Cổ tức tiền mặt 20%". BOND_COUPON: lãi suất
+  // coupon đã đóng băng — hiển thị "Trái tức 9%/năm".
+  percentLabel: string;
+  // BOND_COUPON-only: kỳ trả lãi (tháng) — ghép thành "9%/năm · kỳ 6 tháng".
+  couponFrequencyMonths?: number;
   dateLabel: string; // đã format dd/MM/yyyy
   // CASH
   grossAmount?: string;

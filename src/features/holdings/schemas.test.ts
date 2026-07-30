@@ -2,9 +2,11 @@ import { describe, expect, test } from "vitest";
 
 import {
   addTransactionSchema,
+  bondTermsSchema,
   deleteTransactionSchema,
   navOverrideSchema,
   newHoldingSchema,
+  settleMaturitySchema,
   updateTransactionSchema,
 } from "./schemas";
 
@@ -37,6 +39,19 @@ describe("newHoldingSchema", () => {
       type: "STOCK",
       unit: "cổ phần",
       ...validTransactionFields,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // Cùng bất biến với addTransactionSchema — `transactionFields` dùng chung
+  // nên cả hai phải cùng từ chối (xem comment ở đó).
+  test("cashflowType = MATURITY bị từ chối khi tạo vị thế mới", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "VCB2028",
+      type: "BOND",
+      unit: "trái phiếu",
+      ...validTransactionFields,
+      cashflowType: "MATURITY",
     });
     expect(result.success).toBe(false);
   });
@@ -227,6 +242,20 @@ describe("addTransactionSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // `MATURITY` có trong CASHFLOW_TYPES (Prisma enum) nhưng KHÔNG được tạo mới
+  // qua form giao dịch thường: đường đó bỏ qua kiểm tra `holding.type ===
+  // "BOND"` + `BondTerms` tồn tại của settleMaturity, và cho ghi một dòng đáo
+  // hạn lên vị thế bất kỳ (kể cả vàng). Form đã khoá ở UI — đây là chốt chặn
+  // server (review PR #102).
+  test("tạo mới cashflowType = MATURITY bị từ chối", () => {
+    const result = addTransactionSchema.safeParse({
+      holdingId: "holding-1",
+      ...validTransactionFields,
+      cashflowType: "MATURITY",
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("updateTransactionSchema", () => {
@@ -258,6 +287,19 @@ describe("updateTransactionSchema", () => {
       taxAmount: "5200",
     });
     expect(result.success).toBe(false);
+  });
+
+  // Khác addTransactionSchema: schema SỬA phải NHẬN `MATURITY`, vì form gửi
+  // lên nguyên loại của dòng đang sửa — chặn ở tầng schema thì không sửa nổi
+  // ngày/số lượng của một dòng đáo hạn. Việc chặn ĐỔI loại nằm ở
+  // updateTransaction (cần đọc loại đang lưu trong DB).
+  test("sửa một dòng MATURITY (giữ nguyên loại) được schema chấp nhận", () => {
+    const result = updateTransactionSchema.safeParse({
+      cashflowId: "cf-1",
+      ...validTransactionFields,
+      cashflowType: "MATURITY",
+    });
+    expect(result.success).toBe(true);
   });
 });
 
@@ -322,6 +364,133 @@ describe("navOverrideSchema", () => {
         price: "7720000",
         date: "not-a-date",
       }).success,
+    ).toBe(false);
+  });
+});
+
+// Phase 7 (issue #58/#101) — điều khoản trái phiếu và tất toán đáo hạn.
+describe("bondTermsSchema", () => {
+  const required = {
+    holdingId: "holding-1",
+    issuerType: "CORPORATE" as const,
+    parValue: "100000000",
+  };
+  const emptyCoupon = {
+    couponRatePercent: "",
+    couponFrequencyMonths: "",
+    firstCouponDate: "",
+    maturityDate: "",
+  };
+
+  test("đủ cụm coupon -> parse ra Date/number đúng kiểu", () => {
+    const result = bondTermsSchema.safeParse({
+      ...required,
+      couponRatePercent: "9",
+      couponFrequencyMonths: "6",
+      firstCouponDate: "2026-01-15",
+      maturityDate: "2029-01-15",
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.couponRatePercent).toBe("9");
+    expect(result.data.couponFrequencyMonths).toBe(6);
+    expect(result.data.firstCouponDate).toBeInstanceOf(Date);
+    expect(result.data.maturityDate).toBeInstanceOf(Date);
+  });
+
+  // Trái phiếu chiết khấu/zero-coupon hợp lệ mà không có kỳ trả lãi nào —
+  // "thiếu field optional là bình thường, không phải lỗi"
+  // (docs/domain/10-cashflow-calendar.md).
+  test("zero-coupon: bỏ trống cả cụm coupon -> hợp lệ, quy về null", () => {
+    const result = bondTermsSchema.safeParse({ ...required, ...emptyCoupon });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.couponRatePercent).toBeNull();
+    expect(result.data.couponFrequencyMonths).toBeNull();
+    expect(result.data.firstCouponDate).toBeNull();
+    expect(result.data.maturityDate).toBeNull();
+  });
+
+  // Chuỗi rỗng KHÔNG được lọt qua z.coerce.number() thành số 0 — "kỳ trả lãi 0
+  // tháng" sẽ làm buildCouponSchedule() sinh lịch vô nghĩa.
+  test("kỳ trả lãi 0 hoặc không nguyên -> từ chối", () => {
+    for (const value of ["0", "-6", "6.5"]) {
+      const result = bondTermsSchema.safeParse({
+        ...required,
+        ...emptyCoupon,
+        couponFrequencyMonths: value,
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  test("thiếu mệnh giá -> từ chối (không tính được tiền lẫn thuế)", () => {
+    const result = bondTermsSchema.safeParse({
+      ...required,
+      ...emptyCoupon,
+      parValue: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("đáo hạn trước kỳ trả lãi đầu -> từ chối ngay lúc nhập", () => {
+    const result = bondTermsSchema.safeParse({
+      ...required,
+      ...emptyCoupon,
+      firstCouponDate: "2029-01-15",
+      maturityDate: "2026-01-15",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("settleMaturitySchema", () => {
+  const valid = {
+    holdingId: "holding-1",
+    date: "2029-01-15",
+    quantity: "2",
+    pricePerUnit: "100000000",
+  };
+
+  test("chấp nhận input tối thiểu; thuế/phí optional (server tự tính)", () => {
+    const result = settleMaturitySchema.safeParse(valid);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.taxAmount).toBeUndefined();
+    expect(result.data.feeAmount).toBeUndefined();
+  });
+
+  test("nhận thuế sửa tay (prefill, không khoá field)", () => {
+    const result = settleMaturitySchema.safeParse({
+      ...valid,
+      taxAmount: "800000",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.taxAmount).toBe("800000");
+  });
+
+  // Loại giao dịch là HẰNG SỐ của luồng này, không phải input — client không có
+  // cách nào ghi một dòng SELL (chịu thuế chuyển nhượng 0,1%) qua đường này.
+  test("không nhận cashflowType từ client", () => {
+    const result = settleMaturitySchema.safeParse({
+      ...valid,
+      cashflowType: "SELL",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).not.toHaveProperty("cashflowType");
+  });
+
+  test("số lượng/giá phải lớn hơn 0", () => {
+    expect(
+      settleMaturitySchema.safeParse({ ...valid, quantity: "0" }).success,
+    ).toBe(false);
+    expect(
+      settleMaturitySchema.safeParse({ ...valid, pricePerUnit: "0" }).success,
     ).toBe(false);
   });
 });

@@ -1,15 +1,25 @@
-import { ArrowDownLeft, ArrowUpRight, Coins, Flag } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CalendarCheck,
+  Coins,
+  Flag,
+} from "lucide-react";
 
+import type { CashflowType } from "@prisma/client";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Một dòng trong timeline dòng tiền của chi tiết vị thế (mockup 2c). "CUTOFF_NAV"
 // là dòng tiền GIẢ ĐỊNH = NAV tại mốc chốt (docs/domain/05-returns-xirr-and-pnl.md
 // "ghép runtime lúc tính, không lưu DB") — Container tự đánh dấu, component chỉ
-// tô khác màu, không tính toán gì thêm.
+// tô khác màu, không tính toán gì thêm. `kind` dẫn xuất từ CashflowType (Prisma)
+// + 2 giá trị UI-only ("DIVIDEND"/"CUTOFF_NAV") — KHÔNG tự khai lại "BUY" |
+// "SELL" song song (docs/rules/typescript-style.md mục "Enum").
 type CashflowTimelineRow = {
   id: string;
-  kind: "BUY" | "SELL" | "DIVIDEND" | "CUTOFF_NAV";
+  kind: CashflowType | "DIVIDEND" | "CUTOFF_NAV";
   // "Mua 3.000 CP" / "NAV tại mốc chốt".
   label: string;
   // "09/07/2024 · giá 158.000" / "11/07/2026 · dòng tiền giả định".
@@ -26,11 +36,25 @@ type CashflowTimelineProps = {
   className?: string;
 };
 
+// MATURITY dùng tông asset-bond (#5b6b8c) — cùng dòng tiền DƯƠNG như SELL
+// nhưng KHÔNG phải bán: tổ chức phát hành trả lại gốc, không chịu thuế chuyển
+// nhượng 0,1% (mockup Phase 7, docs/domain/07-tax.md). Để chung màu xanh với
+// SELL thì người dùng đọc lịch sử sẽ tưởng mình đã bán trái phiếu ra thị
+// trường, nên tách màu là phần của nghiệp vụ chứ không phải trang trí.
 const ICON_CLASS: Record<CashflowTimelineRow["kind"], string> = {
   BUY: "bg-destructive/12 text-destructive",
   SELL: "bg-gain/12 text-gain",
   DIVIDEND: "bg-accent/14 text-accent",
   CUTOFF_NAV: "bg-primary/18 text-primary",
+  MATURITY: "bg-asset-bond/24 text-asset-bond",
+};
+
+const KIND_ICON: Record<CashflowTimelineRow["kind"], LucideIcon> = {
+  BUY: ArrowDownLeft,
+  SELL: ArrowUpRight,
+  DIVIDEND: Coins,
+  CUTOFF_NAV: Flag,
+  MATURITY: CalendarCheck,
 };
 
 function CashflowTimeline({
@@ -50,14 +74,7 @@ function CashflowTimeline({
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         {rows.map((row, index) => {
           const isNegative = Number(row.amount) < 0;
-          const Icon =
-            row.kind === "CUTOFF_NAV"
-              ? Flag
-              : row.kind === "DIVIDEND"
-                ? Coins
-                : row.kind === "SELL"
-                  ? ArrowUpRight
-                  : ArrowDownLeft;
+          const Icon = KIND_ICON[row.kind];
 
           return (
             <div

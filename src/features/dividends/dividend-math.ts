@@ -42,6 +42,40 @@ export function computeStockDividend(input: {
   };
 }
 
+// Công thức thuần cho TRÁI TỨC (lãi trái phiếu định kỳ, Phase 7 issue #58 —
+// docs/domain/03-dividends.md "Cách tính", mục BOND_COUPON):
+//   gross = parValue × couponRatePercent/100 × couponFrequencyMonths/12 × SL
+//   tax   = gross × BOND_INTEREST_TAX_RATE_<issuerType>/100
+//   net   = gross − tax     (dòng tiền dương đưa vào XIRR, như CASH)
+//
+// Khác `computeCashDividend` ở hai điểm nghiệp vụ, không chỉ ở tên biến:
+//  1. KHÔNG nhận `percent` — mệnh giá/lãi suất là ĐIỀU KHOẢN HỢP ĐỒNG đọc từ
+//     BondTerms, app không hỏi lại user mỗi kỳ.
+//  2. Có hệ số `couponFrequencyMonths/12` quy đổi lãi suất DANH NGHĨA THEO NĂM
+//     về một kỳ trả lãi (9%/năm trả 6 tháng/lần -> 4,5% mỗi kỳ). Bỏ hệ số này
+//     là sai gấp đôi/gấp bốn số tiền mà không có tín hiệu lỗi nào.
+//
+// Thuế suất truyền vào (không tự resolve ở đây — hàm thuần): caller resolve
+// `BOND_INTEREST_TAX_RATE_CORPORATE`/`_GOVERNMENT` theo `BondTerms.issuerType`,
+// effective-dated theo NGÀY TRẢ LÃI (docs/domain/07-tax.md).
+export function computeBondCoupon(input: {
+  parValue: Decimal;
+  couponRatePercent: Decimal;
+  couponFrequencyMonths: number;
+  taxRatePercent: Decimal;
+  quantity: Decimal;
+}): { grossAmount: Decimal; taxAmount: Decimal; netAmount: Decimal } {
+  const couponPerUnit = input.parValue
+    .mul(input.couponRatePercent)
+    .div(100)
+    .mul(input.couponFrequencyMonths)
+    .div(12);
+  const grossAmount = couponPerUnit.mul(input.quantity);
+  const taxAmount = grossAmount.mul(input.taxRatePercent).div(100);
+  const netAmount = grossAmount.minus(taxAmount);
+  return { grossAmount, taxAmount, netAmount };
+}
+
 // Sai lệch tối đa cho phép giữa giá trị user tự sửa (stockQuantityOverride)
 // và rawStockQuantity (số CP thưởng RAW, trước làm tròn, tính từ %) — đủ rộng
 // để chấp nhận quy ước làm tròn khác của công ty phát hành (vd theo lô), đủ

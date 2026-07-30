@@ -50,8 +50,13 @@ export class DividendForm {
     });
   }
 
+  // BOND_COUPON đổi nhãn nút thành "Ghi trái tức" (SUBMIT_BUTTON_LABEL,
+  // DividendForm.tsx) — chỉ một trong hai nhãn hiện diện tại một thời điểm
+  // (rẽ theo tab đang chọn) nên regex khớp cả hai vẫn an toàn, không mơ hồ.
   get submitButton(): Locator {
-    return this.page.getByRole("button", { name: "Ghi cổ tức", exact: true });
+    return this.page.getByRole("button", {
+      name: /^(Ghi cổ tức|Ghi trái tức)$/,
+    });
   }
 
   roundedDownNote(rawQuantity: string): Locator {
@@ -103,8 +108,12 @@ export class DividendForm {
     await this.submitButton.click();
   }
 
+  // BOND_COUPON đổi tiêu đề màn thành công thành "Đã ghi trái tức"
+  // (DividendSuccessContent, DividendForm.tsx) thay vì "Đã ghi cổ tức".
   successHeading(symbol: string): Locator {
-    return this.page.getByText(new RegExp(`Đã ghi cổ tức ${symbol}`));
+    return this.page.getByText(
+      new RegExp(`Đã ghi (cổ tức|trái tức) ${symbol}`),
+    );
   }
 
   get historyLink(): Locator {

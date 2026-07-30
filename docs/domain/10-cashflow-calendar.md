@@ -20,6 +20,9 @@ Bảng riêng **`BondTerms`** (1-1 với `Holding`, chỉ tồn tại khi `type 
 - **KHÔNG có field `nextCouponDate` cộng tay** (đảo thiết kế cũ, chốt 2026-07-25) — xem mục kế tiếp.
 
 ## Suy ra kỳ trả lãi tới
+
+Cài đặt: `lib/bond-schedule.ts::computeNextCouponDate()` (thuần, không đụng DB — caller truyền `lastPaidCouponDate` đọc sẵn). Dùng chung cho tầng ghi trái tức (Phase 7 tự điền ngày + badge `KỲ n`), preview card "app suy ra" ở màn nhập điều khoản, và Phase 8 (lịch dòng tiền). Mọi phép tính ngày theo **UTC**; so sánh theo **NGÀY**, không theo giờ (`Dividend.date` lưu ở DB có thể mang phần giờ khác nhau tuỳ nguồn ghi).
+
 ```
 nextCouponDate(bondTerms, dividends):
   nếu có nextCouponDateOverride  → dùng luôn (tổ chức phát hành đã đổi lịch)
@@ -39,6 +42,8 @@ nextCouponDate(bondTerms, dividends):
 - Chỉ xét `Holding{type: BOND, quantity > 0}` (vị thế đang mở) — bán/đáo hạn hết thì `quantity` về 0, tự động biến mất khỏi lịch (không cần lọc riêng).
 - **Thiếu field là bình thường, không phải lỗi:** `maturityDate`/`firstCouponDate`/`couponFrequencyMonths` là optional (user có thể chưa nhập, hoặc trái phiếu không có coupon định kỳ — chiết khấu/zero-coupon chỉ có `maturityDate`). Holding thiếu field liên quan đơn giản **không xuất hiện** ở mục tương ứng — khác nguyên tắc "thiếu `Setting` → báo lỗi cứng" (`09-settings.md`), vì đây là field nhập tay optional trên entity, không phải cấu hình hệ thống bắt buộc. (Ngoại lệ: **ghi** trái tức mà thiếu `parValue`/`couponRatePercent` thì báo lỗi — xem `03-dividends.md` mục "Ca biên" — vì lúc đó không tính được số tiền.)
 - **Không có bước "cập nhật ngày kỳ tới" sau khi ghi trái tức.** `recordDividend` nhánh `BOND_COUPON` **không ghi gì** vào `BondTerms`; kỳ tới luôn suy runtime theo công thức ở mục trên. User vẫn sửa tay được qua `nextCouponDateOverride` khi tổ chức phát hành đổi lịch thật (cùng tinh thần `NavOverride`/`taxAmount` — giá trị tự động là gợi ý, không khoá).
+  - **Chưa có UI nhập `nextCouponDateOverride`** (tính tới hết Phase 7): cột tồn tại và `computeNextCouponDate()` đã ưu tiên nó, nhưng màn nhập điều khoản (7a) chưa có ô này. Cách xoay xở hiện tại: sửa thẳng ngày trên form ghi trái tức (ô ngày trả lãi luôn sửa được). Bổ sung ô này khi Phase 8 thật sự cần hiển thị lịch dự kiến.
+- **Lịch chỉ sinh được khi có `maturityDate`.** `buildCouponSchedule()` trả rỗng khi thiếu ngày đáo hạn — không có mốc dừng thì không thể liệt kê hữu hạn. Hệ quả: trái phiếu nhập thiếu ngày đáo hạn sẽ không có "kỳ trả lãi tới" tự điền, vẫn ghi trái tức tay được bình thường.
 - **Chỉ là dự kiến, không phải giao dịch/cam kết:** UI phải ghi rõ "dự kiến" — số tiền ước tính có thể lệch giao dịch thật khi ghi nhận (đáo hạn có thể sớm/muộn hơn, coupon rate có thể đổi với trái phiếu lãi suất thả nổi — ngoài phạm vi model hiện tại, giả định lãi suất cố định).
 - **Ước tính đáo hạn không trừ thuế chuyển nhượng** — đáo hạn ghi bằng `Cashflow{type: MATURITY}` (chốt ở Phase 7), không chịu `SALE_TAX_BOND` 0.1%. Lưu ý: với trái phiếu **mua chiết khấu**, phần lợi tức vẫn chịu thuế lãi khi tất toán thật (`07-tax.md`) — ước tính trên lịch là số **gộp**, ghi rõ như vậy.
 - **Ước tính coupon hiển thị số gộp (trước thuế)** kèm ghi chú chưa trừ thuế. Mức thuế thật đã chốt ở Phase 7 (`BOND_INTEREST_TAX_RATE_CORPORATE` 5% / `_GOVERNMENT` 0%) — lịch **cố ý không tự trừ** vì đây là con số dự kiến, số chính xác chỉ có khi ghi nhận thật.

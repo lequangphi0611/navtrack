@@ -1,27 +1,31 @@
 import Decimal from "decimal.js";
 import { notFound } from "next/navigation";
 
-import type { SettingValueType } from "@prisma/client";
+import type { DividendType } from "@prisma/client";
 import type {
   DividendHistoryRow,
   DividendHistorySummary,
 } from "@/features/dividends/components/DividendHistoryList";
 import type { DividendHolding } from "@/features/dividends/types";
 import { getOpenHoldings } from "@/features/holdings/queries";
+import { assertNever } from "@/lib/assert-never";
 import { getSession } from "@/lib/auth";
 import { resolveCutoffDate } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
-import { db } from "@/lib/db";
+import { CASH_FLOW_DIVIDEND_TYPES } from "@/lib/enums";
 import { formatDate } from "@/lib/format";
-import { buildQuantityTimeline } from "@/lib/position-trail";
-import type { PositionTrailEvent } from "@/lib/position-trail";
 import {
-  AppError,
-  parseSettingValue,
-  pickEffectiveSetting,
-  SETTING_KEYS,
-} from "@/lib/settings";
+  buildPositionEvents,
+  buildQuantityTimeline,
+} from "@/lib/position-trail";
 import { valuateHoldings } from "@/lib/valuation";
+
+import { resolveParValueAt, roundPercentLabel } from "./dividend-percent-label";
+import {
+  findCashLikeDividendNetAmounts,
+  findDividendHistorySource,
+  findParValueSettingRows,
+} from "./repository";
 
 // Danh sách Holding đang mở dùng cho HoldingSwitcher (DividendForm) — tái dùng
 // getOpenHoldings() (features/holdings/queries.ts, đã filter userId + quantity
@@ -64,62 +68,26 @@ export async function getOpenHoldingsForDividendSwitcher(): Promise<
   });
 }
 
-// parValueRows đã fetch 1 LẦN cho toàn bộ lịch sử — tránh N+1 khi suy ngược
-// percentLabel cho từng dòng CASH (mỗi dòng có thể rơi vào một effective
-// window mệnh giá khác nhau nếu Setting đổi theo thời gian).
-function resolveParValueAt(
-  rows: { value: string; valueType: SettingValueType; effectiveFrom: Date }[],
-  atDate: Date,
-): Decimal {
-  const row = pickEffectiveSetting(rows, atDate);
-  if (!row) {
-    throw new AppError(
-      "SETTING_NOT_FOUND",
-      `Thiếu cấu hình DIVIDEND_PAR_VALUE cho ngày ${atDate.toISOString()}`,
-    );
-  }
-  const parsed = parseSettingValue(row.value, row.valueType);
-  if (!(parsed instanceof Decimal)) {
-    throw new AppError(
-      "INVALID_SETTING_VALUE",
-      "Setting DIVIDEND_PAR_VALUE không phải kiểu DECIMAL",
-    );
-  }
-  return parsed;
-}
-
-// percentLabel suy ngược từ dữ liệu đã lưu (Dividend không lưu percent trực
-// tiếp — xem docs/domain/03-dividends.md). before=0 (hiếm, dữ liệu bất
-// thường) -> "0" thay vì chia cho 0.
-function roundPercentLabel(numerator: Decimal, denominator: Decimal): string {
-  if (denominator.isZero()) return "0";
-  return numerator
-    .div(denominator)
-    .mul(100)
-    .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
-    .toString();
-}
-
 // Tổng cổ tức tiền mặt (net) ĐÃ nhận từ trước tới nay của MỘT Holding — dùng
 // cho DividendRecordedResult.totalDividendReceived (mockup Phase 4, 4d).
 // KHÔNG lọc theo cutoffDate (đây là tổng lịch sử, không phải input XIRR) và
 // đọc TRỰC TIẾP từ DB nên luôn phản ánh dividend VỪA ghi khi gọi SAU
-// transaction của recordDividend (features/dividends/actions.ts). holdingId
-// đã được caller verify thuộc đúng user trước đó (cùng cách getCashDividends
-// ở holdings/queries.ts không tự re-check userId).
+// transaction của recordDividend (features/dividends/actions.ts).
+// Phase 7 (#58): gồm CẢ trái tức — cùng ý nghĩa "tiền đã thực nhận" với CASH.
+// Dùng chung hằng số CASH_FLOW_DIVIDEND_TYPES với bộ lọc dòng tiền XIRR
+// (lib/enums.ts) để hai nơi không lệch nhau.
+const CASH_LIKE_DIVIDEND_TYPES: DividendType[] = [...CASH_FLOW_DIVIDEND_TYPES];
+
 export async function getTotalCashDividendReceived(
   holdingId: string,
+  userId: string,
 ): Promise<Decimal> {
-  const rows = await db.dividend.findMany({
-    where: { holdingId, type: "CASH", netAmount: { not: null } },
-    select: { netAmount: true },
-  });
-
-  return rows.reduce(
-    // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
-    (sum, row) => sum.plus(new Decimal(row.netAmount!.toString())),
-    new Decimal(0),
+  const netAmounts = await findCashLikeDividendNetAmounts(
+    holdingId,
+    userId,
+    CASH_LIKE_DIVIDEND_TYPES,
   );
+  return netAmounts.reduce((sum, amount) => sum.plus(amount), new Decimal(0));
 }
 
 // Lịch sử cổ tức của MỘT Holding (mockup Phase 4 Screens, 4e) — verify
@@ -133,38 +101,20 @@ export async function getDividendHistory(holdingId: string): Promise<{
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  const holding = await db.holding.findUnique({
-    where: { id: holdingId },
-    select: {
-      userId: true,
-      symbol: true,
-      name: true,
-      unit: true,
-      cashflows: {
-        select: {
-          id: true,
-          type: true,
-          date: true,
-          quantity: true,
-          createdAt: true,
-        },
-      },
-      dividends: {
-        select: {
-          id: true,
-          type: true,
-          date: true,
-          createdAt: true,
-          grossAmount: true,
-          taxAmount: true,
-          netAmount: true,
-          stockQuantity: true,
-        },
-      },
-    },
-  });
+  // "Không tồn tại" và "không thuộc user hiện tại" đều trả `null` — xử lý
+  // giống nhau, không lộ thông tin tồn tại (findDividendHistorySource tự
+  // filter userId, xem repository.ts).
+  const holding = await findDividendHistorySource(holdingId, session.user.id);
+  if (!holding) notFound();
 
-  if (!holding || holding.userId !== session.user.id) notFound();
+  // Thẻ "Trái tức" chỉ xuất hiện với vị thế trái phiếu (mockup 7d) — cổ phiếu/
+  // quỹ giữ nguyên 2 thẻ như Phase 4, không hiện một ô 0 ₫ vô nghĩa. Bám LOẠI
+  // TÀI SẢN (BOND) chứ không bám "có dòng trái tức nào chưa": trái phiếu chưa
+  // ghi kỳ nào vẫn nên thấy ô 0 kỳ, còn cổ phiếu thì không bao giờ.
+  const isBond = holding.type === "BOND";
+  const bondSummaryFields = isBond
+    ? { bondCouponNetTotal: "0", bondCouponCount: 0 }
+    : {};
 
   if (holding.dividends.length === 0) {
     return {
@@ -175,37 +125,18 @@ export async function getDividendHistory(holdingId: string): Promise<{
         stockAddedQuantityTotal: "0",
         stockCount: 0,
         unit: holding.unit,
+        ...bondSummaryFields,
       },
       rows: [],
     };
   }
 
-  const parValueRows = await db.setting.findMany({
-    where: { key: SETTING_KEYS.DIVIDEND_PAR_VALUE },
-    select: { value: true, valueType: true, effectiveFrom: true },
-  });
+  const parValueRows = await findParValueSettingRows();
 
-  const events: PositionTrailEvent[] = [
-    ...holding.cashflows.map((cf) => ({
-      id: cf.id,
-      date: cf.date,
-      createdAt: cf.createdAt,
-      delta:
-        cf.type === "BUY"
-          ? new Decimal(cf.quantity.toString())
-          : new Decimal(cf.quantity.toString()).neg(),
-    })),
-    ...holding.dividends.map((dividend) => ({
-      id: dividend.id,
-      date: dividend.date,
-      createdAt: dividend.createdAt,
-      delta:
-        dividend.type === "STOCK"
-          ? // stockQuantity luôn có giá trị khi type === STOCK.
-            new Decimal(dividend.stockQuantity!.toString())
-          : new Decimal(0),
-    })),
-  ];
+  const events = buildPositionEvents({
+    cashflows: holding.cashflows,
+    dividends: holding.dividends,
+  });
 
   const timeline = buildQuantityTimeline(events);
 
@@ -213,6 +144,8 @@ export async function getDividendHistory(holdingId: string): Promise<{
   let cashCount = 0;
   let stockAddedQuantityTotal = new Decimal(0);
   let stockCount = 0;
+  let bondCouponNetTotal = new Decimal(0);
+  let bondCouponCount = 0;
 
   // Mới nhất trước — sort trên Date GỐC (không phải chuỗi đã format, tránh
   // parse ngược locale) trước khi map sang row hiển thị.
@@ -232,47 +165,90 @@ export async function getDividendHistory(holdingId: string): Promise<{
     // action nào ghi hay không.
     const isNew = index === 0;
 
-    if (dividend.type === "CASH") {
-      // grossAmount/taxAmount/netAmount luôn có giá trị khi type === CASH.
-      const grossAmount = new Decimal(dividend.grossAmount!.toString());
-      const taxAmount = new Decimal(dividend.taxAmount!.toString());
-      const netAmount = new Decimal(dividend.netAmount!.toString());
-      const parValueAtDate = resolveParValueAt(parValueRows, dividend.date);
+    switch (dividend.type) {
+      case "CASH": {
+        // grossAmount/taxAmount/netAmount luôn có giá trị khi type === CASH.
+        const grossAmount = dividend.grossAmount!;
+        const taxAmount = dividend.taxAmount!;
+        const netAmount = dividend.netAmount!;
+        const parValueAtDate = resolveParValueAt(parValueRows, dividend.date);
 
-      cashNetTotal = cashNetTotal.plus(netAmount);
-      cashCount += 1;
+        cashNetTotal = cashNetTotal.plus(netAmount);
+        cashCount += 1;
 
-      return {
-        id: dividend.id,
-        type: "CASH",
-        percentLabel: roundPercentLabel(
-          grossAmount,
-          before.mul(parValueAtDate),
-        ),
-        date: dateLabel,
-        isNew,
-        grossAmount: grossAmount.toString(),
-        taxAmount: taxAmount.toString(),
-        netAmount: netAmount.toString(),
-      } satisfies DividendHistoryRow;
+        return {
+          id: dividend.id,
+          type: "CASH",
+          percentLabel: roundPercentLabel(
+            grossAmount,
+            before.mul(parValueAtDate),
+          ),
+          date: dateLabel,
+          isNew,
+          grossAmount: grossAmount.toString(),
+          taxAmount: taxAmount.toString(),
+          netAmount: netAmount.toString(),
+        } satisfies DividendHistoryRow;
+      }
+      case "STOCK": {
+        // stockQuantity luôn có giá trị khi type === STOCK.
+        const stockQuantity = dividend.stockQuantity!;
+        stockAddedQuantityTotal = stockAddedQuantityTotal.plus(stockQuantity);
+        stockCount += 1;
+
+        return {
+          id: dividend.id,
+          type: "STOCK",
+          percentLabel: roundPercentLabel(stockQuantity, before),
+          date: dateLabel,
+          isNew,
+          unit: holding.unit,
+          quantityBefore: before.toString(),
+          quantityAfter: after.toString(),
+          addedQuantity: stockQuantity.toString(),
+        } satisfies DividendHistoryRow;
+      }
+      case "BOND_COUPON": {
+        // grossAmount/taxAmount/netAmount + 2 field đóng băng luôn có giá trị
+        // khi type === BOND_COUPON (ràng buộc ở tầng ghi, actions.ts).
+        const grossAmount = dividend.grossAmount!;
+        const taxAmount = dividend.taxAmount!;
+        const netAmount = dividend.netAmount!;
+        const couponRatePercentApplied = dividend.couponRatePercentApplied!;
+
+        bondCouponNetTotal = bondCouponNetTotal.plus(netAmount);
+        bondCouponCount += 1;
+
+        // Cả 3 thông số của nhãn ("9%/năm · kỳ 6 tháng") đọc thẳng từ field ĐÃ
+        // ĐÓNG BĂNG trên chính dòng này — không đọc BondTerms hiện tại, cũng
+        // không suy ngược từ grossAmount (phép đảo cần SL-tại-ngày-ghi, mà SL
+        // đó tính lại từ lịch sử giao dịch mỗi lần đọc nên sửa/xoá một lệnh mua
+        // cũ sẽ đổi nhãn của kỳ đã ghi — xem DECISION.md 2026-07-28 (3)).
+        const couponFrequencyMonths = dividend.couponFrequencyMonthsApplied;
+
+        return {
+          id: dividend.id,
+          type: "BOND_COUPON",
+          // KHÔNG suy ngược như CASH/STOCK — lãi suất đã được đóng băng nguyên
+          // vẹn lúc ghi (docs/domain/03-dividends.md "Hiển thị lịch sử").
+          percentLabel: couponRatePercentApplied.toString(),
+          couponRatePercentApplied: couponRatePercentApplied.toString(),
+          ...(couponFrequencyMonths !== null ? { couponFrequencyMonths } : {}),
+          date: dateLabel,
+          isNew,
+          grossAmount: grossAmount.toString(),
+          taxAmount: taxAmount.toString(),
+          netAmount: netAmount.toString(),
+          // Miễn thuế nhận biết bằng THUẾ ĐÃ GHI bằng 0 trên chính dòng này.
+          // Ở tầng lịch sử không có issuerType của thời điểm ghi (BondTerms
+          // sửa được), nên dùng dữ liệu đã đóng băng thay vì đọc lại điều khoản
+          // hiện tại — nhất quán với nguyên tắc "kỳ đã ghi không đổi".
+          isTaxExempt: taxAmount.isZero(),
+        } satisfies DividendHistoryRow;
+      }
+      default:
+        return assertNever(dividend.type);
     }
-
-    // stockQuantity luôn có giá trị khi type === STOCK.
-    const stockQuantity = new Decimal(dividend.stockQuantity!.toString());
-    stockAddedQuantityTotal = stockAddedQuantityTotal.plus(stockQuantity);
-    stockCount += 1;
-
-    return {
-      id: dividend.id,
-      type: "STOCK",
-      percentLabel: roundPercentLabel(stockQuantity, before),
-      date: dateLabel,
-      isNew,
-      unit: holding.unit,
-      quantityBefore: before.toString(),
-      quantityAfter: after.toString(),
-      addedQuantity: stockQuantity.toString(),
-    } satisfies DividendHistoryRow;
   });
 
   return {
@@ -283,6 +259,12 @@ export async function getDividendHistory(holdingId: string): Promise<{
       stockAddedQuantityTotal: stockAddedQuantityTotal.toString(),
       stockCount,
       unit: holding.unit,
+      ...(isBond
+        ? {
+            bondCouponNetTotal: bondCouponNetTotal.toString(),
+            bondCouponCount,
+          }
+        : {}),
     },
     rows,
   };

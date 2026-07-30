@@ -6,15 +6,26 @@ import {
   nonNegativeDecimal,
   positiveDecimal,
 } from "@/features/holdings/schemas";
+import { DIVIDEND_TYPES } from "@/lib/enums";
 
-export const dividendTypeEnum = z.enum(["CASH", "STOCK"]);
+export const dividendTypeEnum = z.enum(DIVIDEND_TYPES);
 
 export const recordDividendSchema = z
   .object({
     holdingId: z.string().min(1, "Thiếu vị thế"),
     type: dividendTypeEnum,
     date: z.coerce.date({ error: "Ngày không hợp lệ" }),
-    percent: positiveDecimal("Tỷ lệ phải lớn hơn 0"),
+    // Optional ở tầng field vì BOND_COUPON KHÔNG có ô % nào (mệnh giá/lãi suất
+    // là điều khoản hợp đồng đọc từ BondTerms — docs/domain/03-dividends.md
+    // "Cách tính", nhánh BOND_COUPON). Bắt buộc lại theo type ở refine bên dưới,
+    // không nới lỏng cho CASH/STOCK.
+    percent: positiveDecimal("Tỷ lệ phải lớn hơn 0").optional(),
+    // Chỉ có ý nghĩa khi type === "BOND_COUPON": thuế app tự tính là PREFILL,
+    // user sửa tay được để khớp số tổ chức phát hành thực khấu trừ
+    // (docs/domain/07-tax.md "Form chỉ prefill, KHÔNG khoá field"). CASH tự
+    // tính thuế và KHÔNG nhận override — chặn ở refine bên dưới thay vì âm thầm
+    // bỏ qua ("không tin client", cùng tinh thần buyHasNoTax ở holdings/schemas.ts).
+    taxAmount: nonNegativeDecimal("Thuế không hợp lệ").optional(),
     // Chỉ có ý nghĩa khi type === "STOCK" — cho phép user tự sửa stockQuantity
     // khi hệ thống làm tròn sai lệch với quy ước của công ty phát hành. Validate
     // tolerance (isStockQuantityOverrideValid) diễn ra trong Server Action, không
@@ -49,6 +60,19 @@ export const recordDividendSchema = z
   .refine((data) => !data.paymentDate || data.paymentDate >= data.date, {
     message: "Ngày thanh toán không thể trước ngày chia",
     path: ["paymentDate"],
-  });
+  })
+  // CASH/STOCK tính số tiền/số lượng TỪ % nên thiếu % là không tính được gì;
+  // BOND_COUPON không có % (xem comment ở field).
+  .refine((data) => data.type === "BOND_COUPON" || data.percent !== undefined, {
+    message: "Nhập tỷ lệ cổ tức",
+    path: ["percent"],
+  })
+  .refine(
+    (data) => data.type === "BOND_COUPON" || data.taxAmount === undefined,
+    {
+      message: "Loại cổ tức này không nhận thuế nhập tay",
+      path: ["taxAmount"],
+    },
+  );
 
 export type RecordDividendInput = z.infer<typeof recordDividendSchema>;

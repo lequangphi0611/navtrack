@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { Undo2 } from "lucide-react";
 
+import type { CashflowType } from "@prisma/client";
 import { EmptyState } from "@/components/EmptyState";
 import type { CashflowTimelineRow } from "@/features/holdings/components/CashflowTimeline";
 import {
@@ -8,6 +9,7 @@ import {
   getHoldingDetail,
 } from "@/features/holdings/queries";
 import { getHideAmountsByDefault } from "@/features/settings/queries";
+import { cashflowActionLabel } from "@/lib/cashflow-label";
 import {
   formatDate,
   formatMoney,
@@ -18,6 +20,23 @@ import { ROUTES } from "@/lib/routes";
 
 import { ClosedHoldingsList } from "./ClosedHoldingsList";
 import { ClosedHoldingsSummaryStrip } from "../ClosedHoldingsSummaryStrip";
+
+// Nhãn dòng lệnh trong timeline "Dòng lệnh của mã" (mockup 6g/6h/6i) — tái
+// dùng cashflowActionLabel() (src/lib/cashflow-label.ts) cho "Mua"/"Đáo hạn",
+// chỉ SELL cần logic riêng (isFinalSell -> "Bán hết" thay vì "Bán").
+function cashflowLabel(
+  cf: { type: CashflowType; quantity: string },
+  isFinalSell: boolean,
+  unit: string,
+): string {
+  const action =
+    cf.type === "SELL"
+      ? isFinalSell
+        ? "Bán hết"
+        : "Bán"
+      : cashflowActionLabel(cf.type);
+  return `${action} ${formatQuantity(cf.quantity, unit)}`;
+}
 
 // Container async cho tab "Đã đóng" (mockup 6g/6h/6i, mục 12 phase-6.md) —
 // THAY HẲN nhánh status="closed" cũ trong HoldingsPositionsSection (bỏ
@@ -64,8 +83,11 @@ async function ClosedHoldingsSection() {
         new Decimal(0),
       )
       .toString();
+    // SELL và MATURITY đều là tiền thu về khi đóng vị thế (cùng nhóm với
+    // realized-pnl.ts) — thiếu MATURITY ở đây sẽ khiến "Tổng tiền bán ra"
+    // không khớp "Chênh lệch (đã chốt)" cho vị thế trái phiếu đáo hạn.
     const totalProceeds = ascending
-      .filter((cf) => cf.type === "SELL")
+      .filter((cf) => cf.type === "SELL" || cf.type === "MATURITY")
       .reduce((sum, cf) => sum.plus(cf.amount), new Decimal(0))
       .toString();
 
@@ -91,7 +113,7 @@ async function ClosedHoldingsSection() {
           row: {
             id: cf.id,
             kind: cf.type,
-            label: `${cf.type === "BUY" ? "Mua" : isFinalSell ? "Bán hết" : "Bán"} ${formatQuantity(cf.quantity, detail?.unit ?? "")}`,
+            label: cashflowLabel(cf, isFinalSell, detail?.unit ?? ""),
             dateNote: `${formatDate(cf.date)} · giá ${formatMoney(cf.pricePerUnit)}`,
             amount: cf.amount,
           },

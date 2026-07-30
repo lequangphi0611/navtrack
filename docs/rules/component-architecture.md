@@ -83,7 +83,77 @@ export default function DashboardPage() {
 }
 ```
 
+- **Cấm `"use client"` ở `*Screen` / `*Section` / `layout.tsx`.** Đánh dấu một component là client thì **mọi component nó import cũng thành client** — một `onClick` ở cành kéo cả cụm vào bundle. Khi component server cần thứ gì tương tác, **truyền xuống** (children/slot, hoặc Server Action làm prop), không kéo logic server lên.
 - Dùng **Server Actions** cho mutation (submit form) thay vì gọi API route từ client, khi có thể.
+
+### Biến thiên ở dữ liệu → props. Biến thiên ở cấu trúc → children/slot
+
+Nhiều props không tự nó là lỗi — một Presentational lá nhận 8 field dữ liệu là bình thường. Lỗi là khi props **phản chiếu cấu trúc** của một màn hình gồm nhiều vùng độc lập: lúc đó thêm một vùng phải sửa cả `page.tsx`, cả `Props`, cả thân component.
+
+Dấu hiệu: **Props type ≥ 10 field** *và* các field **gom thành nhóm theo vùng UI** (mỗi nhóm chỉ một vùng dùng). Ca nặng nhất hiện có: `DashboardScreenProps` = **25 props**, thực chất là layout của 8 vùng độc lập.
+
+Container **là Server Component** nên truyền JSX xuống **không tốn gì** — đây là composition pattern lõi của RSC, không phải mẹo.
+
+```tsx
+// ❌ Bad — screen nhận 25 props phẳng, phản chiếu shape của PortfolioValuation;
+//          thêm một chỉ số phải sửa 3 chỗ (lib → Props → thân component)
+<DashboardScreen navValue={…} navDeltaAmount={…} realizedPnl={…} unrealizedPnl={…}
+                 costDragAmount={…} costDragPercent={…} allocation={…} /* …18 props nữa */ />
+
+// ✅ Good — page dựng sẵn từng vùng, screen chỉ giữ bố cục;
+//          thêm chỉ số mới KHÔNG đụng tới DashboardScreen
+<DashboardScreen
+  navHero={<NavHeroCard {...valuation} />}
+  pnl={<PnlCostDragCard {...valuation} />}
+  allocation={<AllocationBar slices={allocation} />}
+/>
+```
+
+### Biến thiên theo enum nghiệp vụ lặp lại → tách variant component
+
+Khác với mục trên (nhiều **vùng UI độc lập** trong một layout): ở đây một **enum nghiệp vụ** (`DividendType`, `AssetType`...) quyết định cấu trúc JSX lặp lại ở **nhiều vùng không liền kề** trong cùng một component — không phải một vùng content duy nhất, nên không giải quyết bằng một `children` slot.
+
+Dấu hiệu: cùng một biến enum bị `switch`/ternary/IIFE để chọn JSX khác nhau ở **≥ 3 chỗ** trong một component (xem [`typescript-style.md`](./typescript-style.md) mục "Phân nhánh theo enum" phần Giới hạn). Xử lý: rẽ nhánh **đúng một lần** ở container/cha — chọn hẳn **component riêng cho mỗi giá trị** enum (`CashDividendFields`/`StockDividendFields`), không rẽ nhánh lại tại từng vùng con. Phần thật sự dùng chung giữa các biến thể (header, nút submit, field không phụ thuộc loại...) tách thành atom/molecule nhỏ (props thuần, không biết enum) để cả hai variant component cùng gọi — không nhân đôi JSX của phần chung.
+
+```tsx
+// ❌ Bad — 1 biến `type`, switch/IIFE lặp lại ở nhiều vùng rời rạc trong 1 component
+function DividendForm({ ... }) {
+  const [type, setType] = useState<DividendType>("CASH");
+  // ... switch(type) chọn công thức preview
+  // ... switch(type) chọn khối override
+  // ... switch(type) chọn field ngày
+  // ... switch(type) chọn card breakdown
+  // ... switch(type) chọn alert cuối
+  // mỗi switch đều có case "BOND_COUPON": return null (chết, UI chưa cho chọn)
+}
+
+// ✅ Good — container rẽ nhánh MỘT lần, mỗi variant tự chứa phần khác biệt của mình
+function DividendForm({ ... }) {
+  const [type, setType] = useState<DividendType>("CASH");
+  return (
+    <form>
+      {/* phần dùng chung: header, switcher, checkbox, submit */}
+      {type === "CASH" ? (
+        <CashDividendFields {...sharedProps} />
+      ) : (
+        <StockDividendFields {...sharedProps} onValidityChange={setOverrideInvalid} />
+      )}
+    </form>
+  );
+}
+```
+
+Ca thực tế: `DividendForm.tsx` (PR #102) — xem `process/DECISION.md` mục "Tách variant component thay vì switch lặp lại theo enum" để biết lý do và cách chia cụ thể (atom dùng chung `PreviewBreakdownCard`/`PreviewFormulaRow`/`InfoNote`/`PaymentDateField`, biến trạng thái nào cần báo ngược lên cha qua callback).
+
+### Tách component theo ranh giới stream, không chỉ theo tái dùng
+
+Trong RSC, đơn vị tách component không chỉ là "có tái dùng được không" — nó còn là **ranh giới stream** (vùng nào hiện trước, vùng nào chờ) và **ranh giới cache/revalidate**.
+
+> Một vùng UI có **nguồn dữ liệu riêng** và **tốc độ riêng** thì **phải** là component riêng để bọc `<Suspense>`, kể cả khi nó chỉ dùng đúng một lần và không tái dùng ở đâu cả.
+
+Đây là tiêu chí Atomic Design không có (Atomic Design phân loại theo kích cỡ/tái dùng, không biết vùng nào chờ DB lâu hơn). Khi hai tiêu chí xung đột, **ranh giới stream thắng**.
+
+Lưu ý kèm theo: nhiều vùng Suspense độc lập cùng cần dữ liệu dẫn xuất từ một fetch gốc thì bọc fetch gốc bằng React `cache()` để không nhân đôi round-trip — xem [`data-prisma.md`](./data-prisma.md#chọn-select-hẹp-thay-vì-include-full-row).
 
 ### Server Action & error contract
 

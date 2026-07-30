@@ -37,6 +37,8 @@ export function computeCostDrag(
   cashflows: CostDragCashflowInput[],
   dividends: CostDragDividendInput[],
 ): CostDragResult {
+  // Xác nhận đúng cho MATURITY tương lai (process/phase-7.md mục 2): đáo hạn
+  // không phải vốn mua vào, không thuộc grossInvested.
   const grossInvested = cashflows
     .filter((cf) => cf.type === "BUY")
     .reduce((sum, cf) => sum.plus(cf.amount.abs()), new Decimal(0));

@@ -1,8 +1,32 @@
+import type { CashflowType } from "@prisma/client";
 import Decimal from "decimal.js";
 import { z } from "zod";
 
+import { CASHFLOW_TYPES } from "@/lib/enums";
+
 export const assetTypeEnum = z.enum(["STOCK", "FUND", "BOND", "GOLD"]);
-export const cashflowTypeEnum = z.enum(["BUY", "SELL"]);
+export const cashflowTypeEnum = z.enum(CASHFLOW_TYPES);
+
+// Loại giao dịch TẠO MỚI bằng tay được — cố ý KHÔNG phải `cashflowTypeEnum`.
+// Cho tới Phase 6, `CASHFLOW_TYPES` chỉ có BUY/SELL nên dùng chung là an toàn;
+// Phase 7 (#56) thêm `MATURITY` vào mảng đó và mọi schema dựa trên
+// `transactionFields` LẶNG LẼ nhận thêm một loại mà form không bao giờ hiển thị.
+//
+// `MATURITY` chỉ được sinh ra bởi chính luồng tất toán đáo hạn
+// (settleMaturitySchema + settleMaturity), nơi có đủ kiểm tra `holding.type
+// === "BOND"` và `BondTerms` tồn tại, và nơi thuế đánh trên PHẦN LỢI TỨC. Cho
+// client tạo mới một dòng `MATURITY` qua form giao dịch thường là ghi thẳng
+// `Cashflow{MATURITY}` lên một vị thế bất kỳ (kể cả vàng), bỏ qua toàn bộ kiểm
+// tra trên — mà nó vẫn được `cashflowEventRank()` xếp cuối ngày và
+// `computeRealizedGainForHolding()` tính như SELL (docs/domain/07-tax.md "Bán
+// trước hạn vs đáo hạn"). `TransactionForm` đã khoá ở UI, nhưng
+// `<input type="hidden">` sửa được — "không tin client" (CLAUDE.md), cùng lý do
+// `buyHasNoTax` bên dưới.
+//
+// SỬA thì khác: `updateTransactionSchema` vẫn phải nhận `MATURITY` (form gửi
+// nguyên loại của dòng đang sửa lên), nên việc chặn ĐỔI loại nằm ở
+// `updateTransaction` — chỉ ở đó mới đọc được loại đang lưu trong DB.
+const manualCashflowTypeEnum = z.enum(["BUY", "SELL"]);
 
 function decimalString(message: string) {
   return z
@@ -43,7 +67,7 @@ export function nonNegativeDecimal(message: string) {
 }
 
 const transactionFields = {
-  cashflowType: cashflowTypeEnum,
+  cashflowType: manualCashflowTypeEnum,
   date: z.coerce.date({ error: "Ngày không hợp lệ" }),
   quantity: positiveDecimal("Số lượng phải lớn hơn 0"),
   pricePerUnit: positiveDecimal("Giá phải lớn hơn 0"),
@@ -62,7 +86,7 @@ const transactionFields = {
 // được; tránh từ chối nhầm các biểu diễn khác của 0 ("0.0", "0.00") nếu sau
 // này có nguồn gửi request khác ngoài form (form hiện tại luôn gửi literal "0").
 function buyHasNoTax(data: {
-  cashflowType: "BUY" | "SELL";
+  cashflowType: CashflowType;
   taxAmount: string;
 }): boolean {
   return data.cashflowType !== "BUY" || new Decimal(data.taxAmount).isZero();
@@ -94,11 +118,93 @@ export const updateTransactionSchema = z
   .object({
     cashflowId: z.string().min(1, "Thiếu giao dịch"),
     ...transactionFields,
+    // Ghi đè `manualCashflowTypeEnum` của `transactionFields`: form sửa giao
+    // dịch gửi lên nguyên loại của dòng đang sửa, nên một dòng `MATURITY` hợp
+    // lệ phải qua được validate thì mới sửa được ngày/số lượng/giá của nó.
+    // Chặn ĐỔI loại là việc của `updateTransaction` (xem comment ở đó).
+    cashflowType: cashflowTypeEnum,
   })
   .refine(buyHasNoTax, BUY_HAS_NO_TAX_ISSUE);
 
 export const deleteTransactionSchema = z.object({
   cashflowId: z.string().min(1, "Thiếu giao dịch"),
+});
+
+// Điều khoản trái phiếu (Phase 7, mockup 7a) — nhập MỘT LẦN trên vị thế, mọi
+// lần ghi trái tức về sau đọc lại từ đây thay vì hỏi lại user
+// (docs/domain/10-cashflow-calendar.md).
+//
+// Chỉ `issuerType` + `parValue` BẮT BUỘC: thiếu chúng thì không tính được tiền
+// lẫn thuế. Cụm coupon (lãi suất/kỳ/ngày kỳ đầu/đáo hạn) đều optional vì trái
+// phiếu chiết khấu (zero-coupon) hợp lệ mà không có kỳ trả lãi nào — "thiếu
+// field optional là bình thường, không phải lỗi".
+//
+// Chuỗi rỗng từ form = "bỏ trống" (-> null), không phải lỗi định dạng: `<input>`
+// không gửi undefined, luôn gửi "". Nhánh `z.literal("")` đứng TRƯỚC trong union
+// là cố ý — `z.coerce.date("")`/`z.coerce.number("")` không từ chối "" một cách
+// sạch sẽ (ra Invalid Date / số 0), nên để coerce chạm vào "" là mở đường cho
+// một giá trị rác lọt qua thành "kỳ trả lãi 0 tháng".
+const optionalDate = z
+  .union([z.literal(""), z.coerce.date({ error: "Ngày không hợp lệ" })])
+  .transform((value) => (value === "" ? null : value));
+
+const optionalCouponRate = z
+  .union([z.literal(""), positiveDecimal("Lãi suất phải lớn hơn 0")])
+  .transform((value) => (value === "" ? null : value));
+
+const optionalCouponFrequency = z
+  .union([
+    z.literal(""),
+    z.coerce
+      .number()
+      .int("Kỳ trả lãi phải là số tháng nguyên")
+      .positive("Kỳ trả lãi phải lớn hơn 0"),
+  ])
+  .transform((value) => (value === "" ? null : value));
+
+export const bondTermsSchema = z
+  .object({
+    holdingId: z.string().min(1, "Thiếu vị thế"),
+    issuerType: z.enum(["CORPORATE", "GOVERNMENT"]),
+    parValue: positiveDecimal("Mệnh giá phải lớn hơn 0"),
+    couponRatePercent: optionalCouponRate,
+    couponFrequencyMonths: optionalCouponFrequency,
+    firstCouponDate: optionalDate,
+    maturityDate: optionalDate,
+  })
+  // Ngày đáo hạn trước ngày trả lãi kỳ đầu là dữ liệu không thể có thật — mọi
+  // mốc coupon đều bị cắt trước khi sinh, lịch trả lãi ra rỗng một cách khó
+  // hiểu thay vì báo lỗi ngay lúc nhập (lib/bond-schedule.ts::buildCouponSchedule).
+  .refine(
+    (data) =>
+      !data.firstCouponDate ||
+      !data.maturityDate ||
+      data.maturityDate >= data.firstCouponDate,
+    {
+      message: "Ngày đáo hạn không thể trước ngày trả lãi kỳ đầu",
+      path: ["maturityDate"],
+    },
+  );
+
+// Tất toán đáo hạn trái phiếu (Phase 7, issue #101). KHÔNG tái dùng
+// addTransactionSchema: ở đó `cashflowType` do client chọn, còn ở đây loại giao
+// dịch là HẰNG SỐ do chính luồng nghiệp vụ quyết định (`MATURITY`) — cho client
+// gửi lên sẽ mở đường ghi nhầm một lệnh SELL vào màn đáo hạn, đúng thứ tách
+// enum này ra để tránh (docs/domain/07-tax.md "Bán trước hạn vs đáo hạn").
+//
+// `taxAmount` VẪN nhận từ client (khác thuế của SELL, cũng nhận): giá trị app
+// tính chỉ là PREFILL, user sửa lại theo sao kê được — nguyên tắc "form chỉ
+// prefill, KHÔNG khoá field" (docs/domain/07-tax.md). Server tự tính lại giá
+// trị gợi ý và KHÔNG tin số client gửi cho bất kỳ mục đích nào khác ngoài chính
+// cột `taxAmount`.
+export const settleMaturitySchema = z.object({
+  holdingId: z.string().min(1, "Thiếu vị thế"),
+  date: z.coerce.date({ error: "Ngày không hợp lệ" }),
+  quantity: positiveDecimal("Số lượng phải lớn hơn 0"),
+  pricePerUnit: positiveDecimal("Giá phải lớn hơn 0"),
+  taxAmount: nonNegativeDecimal("Thuế không hợp lệ").optional(),
+  feeAmount: nonNegativeDecimal("Phí không hợp lệ").optional(),
+  note: z.string().trim().optional(),
 });
 
 export const navOverrideSchema = z.object({

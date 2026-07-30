@@ -1,5 +1,6 @@
 import { HoldingDetailScreen } from "@/features/holdings/components/HoldingDetailScreen";
 import {
+  getBondHoldingActions,
   getHoldingDetail,
   getJustRecordedBanner,
 } from "@/features/holdings/queries";
@@ -25,12 +26,17 @@ export default async function HoldingDetailPage({
     ? await getJustRecordedBanner(holding, cashflowId)
     : undefined;
 
+  // Phase 7 — hàng thao tác điều khoản/tất toán + cảnh báo quá đáo hạn. Trả
+  // null cho mọi loại tài sản khác BOND, khi đó màn hình không hiện gì thêm.
+  const bond = await getBondHoldingActions(id);
+
   return (
     <HoldingDetailScreen
       holding={holding}
       cashflows={holding.cashflows}
       valuation={holding.valuation}
       justRecorded={justRecorded}
+      {...(bond ? { bond } : {})}
     />
   );
 }

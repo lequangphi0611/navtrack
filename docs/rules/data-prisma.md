@@ -51,7 +51,47 @@ export async function getHoldings() {
 ```
 
 - Với model **soft-delete** (vd `AllowedUser`), truy vấn phải lọc `revokedAt = null` (định nghĩa cột: xem `schema.md`).
-- Gom truy vấn có kiểm soát quyền vào `queries.ts` của feature, không rải Prisma khắp nơi.
+- Gom truy vấn có kiểm soát quyền vào **`repository.ts`** của feature, không rải Prisma khắp nơi — xem mục ngay dưới.
+
+## Tầng truy cập dữ liệu (`repository.ts`) — nơi DUY NHẤT chạm Prisma
+
+Next.js khuyến nghị một **Data Access Layer**: một tầng server-only duy nhất chạm DB, **tự làm authorization**, và trả ra dữ liệu đã an toàn — lý do không phải cho đẹp mà là **giảm rủi ro bug phân quyền**, vì check `userId` chỉ tồn tại ở một chỗ thay vì lặp bằng tay ở mọi call site.
+
+- **`features/<name>/repository.ts` là nơi duy nhất được `import { db }` / gọi `tx.*`.** `actions.ts` và `queries.ts` gọi repository, **không** gọi Prisma trực tiếp.
+- Hàm repository **tự nhận `userId`** và tự filter — không có hàm nào trả dữ liệu chưa scope theo user.
+- Repository trả **Domain** (`Decimal`, kiểu nghiệp vụ), không trả row Prisma thô và cũng không format. Ba tầng `Row → Domain → DTO`: xem [`clean-code.md`](./clean-code.md#2-ba-tầng-type-row--domain--dto).
+- "Không tồn tại" và "không thuộc user" trả **cùng một kết quả** (`null`) — không lộ thông tin tồn tại.
+
+```ts
+// ❌ Bad — action tự query, tự chép select, tự check quyền (lặp ở 5 action, 5 câu chữ khác nhau)
+const holding = await tx.holding.findUnique({
+  where: { id: holdingId },
+  select: { userId: true, cashflows: { select: { /* 7 field */ } }, dividends: { where: { type: "STOCK" }, /* ... */ } },
+});
+if (!holding || holding.userId !== userId) return { ok: false, error: "Không tìm thấy danh mục" };
+
+// ✅ Good — một lời gọi: select + mapper + check quyền nằm trong repository
+const source = await findPositionSourceById(holdingId, userId, tx);
+if (!source) return { ok: false, error: "Không tìm thấy danh mục" };
+```
+
+### Ranh giới transaction: truyền `tx` tường minh
+
+Hàm repository phải chạy được **cả trong lẫn ngoài** `$transaction`. Truyền `Prisma.TransactionClient` **tường minh qua tham số** — không dùng `AsyncLocalStorage`/CLS (ẩn control flow, khó debug), không bọc thêm lớp Unit of Work (`db.$transaction` **đã là** Unit of Work).
+
+```ts
+// ✅ Good — một chữ ký chạy cả 2 ngữ cảnh; mặc định `db` khi gọi ngoài transaction
+export async function findPositionSourceById(
+  holdingId: string,
+  userId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<PositionSource | null> { /* ... */ }
+
+await findPositionSourceById(id, userId);                        // ngoài transaction
+await db.$transaction((tx) => findPositionSourceById(id, userId, tx)); // trong transaction
+```
+
+- Quy tắc TOCTOU vẫn giữ nguyên: đọc-để-check và ghi phải **cùng một** `$transaction`, và caller là nơi mở transaction — repository **không** tự mở (nếu nó tự mở, hai lời gọi repository không thể nằm chung một transaction nữa).
 
 ## Chọn `select` hẹp thay vì `include` full-row
 

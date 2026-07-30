@@ -180,6 +180,15 @@ export class TransactionForm {
     await this.page.waitForURL(afterTransactionUrl(this.holdingUrl));
   }
 
+  // Submit khi field đã tự fill riêng qua fillQuantity/fillPricePerUnit/fillDate
+  // ở trên (cùng tinh thần confirmSell()) — cần khi spec phải mua thêm vào một
+  // NGÀY CỤ THỂ khác "hôm nay" (submitBuy() không nhận `date`), vd dựng lại vị
+  // thế trái phiếu mua bù sau một kỳ trái tức cũ (bond-coupon-and-maturity.spec.ts).
+  async confirmBuy() {
+    await this.submitBuyButton.click();
+    await this.page.waitForURL(afterTransactionUrl(this.holdingUrl));
+  }
+
   // Fill + bấm "Ghi nhận giao dịch bán" — dùng chung cho submitSell() (ca
   // hợp lệ, có redirect) và submitSellExceedingQuantity() (ca bị chặn, không
   // redirect) để không lặp 2 lần cùng chuỗi toggle/fill (review PR #97 finding #6).

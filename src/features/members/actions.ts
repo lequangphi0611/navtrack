@@ -7,8 +7,8 @@ import type { ActionResult } from "@/lib/action-result";
 import { toFieldErrors } from "@/lib/action-result";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { logger } from "@/lib/logger";
 import { ROUTES } from "@/lib/routes";
+import { handleWriteError, UNAUTHENTICATED_MESSAGE } from "@/lib/server-action";
 import { resolveSetting, SETTING_KEYS } from "@/lib/settings";
 
 import { inviteSchema } from "./schemas";
@@ -27,7 +27,7 @@ export async function inviteMember(
 
   const session = await getSession();
   if (!session?.user?.email) {
-    return { ok: false, error: "Chưa đăng nhập" };
+    return { ok: false, error: UNAUTHENTICATED_MESSAGE };
   }
 
   const inviter = await db.allowedUser.findUnique({
@@ -74,7 +74,8 @@ export async function inviteMember(
         return { ok: true as const };
       },
       // Serializable — hai lời mời đồng thời không được cùng đọc activeCount
-      // cũ rồi cùng vượt MAX_MEMBERS; giao dịch thua sẽ bị lỗi P2034, xử lý ở catch.
+      // cũ rồi cùng vượt MAX_MEMBERS; giao dịch thua sẽ bị lỗi serialization
+      // conflict, xử lý ở catch (handleWriteError, @/lib/server-action).
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
 
@@ -83,17 +84,13 @@ export async function inviteMember(
     revalidatePath(ROUTES.members);
     return { ok: true, data: { email } };
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      (err.code === "P2002" || err.code === "P2034")
-    ) {
-      logger.warn({ email }, "inviteMember race, ask to retry");
-      return {
-        ok: false,
-        error: "Có thao tác mời đang xử lý đồng thời, vui lòng thử lại",
-      };
-    }
-    logger.error({ err, email }, "inviteMember failed");
-    throw err;
+    return handleWriteError(err, {
+      action: "inviteMember",
+      email,
+      messages: {
+        p2002: "Có thao tác mời đang xử lý đồng thời, vui lòng thử lại",
+        p2034: "Có thao tác mời đang xử lý đồng thời, vui lòng thử lại",
+      },
+    });
   }
 }

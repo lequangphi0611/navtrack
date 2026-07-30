@@ -1,13 +1,18 @@
+import type { CashflowType } from "@prisma/client";
 import {
   ArrowDownLeft,
   ArrowUpRight,
   CheckCircle2,
   History,
+  Landmark,
+  type LucideIcon,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
+import { assertNever } from "@/lib/assert-never";
+import { cashflowActionLabel } from "@/lib/cashflow-label";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -15,11 +20,51 @@ type TransactionSnapshotBannerProps = {
   transactionLabel: string; // "Mua 5.000 CP"
   transactionDateNote: string; // "11/07/2026 · giá 27.300"
   transactionAmount: string; // signed, "-136500000"
-  transactionKind: "BUY" | "SELL";
+  transactionKind: CashflowType;
   snapshotNavValue: string;
   navHistoryHref: string; // ROUTES.snapshots
   hidden?: boolean;
 };
+
+type TransactionVisual = {
+  icon: LucideIcon;
+  iconBgClass: string;
+  colorClass: string;
+};
+
+// Ngôn ngữ icon/màu theo CashflowType — switch exhaustive (không ternary nhị
+// phân) để bắt lỗi biên dịch ngay khi CashflowType có giá trị mới (vd
+// MATURITY trong tương lai), cùng nguồn sự thật màu với CashflowTimeline
+// (BUY = đỏ/ArrowDownLeft, SELL = xanh/ArrowUpRight).
+function getTransactionVisual(type: CashflowType): TransactionVisual {
+  switch (type) {
+    case "BUY":
+      return {
+        icon: ArrowDownLeft,
+        iconBgClass: "bg-destructive/12",
+        colorClass: "text-destructive",
+      };
+    case "SELL":
+      return {
+        icon: ArrowUpRight,
+        iconBgClass: "bg-gain/12",
+        colorClass: "text-gain",
+      };
+    case "MATURITY":
+      // Placeholder tạm — trái phiếu đáo hạn chưa có ngôn ngữ hình ảnh riêng
+      // (design-implementer sẽ polish ở #57), dùng tông primary/neutral để
+      // phân biệt tạm với BUY/SELL. Icon Landmark khớp với KIND_ICON.MATURITY
+      // ở CashflowTimeline.tsx — hai nơi PHẢI cùng icon vì cả hai đều tự nhận
+      // "cùng nguồn sự thật màu" (đừng lệch lại khi #57 polish).
+      return {
+        icon: Landmark,
+        iconBgClass: "bg-primary/12",
+        colorClass: "text-primary",
+      };
+    default:
+      return assertNever(type);
+  }
+}
 
 // Banner hiện ngay dưới PageHeader của /holdings/[id] khi vừa ghi một giao dịch
 // (mockup 3d) — mở rộng HoldingDetailScreen, KHÔNG route riêng. Cùng ngôn ngữ
@@ -34,8 +79,12 @@ function TransactionSnapshotBanner({
   navHistoryHref,
   hidden = false,
 }: TransactionSnapshotBannerProps) {
-  const isBuy = transactionKind === "BUY";
-  const TransactionIcon = isBuy ? ArrowDownLeft : ArrowUpRight;
+  const {
+    icon: TransactionIcon,
+    iconBgClass,
+    colorClass,
+  } = getTransactionVisual(transactionKind);
+  const transactionVerb = cashflowActionLabel(transactionKind).toLowerCase();
 
   return (
     <div className="flex flex-col gap-3.5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
@@ -48,7 +97,7 @@ function TransactionSnapshotBanner({
             Đã ghi giao dịch &amp; chốt snapshot
           </div>
           <div className="mt-0.25 text-[11px] text-muted-faint">
-            Snapshot MANUAL tạo tự động sau khi {isBuy ? "mua" : "bán"}
+            Snapshot MANUAL tạo tự động sau khi {transactionVerb}
           </div>
         </div>
       </div>
@@ -61,15 +110,10 @@ function TransactionSnapshotBanner({
           <div
             className={cn(
               "flex size-8.5 shrink-0 items-center justify-center rounded-[10px]",
-              isBuy ? "bg-destructive/12" : "bg-gain/12",
+              iconBgClass,
             )}
           >
-            <TransactionIcon
-              className={cn(
-                "size-4.5",
-                isBuy ? "text-destructive" : "text-gain",
-              )}
-            />
+            <TransactionIcon className={cn("size-4.5", colorClass)} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[13.5px] font-semibold text-foreground">
@@ -82,7 +126,7 @@ function TransactionSnapshotBanner({
           <div
             className={cn(
               "font-mono text-[13px] font-semibold tabular-nums",
-              isBuy ? "text-destructive" : "text-gain",
+              colorClass,
             )}
           >
             {formatMoney(transactionAmount, { hidden, compact: true })}

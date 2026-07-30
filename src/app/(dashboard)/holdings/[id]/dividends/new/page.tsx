@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { recordDividend } from "@/features/dividends/actions";
 import { DividendForm } from "@/features/dividends/components/DividendForm";
 import { getOpenHoldingsForDividendSwitcher } from "@/features/dividends/queries";
+import { getBondCouponFormData } from "@/features/holdings/queries";
 import { ROUTES } from "@/lib/routes";
 import {
   requireDecimalSetting,
@@ -26,6 +27,14 @@ export default async function NewDividendPage({
   const holdings = await getOpenHoldingsForDividendSwitcher();
   const current = holdings.find((holding) => holding.id === id);
   if (!current) notFound();
+
+  // Phase 7 — vị thế trái phiếu có thêm tab "Trái tức". `null` = không phải
+  // trái phiếu -> DividendForm giữ nguyên hai loại của Phase 4, không hiện tab.
+  // Trái phiếu CHƯA nhập điều khoản vẫn trả về ngữ cảnh (terms: null) để form
+  // render màn chặn 7g dẫn sang màn nhập, thay vì giấu tab đi không lời giải
+  // thích.
+  const bondData =
+    current.type === "BOND" ? await getBondCouponFormData(current.id) : null;
 
   const today = new Date();
   const settings = await resolveSettings(
@@ -54,7 +63,24 @@ export default async function NewDividendPage({
       }}
       faceValuePerShare={parValue.toString()}
       taxRatePercent={taxRatePercent.toString()}
-      defaultDateInputValue={today.toISOString().slice(0, 10)}
+      {...(bondData
+        ? {
+            bond: {
+              terms: bondData.terms,
+              taxRatePercent: bondData.taxRatePercent,
+              ...(bondData.couponPeriodLabel
+                ? { couponPeriodLabel: bondData.couponPeriodLabel }
+                : {}),
+              bondTermsHref: ROUTES.bondTerms(current.id),
+            },
+          }
+        : {})}
+      // Vị thế trái phiếu mở thẳng tab "Trái tức" nên ngày mặc định phải là KỲ
+      // TRẢ LÃI TỚI suy từ hợp đồng (badge "KỲ n · TỰ ĐIỀN"), không phải hôm
+      // nay — coupon gần như không bao giờ rơi đúng ngày user mở form.
+      defaultDateInputValue={
+        bondData?.nextCouponDateInputValue ?? today.toISOString().slice(0, 10)
+      }
       historyHref={ROUTES.dividendHistory(current.id)}
       closeHref={ROUTES.holdingDetail(current.id)}
       action={recordDividend}
