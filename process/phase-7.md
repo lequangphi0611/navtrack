@@ -50,17 +50,19 @@ Thêm giá trị vào `DividendType`/`CashflowType` sẽ **sai âm thầm** ở 
 - [x] Không còn điểm rẽ nhánh nhị phân theo `DividendType`/`CashflowType` trong `src/` (đã chuyển sang `switch` + `assertNever` / `Record`).
 - [x] Docs domain (`03-dividends.md`, `07-tax.md`, `09-settings.md`, `10-cashflow-calendar.md`, `02-data-model.md`) đồng bộ với quyết định thật lúc implement.
 
-## Trạng thái verify (cập nhật 2026-07-29 sau review vòng 2 PR #102)
+## Trạng thái verify (cập nhật 2026-07-30 — hạ tầng đã chạy xong trên Claude Local)
 
-Tiêu chí ở trên đã tick theo bằng chứng thật (code + unit test), nhưng **hai việc hạ tầng chưa chạy được trên Claude Cloud** — phải làm trên Claude Local trước khi coi Phase 7 là xong tuyệt đối (xem `TOOLS.md`):
+Tiêu chí ở trên đã tick theo bằng chứng thật (code + unit test); hai việc hạ tầng từng treo trên Claude Cloud nay đã hoàn tất trên Claude Local (xem `TOOLS.md`):
 
-- ❌ **`prisma migrate dev` thật** — treo từ issue #56, chưa chạy (thiếu Postgres/Docker). Schema đã `prisma validate`/`generate` sạch.
-- ❌ **`pnpm e2e` (Playwright)** — cần Docker. Chưa có e2e cho luồng trái tức/đáo hạn; đây là nơi duy nhất kiểm chứng được đường ghi thật (Server Action + DB), vì unit test không chạm DB.
+- ✅ **`prisma migrate dev` thật** — migration `20260729233213_add_bond_terms_and_coupon_maturity` đã tạo và áp vào DB dev (bảng `BondTerms`, enum `BondIssuerType`, `CashflowType.MATURITY`, `DividendType.BOND_COUPON`, 3 cột đóng băng trên `Dividend`).
+- ✅ **`pnpm e2e` (Playwright)** — toàn bộ **43/43** pass, gồm 2 kịch bản bắt buộc bên dưới (`e2e/tests/bond-coupon-and-maturity.spec.ts`).
 
-**Hai kịch bản e2e BẮT BUỘC** (cả hai bắt đúng lỗi đã sửa ngày 2026-07-29, và cả hai đều nằm ngoài tầm unit test):
-1. **Ghi bù một kỳ trái tức cũ sau khi đã mua thêm** — `grossAmount`/`taxAmount`/`netAmount` phải cùng một cơ sở SL (SL **tại ngày trả lãi**), không lẫn SL hiện tại.
-2. **Trái tức kỳ cuối trả đúng ngày đáo hạn, ghi tất toán TRƯỚC rồi mới ghi trái tức** — bất biến `SETTLEMENT_RANK`; sai thì trái tức ra 0 đồng, im lặng.
-- ✅ `pnpm lint` / `pnpm typecheck` / `pnpm test` (**372/372**, 36 file) / `pnpm build` sạch.
+**Bug phát hiện + sửa trong lúc chạy e2e thật (commit `3875282`):** `recordDividend()` forward thẳng `formData.get("percent")` (luôn `null` cho `BOND_COUPON`, field không được render) vào schema zod `.optional()` (chỉ chấp nhận `undefined`) — mọi lần ghi trái tức qua UI thật bị từ chối "Dữ liệu không hợp lệ", dù 372 unit test + build đều xanh (không phủ đường `FormData -> schema`). Sửa 1 dòng: coerce `|| undefined` như các field optional khác cùng khối.
+
+**Hai kịch bản e2e BẮT BUỘC** — đã viết và PASS, `e2e/tests/bond-coupon-and-maturity.spec.ts` (cả hai bắt đúng lỗi đã sửa ngày 2026-07-29, và cả hai đều nằm ngoài tầm unit test):
+1. **Ghi bù một kỳ trái tức cũ sau khi đã mua thêm** — `grossAmount`/`taxAmount`/`netAmount` phải cùng một cơ sở SL (SL **tại ngày trả lãi**), không lẫn SL hiện tại. ✅
+2. **Trái tức kỳ cuối trả đúng ngày đáo hạn, ghi tất toán TRƯỚC rồi mới ghi trái tức** — bất biến `SETTLEMENT_RANK`; sai thì trái tức ra 0 đồng, im lặng. ✅
+- ✅ `pnpm lint` / `pnpm typecheck` / `pnpm test` (**372/372**, 36 file) / `pnpm build` / `pnpm e2e` (**43/43**) sạch.
 
 Cách các tiêu chí "khó test" được khoá lại khi chưa có e2e:
 - *"Ghi trái tức KHÔNG tạo `NavOverride`"* — khoá bằng **kiểu**: union `RecordedDividend` (`build-dividend-form-state.ts`) cố ý không có field `priceAdjustment` ở nhánh `BOND_COUPON`, nên "quên bỏ qua" là lỗi compile; cộng test đầu ra khẳng định không có `navOverrideAdjusted`/`oldPrice`/`newPrice`.
