@@ -29,16 +29,25 @@ export const cashflowTypeEnum = z.enum(CASHFLOW_TYPES);
 const manualCashflowTypeEnum = z.enum(["BUY", "SELL"]);
 
 function decimalString(message: string) {
-  return z
-    .string()
-    .trim()
-    .refine((value) => {
-      try {
-        return new Decimal(value).isFinite();
-      } catch {
-        return false;
-      }
-    }, message);
+  return (
+    z
+      .string()
+      .trim()
+      // decimal.js chỉ chấp nhận dấu chấm làm phân cách thập phân — bàn phím số
+      // "inputMode=decimal" trên nhiều máy (locale VN) gõ ra dấu phẩy, nên chuẩn
+      // hoá "," -> "." trước khi parse. Cùng chuẩn hoá client-side preview đã
+      // làm ở bond-terms-preview.ts, nhưng ở đó chỉ để hiển thị — thiếu bước này
+      // ở schema khiến "9,8" hiện đúng ở preview nhưng bị validate từ chối lúc
+      // lưu thật (issue phát hiện khi debug BondTermsForm).
+      .transform((value) => value.replace(",", "."))
+      .refine((value) => {
+        try {
+          return new Decimal(value).isFinite();
+        } catch {
+          return false;
+        }
+      }, message)
+  );
 }
 
 // Exported để tái dùng ở features/dividends/schemas.ts (recordDividendSchema.percent) —

@@ -12,6 +12,7 @@ import {
   Landmark,
   Lightbulb,
 } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Badge } from "@/components/ui/badge";
@@ -80,6 +81,19 @@ function BondTermsFields({
   });
   const hasSchedulePreview =
     preview.couponPerPeriod !== null || preview.nextCouponDate !== null;
+
+  // Bug đã ghi nhận (Safari iOS): sau khi submit lỗi validate, form cha
+  // re-render để hiện Alert — native <select> đôi khi tự vẽ lại nhãn option
+  // ĐẦU TIÊN dù thuộc tính `value` bên dưới KHÔNG hề đổi. React chỉ ghi lại
+  // `.value` cho DOM khi giá trị prop khác lần render trước, nên không tự sửa
+  // được lỗi vẽ này. Ép gán lại `.value` ở MỌI lần render (cố ý không giới
+  // hạn dependency) để buộc trình duyệt vẽ lại đúng option đang chọn thật.
+  const couponFrequencySelectRef = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (couponFrequencySelectRef.current) {
+      couponFrequencySelectRef.current.value = couponFrequencyMonths;
+    }
+  });
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -205,6 +219,7 @@ function BondTermsFields({
               Kỳ trả lãi
             </label>
             <Select
+              ref={couponFrequencySelectRef}
               id="couponFrequencyMonths"
               name="couponFrequencyMonths"
               value={couponFrequencyMonths}
