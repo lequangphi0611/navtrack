@@ -694,10 +694,12 @@ export async function recordDividend(
     holdingId: formData.get("holdingId"),
     type: formData.get("type"),
     date: formData.get("date"),
-    percent: formData.get("percent"),
-    // formData.get() trả null khi field không có mặt trong form (CASH, hoặc
-    // STOCK không override) -> coerce về undefined để khớp .optional() của
-    // zod (optional chỉ chấp nhận undefined, không chấp nhận null).
+    // formData.get() trả null khi field không có mặt trong form (BOND_COUPON
+    // không render input percent) -> coerce về undefined để khớp .optional()
+    // của zod (optional chỉ chấp nhận undefined, không chấp nhận null).
+    percent: formData.get("percent") || undefined,
+    // Cùng lý do percent — field không có mặt trong form (CASH, hoặc STOCK
+    // không override) -> coerce null về undefined để khớp .optional() của zod.
     stockQuantityOverride: formData.get("stockQuantityOverride") || undefined,
     // Cùng lý do stockQuantityOverride — coerce null (field không có mặt
     // trong form, vd UI chưa nhập) về undefined để khớp .optional() của zod.

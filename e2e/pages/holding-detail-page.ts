@@ -1,7 +1,9 @@
 import type { Locator, Page } from "@playwright/test";
 
+import { BondTermsForm } from "./bond-terms-form";
 import { DividendForm } from "./dividend-form";
 import { HoldingsPage } from "./holdings-page";
+import { MaturitySettlementForm } from "./maturity-settlement-form";
 import { TransactionForm } from "./transaction-form";
 
 // Màn hình chi tiết một vị thế (/holdings/[id]). Nhận holdingUrl (base URL
@@ -75,6 +77,30 @@ export class HoldingDetailPage {
     await this.newDividendLink.click();
     await this.page.waitForURL(`${this.holdingUrl}/dividends/new`);
     return new DividendForm(this.page, this.holdingUrl);
+  }
+
+  // BondActionsRow (Phase 7, chỉ vị thế BOND) — nhãn đổi "Nhập điều khoản" ->
+  // "Điều khoản" một khi BondTerms đã tồn tại, regex khớp cả hai bằng chung
+  // cụm từ "điều khoản" thay vì hard-code 1 trong 2 nhãn.
+  get bondTermsLink(): Locator {
+    return this.page.getByRole("link", { name: /điều khoản/i });
+  }
+
+  async goToBondTerms(): Promise<BondTermsForm> {
+    await this.bondTermsLink.click();
+    await this.page.waitForURL(`${this.holdingUrl}/bond-terms`);
+    return new BondTermsForm(this.page, this.holdingUrl);
+  }
+
+  // Chỉ hiện khi holding đã có BondTerms (bond.hasTerms — BondActionsRow).
+  get maturitySettlementLink(): Locator {
+    return this.page.getByRole("link", { name: "Tất toán đáo hạn" });
+  }
+
+  async goToMaturitySettlement(): Promise<MaturitySettlementForm> {
+    await this.maturitySettlementLink.click();
+    await this.page.waitForURL(`${this.holdingUrl}/maturity`);
+    return new MaturitySettlementForm(this.page, this.holdingUrl);
   }
 
   // Badge nguồn giá "Tự động"/"Nhập tay" (PriceSourceBadge) — chỉ check case

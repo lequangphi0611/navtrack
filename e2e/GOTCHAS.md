@@ -197,3 +197,23 @@ holdingUrl)` (bấm dòng vị thế mở sheet → bấm link → pin đúng UR
 - **Bài học chung:** một UI redesign đổi loại phần tử tương tác (Link ↔ button/Sheet) cho MÀN
   ĐÃ CÓ SPEC TỪ TRƯỚC vẫn có thể lọt qua review nếu spec cũ không được chạy lại — luôn `pnpm
 e2e` toàn bộ spec chạm route bị đổi UI trước khi merge, không chỉ spec của feature mới.
+
+## 17. `BondTermsForm` đọc thẳng React state khi submit, KHÔNG qua `FormData` — `fillDatePicker()` vô tác dụng ở form này
+
+- **Triệu chứng:** set `firstCouponDate`/`maturityDate` qua `fillDatePicker()` (ghi thẳng DOM
+  của `<input type="hidden">`) rồi submit `BondTermsForm` — giá trị lưu xuống DB vẫn rỗng, dù
+  `pnpm typecheck`/UI lúc thao tác tay trông bình thường.
+- **Nguyên nhân:** `submitTerms()` (`BondTermsForm.tsx`, comment ngay trong code: "Đọc thẳng
+  từ state (không qua FormData): mọi field ở đây đều controlled, và SegmentedControl/Select
+  không phải input thật nên FormData sẽ thiếu `issuerType`") gọi `saveBondTerms()` bằng các
+  biến state (`parValue`, `firstCouponDate`...), không đọc `formData.get(...)` — khác MỌI form
+  ghi khác của repo (`DividendForm`, `TransactionForm`, `MaturitySettlementForm` đều đọc qua
+  `FormData`). `fillDatePicker()` chỉ ghi DOM value của input ẩn, KHÔNG gọi `onChange` nên
+  không cập nhật state — form đọc state cũ (rỗng) khi submit.
+- **Cách né:** field `Input`/`Select` thường của `BondTermsForm` (`parValue`,
+  `couponRatePercent`, `couponFrequencyMonths`) vẫn dùng `.fill()`/`.selectOption()` bình
+  thường (dispatch event thật → cập nhật state đúng). Riêng 2 field DatePicker
+  (`firstCouponDate`, `maturityDate`) BẮT BUỘC dùng `selectDateOnCalendar()` (kích hoạt
+  `onChange` thật qua UI), không dùng `fillDatePicker()`. `e2e/pages/bond-terms-form.ts` hiện
+  chưa có setter cho 2 field ngày này (2 kịch bản Phase 7 không cần, bỏ trống vẫn hợp lệ —
+  trái phiếu chiết khấu) — thêm setter dùng `selectDateOnCalendar` khi có spec thật sự cần.
