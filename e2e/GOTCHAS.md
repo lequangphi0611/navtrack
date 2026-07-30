@@ -217,3 +217,19 @@ e2e` toàn bộ spec chạm route bị đổi UI trước khi merge, không ch�
   `onChange` thật qua UI), không dùng `fillDatePicker()`. `e2e/pages/bond-terms-form.ts` hiện
   chưa có setter cho 2 field ngày này (2 kịch bản Phase 7 không cần, bỏ trống vẫn hợp lệ —
   trái phiếu chiết khấu) — thêm setter dùng `selectDateOnCalendar` khi có spec thật sự cần.
+
+## 18. `DatePicker` đổi sang `captionLayout="dropdown"` + `hideNavigation` — `selectDateOnCalendar()` không còn bấm next/prev
+
+- **Bối cảnh:** `components/ui/date-picker.tsx` bỏ hẳn nút "Tháng trước/sau" (chọn ngày cách
+  nhiều năm — vd đáo hạn trái phiếu — phải bấm next hàng chục lần), thay bằng 2 `<select>`
+  chọn thẳng tháng/năm (react-day-picker `captionLayout="dropdown"`).
+- **Ảnh hưởng e2e:** `selectDateOnCalendar()` (`support/date-picker.ts`) trước đó tính số lần
+  bấm "Go to the Next/Previous Month" rồi `dispatchEvent("click")` — nút đó **không còn tồn
+  tại** (`hideNavigation`), spec nào gọi hàm này sẽ tìm nút không thấy và fail. Đã sửa hàm để
+  chọn thẳng qua 2 combobox `aria-label="Choose the Month"`/`"Choose the Year"` (mặc định của
+  react-day-picker, component chưa set `locale`) bằng `.selectOption()` — không cần đọc giá trị
+  đang hiển thị trên trigger hay tính số lần bấm nữa.
+- **Bài học chung (lặp lại GOTCHAS #16):** đổi CƠ CHẾ điều hướng của một component `ui/` dùng
+  chung xuyên toàn bộ app (không riêng 1 màn) phải rà **mọi** helper e2e đụng tới nó, không chỉ
+  spec của tính năng đang sửa — `DatePicker` xuất hiện ở transaction/dividend/bond-terms/nav-
+  override nên một thay đổi nhỏ ở đây có bán kính ảnh hưởng rất rộng.

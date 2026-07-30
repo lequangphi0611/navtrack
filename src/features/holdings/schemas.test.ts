@@ -399,6 +399,22 @@ describe("bondTermsSchema", () => {
     expect(result.data.maturityDate).toBeInstanceOf(Date);
   });
 
+  // Bàn phím số locale VN gõ ra dấu phẩy ("9,8") — decimal.js chỉ nhận dấu
+  // chấm, decimalString() phải tự chuẩn hoá trước khi validate (bug thật: user
+  // báo "Dữ liệu không hợp lệ" dù preview client-side hiện đúng số).
+  test("lãi suất gõ dấu phẩy thập phân (locale VN) -> chuẩn hoá thành dấu chấm, không bị từ chối", () => {
+    const result = bondTermsSchema.safeParse({
+      ...required,
+      ...emptyCoupon,
+      couponRatePercent: "9,8",
+      couponFrequencyMonths: "6",
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.couponRatePercent).toBe("9.8");
+  });
+
   // Trái phiếu chiết khấu/zero-coupon hợp lệ mà không có kỳ trả lãi nào —
   // "thiếu field optional là bình thường, không phải lỗi"
   // (docs/domain/10-cashflow-calendar.md).
