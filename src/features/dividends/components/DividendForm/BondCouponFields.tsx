@@ -12,11 +12,11 @@ import type {
   DividendHolding,
 } from "@/features/dividends/types";
 import { formatMoney, formatQuantity } from "@/lib/format";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 
 import { BondTermsSummaryCard } from "./BondTermsSummaryCard";
 import { FieldLabel } from "./FieldLabel";
 import { InfoNote } from "./InfoNote";
-import { parseDecimalOrNull } from "./parse-decimal";
 import { PaymentDateField } from "./PaymentDateField";
 import { PreviewBreakdownCard } from "./PreviewBreakdownCard";
 

@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 
 import { computeMaturitySettlement } from "@/lib/maturity-settlement";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 
 // Số liệu màn "Tất toán đáo hạn" (mockup Phase 7 Screens 7e/7f) — preview
 // client-side để user thấy ngay khi sửa số lượng/giá, KHÔNG phải nguồn sự thật:
@@ -31,14 +32,7 @@ type MaturitySettlementPreview = {
 };
 
 function toDecimalOrZero(value: string): Decimal {
-  const trimmed = value.trim();
-  if (trimmed === "") return new Decimal(0);
-  try {
-    const parsed = new Decimal(trimmed.replace(",", "."));
-    return parsed.isFinite() ? parsed : new Decimal(0);
-  } catch {
-    return new Decimal(0);
-  }
+  return parseDecimalOrNull(value) ?? new Decimal(0);
 }
 
 function computeMaturitySettlementPreview({

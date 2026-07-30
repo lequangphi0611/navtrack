@@ -11,6 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/PageHeader";
 import { formatMoney, formatQuantity, formatSignedPercent } from "@/lib/format";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 import { cn } from "@/lib/utils";
 import { AUTO_PRICED_ASSET_TYPES } from "@/lib/valuation";
 
@@ -43,20 +44,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
       {children}
     </label>
   );
-}
-
-// Parse lenient — input "price" gõ tay có thể rỗng/dở dang ("", "-", "1.")
-// trong lúc user đang gõ; new Decimal() throw trên chuỗi không hợp lệ (khác
-// Number() trả NaN êm), nên phải try/catch thay vì để lỗi văng ra ngoài React
-// render. Tiền luôn Decimal, không float (CLAUDE.md) — kể cả preview.
-function parseDecimalOrNull(value: string): Decimal | null {
-  if (value.trim() === "") return null;
-  try {
-    const decimal = new Decimal(value);
-    return decimal.isFinite() ? decimal : null;
-  } catch {
-    return null;
-  }
 }
 
 // null khi chưa nhập đủ/không hợp lệ (số lượng hoặc giá <= 0) — khác 0 hợp lệ

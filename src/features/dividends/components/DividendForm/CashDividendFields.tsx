@@ -4,10 +4,10 @@ import { Calculator, Lock, TrendingUp } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { DividendHolding } from "@/features/dividends/types";
 import { formatMoney, formatQuantity } from "@/lib/format";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 
 import { FieldLabel } from "./FieldLabel";
 import { InfoNote } from "./InfoNote";
-import { parseDecimalOrNull } from "./parse-decimal";
 import { PaymentDateField } from "./PaymentDateField";
 import { PercentInputField } from "./PercentInputField";
 import { PreviewBreakdownCard } from "./PreviewBreakdownCard";
