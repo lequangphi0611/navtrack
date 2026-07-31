@@ -59,8 +59,11 @@ Thứ tự ưu tiên dựa trên các quyết định trong [`business-overview.
 - Trả nợ kỹ thuật enum trước khi thêm giá trị: `switch` exhaustive + `assertNever` (xem `docs/rules/typescript-style.md` mục "Enum").
 - UI ghi nhận trái tức: mở rộng `DividendForm` hiện có (Phase 4); thêm luồng "Tất toán đáo hạn".
 
-## Phase 8 — Lịch dòng tiền sắp tới (mới, 2026-07-17)
-- Danh sách trái phiếu sắp **đáo hạn** + **coupon kỳ tới** trong 90 ngày, ước tính từ `BondTerms` (bảng Phase 7 thêm) và hàm suy kỳ trả lãi tới do Phase 7 viết.
+## Phase 8 — Lịch dòng tiền sắp tới (mới, 2026-07-17; phạm vi rà lại 2026-07-31)
+- Lịch trái phiếu **đáo hạn** + **mọi kỳ trả lãi** trong cửa sổ **hai chiều** `[−180, +90]` ngày (chọn 30/90/180), ước tính từ `BondTerms` và `lib/bond-schedule.ts` (Phase 7 đã có).
+- Chiều lùi để **nhắc khoản đã tới hạn mà chưa ghi** — coupon quá hạn có badge "chưa ghi" như đáo hạn quá hạn, không im lặng biến mất.
+- Hiển thị **số gộp + ước tính thực nhận sau thuế**; có tổng theo cửa sổ/theo tháng; mỗi mục nối thẳng sang màn ghi trái tức / tất toán.
+- Kèm 2 việc treo từ Phase 7 vì dùng chung truy vấn/màn: ô nhập `nextCouponDateOverride` và callout "quá đáo hạn" ở màn Danh mục.
 - Chỉ áp dụng `BOND` — không dự đoán cổ tức STOCK/FUND (ngày/mức không cố định theo hợp đồng, không đủ tin cậy).
 - Phụ thuộc chặt Phase 7 (đọc field đã thêm, không tự thêm schema). Xem `docs/domain/10-cashflow-calendar.md`, `process/phase-8.md`.
 

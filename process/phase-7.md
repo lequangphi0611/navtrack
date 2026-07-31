@@ -71,8 +71,11 @@ Cách các tiêu chí "khó test" được khoá lại khi chưa có e2e:
 - *"Sửa `BondTerms` không đổi nhãn kỳ đã ghi"* — khoá bằng **schema**: cả 3 thành phần của nhãn đọc thẳng từ `parValueApplied`/`couponRatePercentApplied`/`couponFrequencyMonthsApplied`, không có phép tính nào ở đường đọc nên không có gì để trôi. (Bản đầu suy ngược kỳ trả lãi từ `grossAmount` đã bị bỏ — mẫu số của phép đảo chứa SL-tại-ngày-ghi, không đóng băng; xem `DECISION.md` 2026-07-28 (3).)
 
 ## Việc còn treo sang sau (không chặn Phase 7)
+
+Cả hai đã được **giao cho Phase 8** ở lần rà spec 2026-07-31 (dùng chung truy vấn/màn với lịch dòng tiền) — xem `process/phase-8.md` mục 2 và `DECISION.md` 2026-07-31 (11)(12).
+
 - **Callout "quá đáo hạn" ở màn Danh mục (mockup 7h)** — hiện chỉ gắn ở **chi tiết vị thế** (`getBondHoldingActions`). Bản danh mục cần batch `BondTerms.maturityDate` cho toàn bộ vị thế mở; `OverdueMaturityCard` (đã dựng ở #57) vẫn chỉ có preview.
-- **Ô nhập `nextCouponDateOverride`** — cột + logic ưu tiên đã có, form 7a chưa có ô. Xoay xở bằng cách sửa thẳng ngày trên form ghi trái tức. Xem `docs/domain/10-cashflow-calendar.md`.
+- **Ô nhập `nextCouponDateOverride`** — cột + logic ưu tiên đã có, form 7a chưa có ô. Xoay xở bằng cách sửa thẳng ngày trên form ghi trái tức. Xem `docs/domain/10-cashflow-calendar.md`. Lưu ý Phase 8 còn **thu hẹp ngữ nghĩa** của cột này (chỉ áp cho kỳ chưa ghi) — cài đặt Phase 7 cho override thắng vô điều kiện là bug tiềm ẩn khi lịch có nhiều kỳ.
 
 ## Phụ thuộc / ghi chú
 - Phụ thuộc Phase 4 (model `Dividend`, `DividendForm`, `recordDividend` đã có) — mở rộng, không dựng lại từ đầu.
