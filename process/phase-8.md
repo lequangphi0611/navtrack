@@ -22,7 +22,7 @@ Hiển thị các khoản tiền **dự kiến** phát sinh từ trái phiếu �
 - [ ] Tổng hợp: tổng tiền dự kiến trong cửa sổ (gộp + thực nhận), tổng **theo tháng dương lịch** cho phần chiều tới, và số mục **quá hạn chưa ghi** tách riêng khỏi tổng dự kiến.
 
 ### 2. UI
-- [ ] Trang lịch đầy đủ: sắp xếp theo ngày gần nhất trước, **mục quá hạn/chưa ghi xếp lên đầu**; badge "đã quá hạn" (đáo hạn) và "chưa ghi" (coupon); mọi số tiền có nhãn "dự kiến".
+- [ ] Trang lịch đầy đủ: sắp xếp theo ngày gần nhất trước, **mục quá hạn/chưa ghi xếp lên đầu**; badge "đã quá hạn" (đáo hạn) và "chưa ghi" (kỳ trả lãi); mọi số tiền có nhãn "dự kiến".
 - [ ] Bộ chọn cửa sổ **30/90/180 ngày** (client-side, mặc định 90) — hằng số + tuỳ chọn hiển thị, **không** thêm `Setting`.
 - [ ] CTA trên từng mục: `ROUTES.newDividend(holdingId)` (kỳ trả lãi) / `ROUTES.maturitySettlement(holdingId)` (đáo hạn) — CTA kỳ trả lãi **mang theo mốc** qua `?couponDate=yyyy-MM-dd`, `getBondCouponFormData()` nhận mốc tuỳ chọn để prefill đúng kỳ được bấm (hiện luôn prefill kỳ chưa ghi đầu tiên).
 - [ ] Card tóm tắt ở Dashboard: **2–3 mục sắp tới** gần nhất + tổng cửa sổ, mục quá hạn chỉ đếm ở badge riêng (không chen vào danh sách, không thì card "Sắp tới" toàn mục quá hạn) → link sang trang đầy đủ. `BottomNav` giữ 3 tab, không thêm tab.
