@@ -1,7 +1,14 @@
 "use client";
 
 import Decimal from "decimal.js";
-import { Calculator, Gavel, Info, ReceiptText, TrendingUp } from "lucide-react";
+import {
+  Banknote,
+  Calculator,
+  Gavel,
+  Info,
+  ReceiptText,
+  TrendingUp,
+} from "lucide-react";
 import { useState } from "react";
 
 import { AutoFilledAmountCard } from "@/components/AutoFilledAmountCard";
@@ -74,6 +81,16 @@ function BondCouponFields({
     ? grossAmount.mul(taxRatePercent).div(100)
     : null;
 
+  // Lãi gộp sửa tay được (bond lãi suất thả nổi khiến số tự tính từ BondTerms
+  // lệch số thực nhận trên sao kê, process/DECISION.md) — giữ giá trị hiệu lực
+  // ở đây để dòng "Thực nhận" bên dưới phản ánh đúng số user vừa sửa, thay vì
+  // hiển thị net tính theo số tự động đã bị thay.
+  const [effectiveGrossAmount, setEffectiveGrossAmount] = useState<
+    string | null
+  >(null);
+  const effectiveGross =
+    parseDecimalOrNull(effectiveGrossAmount ?? "") ?? grossAmount;
+
   // Thuế sửa tay được (tổ chức phát hành có thể đã khấu trừ khác) — giữ giá trị
   // hiệu lực ở đây để dòng "Thực nhận" bên dưới phản ánh đúng số user vừa sửa,
   // thay vì hiển thị net tính theo số tự động đã bị thay.
@@ -83,7 +100,7 @@ function BondCouponFields({
   const taxAmount =
     parseDecimalOrNull(effectiveTaxAmount ?? "") ?? computedTaxAmount;
   const netAmount =
-    grossAmount && taxAmount ? grossAmount.minus(taxAmount) : null;
+    effectiveGross && taxAmount ? effectiveGross.minus(taxAmount) : null;
 
   return (
     <>
@@ -135,6 +152,27 @@ function BondCouponFields({
       </PaymentDateField>
 
       <AutoFilledAmountCard
+        icon={Banknote}
+        label="Lãi gộp"
+        fieldName="grossAmount"
+        computedAmount={grossAmount ? grossAmount.toString() : "0"}
+        formulaLabel={
+          couponPerPeriod
+            ? `${formatQuantity(holding.quantity, holding.unit)} × ${formatMoney(couponPerPeriod.toString())}`
+            : undefined
+        }
+        onValueChange={setEffectiveGrossAmount}
+        emphasized
+        disabled={isPending}
+        // Chưa sửa tay -> KHÔNG gửi `grossAmount`, để `recordDividend` tự tính
+        // theo `quantityAtDate` (SL TẠI NGÀY TRẢ LÃI). Số ở đây tính theo
+        // `holding.quantity` (SL HIỆN TẠI) nên lệch khi ghi bù một kỳ cũ mà SL
+        // đã đổi từ đó tới nay — cùng lý do với card Thuế bên dưới (review PR
+        // #102).
+        submitWhenAuto={false}
+      />
+
+      <AutoFilledAmountCard
         icon={ReceiptText}
         label="Thuế lãi trái phiếu"
         fieldName="taxAmount"
@@ -167,13 +205,6 @@ function BondCouponFields({
         iconClassName="text-primary"
         title="Tự tính số tiền nhận về"
         rows={[
-          {
-            label: "Lãi gộp",
-            sublabel: `· ${formatQuantity(holding.quantity, holding.unit)} × ${
-              couponPerPeriod ? formatMoney(couponPerPeriod.toString()) : "—"
-            }`,
-            value: grossAmount ? formatMoney(grossAmount.toString()) : "—",
-          },
           {
             label: "Thuế lãi trái phiếu",
             sublabel: `· ${taxRatePercent}%`,

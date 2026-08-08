@@ -26,6 +26,12 @@ export const recordDividendSchema = z
     // tính thuế và KHÔNG nhận override — chặn ở refine bên dưới thay vì âm thầm
     // bỏ qua ("không tin client", cùng tinh thần buyHasNoTax ở holdings/schemas.ts).
     taxAmount: nonNegativeDecimal("Thuế không hợp lệ").optional(),
+    // Chỉ có ý nghĩa khi type === "BOND_COUPON": số tự tính từ BondTerms là
+    // PREFILL, user sửa tay được để khớp số thực nhận trên sao kê phát hành
+    // (vd trái phiếu lãi suất thả nổi — model giả định coupon rate cố định,
+    // xem docs/domain/03-dividends.md). Cùng cơ chế "vắng mặt = dùng số server
+    // tự tính" như taxAmount — .optional(), KHÔNG .default().
+    grossAmount: nonNegativeDecimal("Lãi gộp không hợp lệ").optional(),
     // Chỉ có ý nghĩa khi type === "STOCK" — cho phép user tự sửa stockQuantity
     // khi hệ thống làm tròn sai lệch với quy ước của công ty phát hành. Validate
     // tolerance (isStockQuantityOverrideValid) diễn ra trong Server Action, không
@@ -72,6 +78,13 @@ export const recordDividendSchema = z
     {
       message: "Loại cổ tức này không nhận thuế nhập tay",
       path: ["taxAmount"],
+    },
+  )
+  .refine(
+    (data) => data.type === "BOND_COUPON" || data.grossAmount === undefined,
+    {
+      message: "Loại cổ tức này không nhận lãi gộp nhập tay",
+      path: ["grossAmount"],
     },
   );
 

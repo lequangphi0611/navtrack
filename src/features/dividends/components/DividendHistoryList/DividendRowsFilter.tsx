@@ -50,8 +50,10 @@ function grossMinusTaxLine(row: DividendHistoryRow): string {
 // Dòng phụ khác cấu trúc thật sự theo loại — CASH hiện gộp/thuế, STOCK hiện SL
 // trước → sau, BOND_COUPON cần HAI dòng (điều khoản đã áp dụng, rồi gộp/thuế)
 // nên hàm trả về mảng. switch exhaustive (KHÔNG ternary nhị phân, xem
-// docs/rules/typescript-style.md mục "Enum").
-function dividendDetailLines(row: DividendHistoryRow): string[] {
+// docs/rules/typescript-style.md mục "Enum"). Trả về ReactNode (không thuần
+// string) vì dòng gộp/thuế của BOND_COUPON cần chèn Badge "ĐÃ CHỈNH TAY" khi
+// grossAmountOverridden, không chỉ hiện văn bản.
+function dividendDetailLines(row: DividendHistoryRow): React.ReactNode[] {
   switch (row.type) {
     case "CASH":
       return [`${row.date} · ${grossMinusTaxLine(row)}`];
@@ -68,9 +70,16 @@ function dividendDetailLines(row: DividendHistoryRow): string[] {
       ].filter((part) => part !== null);
       return [
         [row.date, ...terms].join(" · "),
-        row.isTaxExempt
-          ? `gộp ${row.grossAmount ? formatMoney(row.grossAmount, { compact: true }) : "—"} − miễn thuế`
-          : grossMinusTaxLine(row),
+        <span key="gross-tax" className="inline-flex items-center gap-1.25">
+          {row.isTaxExempt
+            ? `gộp ${row.grossAmount ? formatMoney(row.grossAmount, { compact: true }) : "—"} − miễn thuế`
+            : grossMinusTaxLine(row)}
+          {row.grossAmountOverridden ? (
+            <Badge variant="warning" className="px-1.5 py-0 text-[9px]">
+              ĐÃ CHỈNH TAY
+            </Badge>
+          ) : null}
+        </span>,
       ];
     }
     case "STOCK":
@@ -183,9 +192,9 @@ function DividendRowsFilter({ rows, hidden }: DividendRowsFilterProps) {
                     </Badge>
                   ) : null}
                 </div>
-                {dividendDetailLines(row).map((line) => (
+                {dividendDetailLines(row).map((line, index) => (
                   <div
-                    key={line}
+                    key={`${row.id}-detail-${index}`}
                     className="mt-0.5 font-mono text-[11px] text-muted-faint"
                   >
                     {line}

@@ -244,6 +244,9 @@ export async function getDividendHistory(holdingId: string): Promise<{
           // sửa được), nên dùng dữ liệu đã đóng băng thay vì đọc lại điều khoản
           // hiện tại — nhất quán với nguyên tắc "kỳ đã ghi không đổi".
           isTaxExempt: taxAmount.isZero(),
+          // true khi user đã sửa tay grossAmount lúc ghi kỳ này — cờ audit,
+          // độc lập với điều khoản đã đóng băng phía trên (docs/domain/03-dividends.md).
+          grossAmountOverridden: dividend.grossAmountOverridden,
         } satisfies DividendHistoryRow;
       }
       default:
