@@ -1,7 +1,7 @@
 ---
 name: design-implementer
 description: Dùng khi cần hiện thực lớp UI/Presentational của một phase cho Navtrack — component nhận props và hiển thị, styling theo token màu/typography, animation, skeleton, empty/error state. Đọc digest mockup (`process/UI_phase_N.md`) do agent `design-fetcher` sinh sẵn ở đầu phase — KHÔNG tự kéo DesignSync. KHÔNG dùng khi cần sửa Prisma schema, queries.ts, Server Action, hay bất kỳ logic domain nào (XIRR, cost basis, thuế...) — việc đó thuộc design-implementer's cặp — business-implementer.
-tools: Read, Edit, Write, Glob, Grep, Bash
+tools: Read, Edit, Write, Glob, Grep, Bash, PowerShell
 model: sonnet
 ---
 
