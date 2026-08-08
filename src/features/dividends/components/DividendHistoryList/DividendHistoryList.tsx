@@ -37,6 +37,10 @@ type DividendHistoryRow = {
   // true khi kỳ này miễn thuế theo luật (trái phiếu Chính phủ) — hiện badge
   // "MIỄN THUẾ" thay vì để người dùng tưởng app quên tính thuế.
   isTaxExempt?: boolean;
+  // BOND_COUPON — true khi user đã sửa tay grossAmount lúc ghi kỳ này (khác
+  // computed từ BondTerms, vd lãi suất thả nổi) — cờ audit, độc lập với điều
+  // khoản đã đóng băng phía trên (docs/domain/03-dividends.md).
+  grossAmountOverridden?: boolean;
 };
 
 type DividendHistorySummary = {

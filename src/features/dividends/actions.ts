@@ -339,6 +339,10 @@ type RecordBondCouponCtx = {
   couponFrequencyMonths: number;
   taxRatePercent: Decimal;
   taxAmountOverride: string | undefined;
+  // Số tự tính từ BondTerms là PREFILL, user sửa tay được để khớp số thực
+  // nhận trên sao kê phát hành (vd lãi suất thả nổi) — cùng cơ chế
+  // taxAmountOverride ở trên, xem docs/domain/03-dividends.md.
+  grossAmountOverride: string | undefined;
   quantityAtDate: Decimal;
 };
 
@@ -380,6 +384,21 @@ async function recordBondCouponDividend(
     quantity: ctx.quantityAtDate,
   });
 
+  // Gộp chỉ PREFILL, user sửa tay được để khớp số thực nhận trên sao kê phát
+  // hành (vd trái phiếu lãi suất thả nổi — model giả định coupon rate cố định,
+  // docs/domain/03-dividends.md). `computed.grossAmount` (tự tính từ BondTerms)
+  // vẫn giữ nguyên riêng — dùng để hiển thị "số tự tính" cho card UI so sánh
+  // với số cuối cùng; MỌI phép tính tài chính bên dưới (guard, netAmount, ghi
+  // DB) phải dùng `grossAmount` (số CUỐI CÙNG, đã qua override).
+  //
+  // Cùng cơ chế `taxAmountOverride`: CHỈ có mặt khi user thật sự gõ tay (card
+  // ở BondCouponFields đặt `submitWhenAuto={false}`).
+  const grossAmount =
+    ctx.grossAmountOverride !== undefined
+      ? new Decimal(ctx.grossAmountOverride)
+      : computed.grossAmount;
+  const grossAmountOverridden = ctx.grossAmountOverride !== undefined;
+
   // Thuế chỉ PREFILL, user sửa tay được để khớp số tổ chức phát hành thực khấu
   // trừ (docs/domain/07-tax.md). netAmount phải tính lại theo thuế HIỆU LỰC,
   // không dùng netAmount tính từ thuế tự động.
@@ -397,14 +416,19 @@ async function recordBondCouponDividend(
   // với CASH, xem CASH_FLOW_DIVIDEND_TYPES), một giá trị âm ở đây sẽ trôi vào
   // XIRR/tổng đã nhận như thể trái tức làm MẤT tiền. Đây là lỗi lường trước
   // (ActionResult) — gõ nhầm số trên form là chuyện thường, không phải sự cố.
-  if (taxAmount.gt(computed.grossAmount)) {
+  //
+  // So với `grossAmount` (số CUỐI CÙNG, đã qua override) — KHÔNG phải
+  // `computed.grossAmount` (số tự tính) — vì `grossAmount` mới là số thật đưa
+  // vào netAmount/XIRR bên dưới. So với số tự tính sẽ để lọt trường hợp user
+  // hạ gross xuống thấp hơn thuế đã prefill mà không bị chặn.
+  if (taxAmount.gt(grossAmount)) {
     return {
       ok: false,
       error: "Thuế không thể lớn hơn tiền lãi gộp của kỳ này",
     };
   }
 
-  const netAmount = computed.grossAmount.minus(taxAmount);
+  const netAmount = grossAmount.minus(taxAmount);
 
   await insertDividend(
     {
@@ -414,13 +438,16 @@ async function recordBondCouponDividend(
       // Như CASH: mốc dòng tiền XIRR là paymentDate khi có (tiền lãi thực về
       // tay), fallback `date` — xem buildXirrCashflows (lib/xirr-cashflow.ts).
       paymentDate: ctx.paymentDate,
-      grossAmount: computed.grossAmount.toString(),
+      grossAmount: grossAmount.toString(),
       taxAmount: taxAmount.toString(),
       netAmount: netAmount.toString(),
+      grossAmountOverridden,
       // Đóng băng TOÀN BỘ 3 thông số đã dùng để tính — xem comment insertDividend
       // (repository.ts). Kỳ trả lãi phải nằm trong nhóm này chứ không suy ngược
       // từ grossAmount: phép đảo cần SL-tại-ngày-ghi, mà SL đó tính lại từ lịch
-      // sử giao dịch mỗi lần đọc (xem DECISION.md 2026-07-28 (3)).
+      // sử giao dịch mỗi lần đọc (xem DECISION.md 2026-07-28 (3)). GIỮ NGUYÊN
+      // độc lập với việc grossAmount có bị sửa tay hay không — luôn ghi theo
+      // BondTerms gốc, không theo số user vừa gõ.
       parValueApplied: ctx.terms.parValue.toString(),
       couponRatePercentApplied: ctx.couponRatePercent.toString(),
       couponFrequencyMonthsApplied: ctx.couponFrequencyMonths,
@@ -433,7 +460,7 @@ async function recordBondCouponDividend(
     type: "BOND_COUPON",
     symbol: ctx.symbol,
     unit: ctx.unit,
-    grossAmount: computed.grossAmount,
+    grossAmount,
     taxAmount,
     netAmount,
     couponRatePercentApplied: ctx.couponRatePercent,
@@ -544,11 +571,17 @@ type RecordDividendTxCtxBase = {
 // TypeError lúc chạy (review PR #102, docs/rules/typescript-style.md).
 type RecordDividendTxCtx = RecordDividendTxCtxBase &
   (
-    | { type: "CASH" | "STOCK"; bond?: never; taxAmountOverride?: never }
+    | {
+        type: "CASH" | "STOCK";
+        bond?: never;
+        taxAmountOverride?: never;
+        grossAmountOverride?: never;
+      }
     | {
         type: "BOND_COUPON";
         bond: BondCouponContext;
         taxAmountOverride: string | undefined;
+        grossAmountOverride: string | undefined;
       }
   );
 
@@ -564,6 +597,7 @@ async function buildRecordDividendTxCtx(input: {
   type: DividendType;
   userId: string;
   taxAmountOverride: string | undefined;
+  grossAmountOverride: string | undefined;
   base: RecordDividendTxCtxBase;
 }): Promise<
   { ok: true; data: RecordDividendTxCtx } | { ok: false; error: string }
@@ -587,6 +621,7 @@ async function buildRecordDividendTxCtx(input: {
           type,
           bond: bondCtx.data,
           taxAmountOverride: input.taxAmountOverride,
+          grossAmountOverride: input.grossAmountOverride,
         },
       };
     }
@@ -671,6 +706,7 @@ async function runRecordDividendTransaction(
         couponFrequencyMonths: ctx.bond.couponFrequencyMonths,
         taxRatePercent: ctx.bond.taxRatePercent,
         taxAmountOverride: ctx.taxAmountOverride,
+        grossAmountOverride: ctx.grossAmountOverride,
         // SL đang giữ TẠI NGÀY TRẢ LÃI — quy ước thứ tự (lib/position-trail.ts)
         // đảm bảo con số này đọc TRƯỚC Cashflow{MATURITY} cùng ngày, nên trái
         // tức kỳ cuối không ra 0 đồng khi user đã ghi tất toán trước.
@@ -709,6 +745,10 @@ export async function recordDividend(
     // Chỉ BOND_COUPON gửi field này (AutoFilledAmountCard "Thuế lãi trái
     // phiếu") — schema từ chối nếu loại khác gửi lên.
     taxAmount: formData.get("taxAmount") || undefined,
+    // Chỉ BOND_COUPON gửi field này (AutoFilledAmountCard "Lãi gộp") — schema
+    // từ chối nếu loại khác gửi lên. Cùng lý do coerce null -> undefined ở
+    // các field trên.
+    grossAmount: formData.get("grossAmount") || undefined,
   });
   if (!ctx.ok) return ctx;
   const { userId } = ctx;
@@ -740,6 +780,7 @@ export async function recordDividend(
     type,
     userId,
     taxAmountOverride: ctx.data.taxAmount,
+    grossAmountOverride: ctx.data.grossAmount,
     base: {
       holdingId,
       userId,

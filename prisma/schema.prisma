@@ -228,6 +228,13 @@ model Dividend {
   // mà SL đó tính lại từ lịch sử giao dịch mỗi lần đọc -> sửa/xoá một lệnh mua cũ sẽ đổi nhãn
   // của kỳ đã ghi sang một con số khác mà vẫn nghe hợp lý (6 -> 4 hoặc 12). Xem DECISION.md 2026-07-28 (3).
   couponFrequencyMonthsApplied Int?
+  // type = BOND_COUPON: true khi user đã sửa tay grossAmount (khác computed từ
+  // BondTerms — vd lãi suất thả nổi lệch số thực nhận trên sao kê phát hành).
+  // Khác taxAmount (không có cờ tương đương): grossAmount là số GỐC dùng cho
+  // XIRR/báo cáo thuế, cần phân biệt được lúc audit lịch sử liệu số lệch là do
+  // lãi suất thật đổi, do SL replay lệch, hay do user tự sửa tay. Xem
+  // docs/domain/03-dividends.md, process/DECISION.md.
+  grossAmountOverridden        Boolean      @default(false)
   note                         String?
   createdAt                    DateTime     @default(now())
   updatedAt                    DateTime     @updatedAt

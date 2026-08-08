@@ -190,6 +190,11 @@ model Dividend {
   // nằm TRONG nhãn -> phải bất biến như 2 field trên. KHÔNG suy ngược từ grossAmount: mẫu số
   // của phép đảo chứa SL-tại-ngày-ghi, mà SL đó phát lại từ lịch sử giao dịch mỗi lần đọc.
   couponFrequencyMonthsApplied Int?
+  // type = BOND_COUPON: true khi user đã sửa tay grossAmount (khác computed từ
+  // BondTerms — vd lãi suất thả nổi). Khác taxAmount (không có cờ tương đương):
+  // grossAmount là số GỐC cho XIRR/báo cáo thuế, cần phân biệt nguồn gốc lệch số
+  // khi audit lịch sử. Xem docs/domain/03-dividends.md, process/DECISION.md 2026-08-08.
+  grossAmountOverridden Boolean @default(false)
   note          String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
