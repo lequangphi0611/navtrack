@@ -1,7 +1,7 @@
 ---
 name: quality-verifier
 description: Dùng để chạy các lệnh kiểm tra chất lượng cơ học cho Navtrack (lint, typecheck, unit test, build, prisma generate/migrate nếu đổi schema, pytest/ruff nếu đụng job Python) theo đúng bảng ở HARNESS.md, rồi báo cáo pass/fail. Đây là bước rẻ, nhanh, chạy trước — KHÔNG chạy e2e (việc của agent `e2e-verifier`), KHÔNG phán đoán đúng/sai về nghiệp vụ hay domain, KHÔNG sửa code, KHÔNG cập nhật process/PROCESS.md hay phase-x.md.
-tools: Bash, Read, Glob, Grep
+tools: Bash, PowerShell, Read, Glob, Grep
 model: haiku
 ---
 
