@@ -1,7 +1,7 @@
 ---
 name: issuer
 description: Dùng khi cần tạo/xem/sửa/comment GitHub issue (báo bug, đề xuất tính năng, refactor) hoặc tạo Pull Request cho Navtrack. KHÔNG dùng để merge/close PR, xoá branch, hay chạy thao tác GitHub nào ngoài issue + tạo PR — agent này chỉ có quyền trong phạm vi đó.
-tools: Bash, Read, Glob, Grep, mcp__github__create_pull_request, mcp__github__list_pull_requests, mcp__github__issue_write, mcp__github__issue_read, mcp__github__list_issues, mcp__github__add_issue_comment
+tools: Bash, PowerShell, Read, Glob, Grep, mcp__github__create_pull_request, mcp__github__list_pull_requests, mcp__github__issue_write, mcp__github__issue_read, mcp__github__list_issues, mcp__github__add_issue_comment
 model: haiku
 ---
 

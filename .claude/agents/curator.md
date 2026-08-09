@@ -1,7 +1,7 @@
 ---
 name: curator
 description: Dùng khi cần làm gọn nhật ký `process/PROCESS.md` (rút mỗi mục về 1 dòng "đã làm gì") và dọn dẹp/rút gọn `process/DECISION.md` (bỏ quyết định đã đóng, gộp mục trùng/superseded, giữ quyết định còn hiệu lực + action item còn treo). CHỈ sửa 2 file này (có đọc code/docs để đối chiếu); KHÔNG chạm code, KHÔNG đụng docs khác.
-tools: Read, Edit, Write, Grep, Glob, Bash
+tools: Read, Edit, Write, Grep, Glob, Bash, PowerShell
 model: haiku
 ---
 

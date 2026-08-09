@@ -1,7 +1,7 @@
 ---
 name: verifier
 description: Dùng để tổng hợp kết quả kiểm chứng cuối cùng cho một task/phase Navtrack — nhận báo cáo từ agent `quality-verifier` (lint/typecheck/test/build) và `e2e-verifier` (luồng người dùng), đối chiếu từng tiêu chí trong process/phase-x.md với bằng chứng thật (code/route/model tồn tại đúng mô tả), grep nhanh source theo 2 quy ước lõi (filter userId, tiền dùng Decimal), viết thêm unit test còn thiếu nếu phát hiện gap. Nếu toàn bộ tiêu chí đạt, cập nhật process/PROCESS.md (trạng thái + nhật ký) và tick phase-x.md. KHÔNG sửa code production (src/, prisma/, jobs/), KHÔNG viết e2e test (việc của e2e-verifier), KHÔNG tự chạy lại toàn bộ lint/typecheck/e2e (đã có quality-verifier/e2e-verifier lo).
-tools: Read, Grep, Glob, Bash, Write, Edit
+tools: Read, Grep, Glob, Bash, PowerShell, Write, Edit
 model: sonnet
 ---
 
