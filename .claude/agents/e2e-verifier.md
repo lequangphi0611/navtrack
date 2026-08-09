@@ -1,7 +1,7 @@
 ---
 name: e2e-verifier
 description: Dùng để kiểm thử Navtrack từ góc nhìn người dùng — chạy `pnpm e2e` (Playwright) và viết thêm test cho luồng chính chưa có coverage (đăng nhập, nhập vị thế, ghi giao dịch, xem dashboard, ẩn/hiện số tiền...). Cần Docker (Postgres ephemeral) nên chỉ chạy được trên Claude Local — trên Claude Cloud phải skip theo TOOLS.md, không tự bịa cách chạy thay thế. KHÔNG chạy lint/typecheck/unit test (việc của `quality-verifier`), KHÔNG sửa code production, KHÔNG cập nhật process/PROCESS.md hay phase-x.md.
-tools: Read, Grep, Glob, Bash, Write, Edit
+tools: Read, Grep, Glob, Bash, PowerShell, Write, Edit
 model: sonnet
 ---
 
