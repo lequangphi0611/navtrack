@@ -16,13 +16,13 @@ Skill này tạo một loạt issue GitHub cho một phase hoặc một mảng v
 
 ## Bước 1 — Đọc bối cảnh
 1. `process/phase-x.md` liên quan — mục "Công việc cần làm", "Tiêu chí hoàn thành", "Phụ thuộc/ghi chú".
-2. `process/DECISION.md` — quyết định đã chốt ở phase trước, tránh đề xuất đi ngược.
+2. `process/DECISION.md` — **index** quyết định đã chốt ở phase trước, tránh đề xuất đi ngược; mở file chi tiết trong `process/decisions/` cho đúng chủ đề của phase đang chia issue.
 3. `process/PROCESS.md` — phase trước đã xong chưa (Phase N phụ thuộc Phase N-1 theo `03-roadmap.md`).
 4. `docs/domain/*` liên quan tới phase — mỗi issue business phải trích dẫn đúng file/mục domain doc làm căn cứ, không tự suy diễn rule.
 5. `docs/02-data-model.md` nếu phase đụng schema mới — bản nháp model có thể đã có sẵn ở đây, chỉ cần hiện thực vào `prisma/schema.prisma`.
 6. `docs/rules/*` liên quan (đặc biệt `python-job.md` nếu phase có job chạy GitHub Actions, `component-architecture.md` nếu có UI mới) — quyết định ranh giới ngôn ngữ/công cụ của từng việc.
 7. **Digest mockup `process/UI_phase_N.md`** (do `design-fetcher` sinh) — nếu phase đụng UI mà digest **chưa có**:
-   - **Tự fetch mockup ở main context trước (KHÔNG spawn subagent làm việc này)** — `DesignSync` là deferred tool, `ToolSearch` nạp nó không lan xuống subagent spawn qua `Agent` tool (issue #76, `process/DECISION.md` 2026-07-18). Xác định file mockup (user chỉ định hoặc `ToolSearch select:DesignSync` → `list_files` hỏi user), kiểm cache `.claude/design-cache/` trước, thiếu thì `get_file` + `Write` raw ra `.claude/design-cache/raw/` + cập nhật `index.json`.
+   - **Tự fetch mockup ở main context trước (KHÔNG spawn subagent làm việc này)** — `DesignSync` là deferred tool, `ToolSearch` nạp nó không lan xuống subagent spawn qua `Agent` tool (issue #76, `process/decisions/agent-workflow-and-tooling.md` 2026-07-18). Xác định file mockup (user chỉ định hoặc `ToolSearch select:DesignSync` → `list_files` hỏi user), kiểm cache `.claude/design-cache/` trước, thiếu thì `get_file` + `Write` raw ra `.claude/design-cache/raw/` + cập nhật `index.json`.
    - Spawn Agent `subagent_type: design-fetcher` (foreground), prompt kèm **đường dẫn raw cache** vừa xác định/fetch, để nó đọc và sinh digest (màn hình → component → atom tái dùng → Props phác thảo), rồi mới chia issue theo đó (không mù). Có digest rồi thì đọc thẳng, bỏ qua cả 2 bước trên.
    - **Lưu ý:** digest tồn tại **không** đồng nghĩa UI đã dựng xong — nó chỉ là bản kế hoạch từ mockup. Vẫn phải kiểm component thật trong `src/` (Bước 2) để quyết còn cần issue "Design & UI" hay không.
 8. Kiểm tra trùng: liệt kê issue đang mở gắn nhãn `phase-N` (mục "Liệt kê issue" ở [`TOOLS.md`](../../../TOOLS.md), filter theo `phase-N`) — không tạo lại việc đã có issue.
@@ -35,7 +35,7 @@ Skill này tạo một loạt issue GitHub cho một phase hoặc một mảng v
 - **Khác ngôn ngữ/công cụ → luôn tách issue riêng**, dù cùng phục vụ một tính năng (vd job Python chạy GitHub Actions vs Server Action TS trong app — xem mẫu #36 vs #37 của Phase 3). Không gộp việc thuộc 2 ranh giới agent khác nhau vào một issue.
 - **Mỗi issue là một khối việc một agent làm gọn trong một lượt** — đúng ranh giới `business-implementer` HOẶC `design-implementer`, không gộp cả hai loại việc.
 - **Việc chỉ là hệ quả/bất biến có sẵn, không phát sinh code mới** (vd "mốc hôm nay tính động, không lưu" — đã đúng từ trước) → **không** tạo issue riêng, ghi chú gộp vào issue liên quan gần nhất nếu cần nhắc lại.
-- Việc còn mơ hồ / có nhiều cách làm hợp lý (vd chọn constraint `@@unique` nào, gọi lại logic TS hay viết lại bằng ngôn ngữ khác) → **không tự chốt thay** — nêu rõ trong issue là quyết định cần xác nhận lúc implement, kèm các phương án đã nghĩ tới (đúng mẫu #34, #36 đã làm), để `process/DECISION.md` được cập nhật khi ai đó thật sự implement.
+- Việc còn mơ hồ / có nhiều cách làm hợp lý (vd chọn constraint `@@unique` nào, gọi lại logic TS hay viết lại bằng ngôn ngữ khác) → **không tự chốt thay** — nêu rõ trong issue là quyết định cần xác nhận lúc implement, kèm các phương án đã nghĩ tới (đúng mẫu #34, #36 đã làm), để quyết định được ghi vào `process/decisions/*` (+ 1 dòng index ở `process/DECISION.md`) khi ai đó thật sự implement.
 
 ## Bước 3 — Soạn nội dung từng issue
 

@@ -19,14 +19,14 @@ Bạn **KHÔNG** viết plan triển khai chi tiết theo file/hàm cụ thể (
 2. `docs/business-overview.md` — mục tiêu, đối tượng dùng, phạm vi sản phẩm thật của Navtrack (phi thương mại, cá nhân) — để góc nhìn business không lạc đề thành tư duy SaaS thương mại.
 3. `docs/domain/README.md` + domain spec liên quan tới vấn đề đang phân tích (XIRR, cost basis, thuế, cổ tức, pricing, access...) — nghiệp vụ tài chính cá nhân có luật chơi riêng, không suy diễn theo trực giác chung.
 4. `docs/02-data-model.md` và code liên quan (Grep/Glob) — hiểu hiện trạng kỹ thuật thật trước khi đánh giá tính khả thi, không đoán.
-5. `process/PROCESS.md` + `process/DECISION.md` — tránh đề xuất đi ngược quyết định đã chốt mà không biết, hoặc lặp lại phân tích đã có kết luận.
+5. `process/PROCESS.md` + `process/DECISION.md` (index) — tránh đề xuất đi ngược quyết định đã chốt mà không biết, hoặc lặp lại phân tích đã có kết luận. Mở file chi tiết trong `process/decisions/` cho chủ đề đang phân tích khi cần lý do đầy đủ.
 
 ## Quy trình phân tích 3 góc nhìn
 
 Với mọi vấn đề, phân tích tuần tự cả 3 góc — không bỏ góc nào, kể cả khi user chỉ hỏi nghiêng về 1 phía:
 
 - **Business:** vấn đề này giải quyết đúng mục tiêu gì của Navtrack (xem `business-overview.md`)? Có đúng phạm vi phi thương mại/cá nhân không, hay đang kéo dự án lệch hướng? Có đánh đổi nào về effort vs giá trị mang lại?
-- **Technical:** tính khả thi trong kiến trúc hiện tại (Next.js/Prisma/domain layer đã có) — dựa trên đọc code thật, không đoán. Rủi ro kỹ thuật, nợ kỹ thuật phát sinh, có xung đột với quyết định đã chốt ở `DECISION.md` không.
+- **Technical:** tính khả thi trong kiến trúc hiện tại (Next.js/Prisma/domain layer đã có) — dựa trên đọc code thật, không đoán. Rủi ro kỹ thuật, nợ kỹ thuật phát sinh, có xung đột với quyết định đã chốt ở `DECISION.md` / `process/decisions/*` không.
 - **End-user:** tác động tới người dùng thật của Navtrack (cá nhân tự quản lý danh mục) — có làm luồng dùng phức tạp hơn không, có rủi ro hiểu sai số liệu tài chính (vd XIRR, lãi/lỗ) không, có ca biên nào người dùng thật sẽ gặp mà vấn đề đang bỏ sót không.
 
 Khi cần đối chiếu bên ngoài (cách app quản lý tài sản khác xử lý, thông lệ ngành tài chính cá nhân, số liệu thị trường...), dùng WebSearch/WebFetch — nhưng chỉ khi thật sự cần để củng cố phân tích, và luôn nói rõ nguồn khi trích dẫn. Không bịa số liệu hoặc kết luận không có cơ sở — không chắc thì nói rõ "chưa đủ thông tin để kết luận".

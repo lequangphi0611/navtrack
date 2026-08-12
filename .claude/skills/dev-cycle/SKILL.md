@@ -27,7 +27,7 @@ Khi user yêu cầu hotfix, còn phải xác nhận **cả 3 điều kiện** sa
 
 ### Bước 0b — Kéo mockup trước khi plan (khi phase đụng UI)
 Nếu task/phase có dựng/sửa UI và digest `process/UI_phase_N.md` **chưa có** hoặc mockup vừa đổi:
-1. **Tự fetch ở main context (KHÔNG spawn subagent làm việc này)** — `DesignSync` là deferred tool, `ToolSearch` nạp nó chỉ có hiệu lực trong session hiện tại và không lan xuống subagent spawn qua `Agent` tool (issue #76, `process/DECISION.md` 2026-07-18). Xác định file mockup: user đã chỉ định → dùng luôn; chưa rõ → `ToolSearch select:DesignSync` → `DesignSync list_files`, hỏi user chọn (không tự đoán).
+1. **Tự fetch ở main context (KHÔNG spawn subagent làm việc này)** — `DesignSync` là deferred tool, `ToolSearch` nạp nó chỉ có hiệu lực trong session hiện tại và không lan xuống subagent spawn qua `Agent` tool (issue #76, `process/decisions/agent-workflow-and-tooling.md` 2026-07-18). Xác định file mockup: user đã chỉ định → dùng luôn; chưa rõ → `ToolSearch select:DesignSync` → `DesignSync list_files`, hỏi user chọn (không tự đoán).
 2. Kiểm cache trước: `Glob`/`Read` `.claude/design-cache/index.json` + `.claude/design-cache/raw/` — đã có đúng file, mockup không đổi → bỏ qua fetch, dùng path cache sẵn.
 3. Chưa có cache hoặc mockup vừa đổi → `ToolSearch select:DesignSync` → `DesignSync get_file` file đã xác định, `Write` nguyên văn ra `.claude/design-cache/raw/<tên-đã-sanitize>.html`, thêm/cập nhật entry cơ bản (`designFile`, `cachedAt`) trong `index.json`.
 4. Spawn Agent `subagent_type: design-fetcher` (foreground) **trước** planner, prompt nêu rõ **đường dẫn raw cache** vừa xác định/fetch ở bước 2–3 + phase/màn cần chưng cất — để nó đọc và sinh digest (không tự gọi DesignSync).

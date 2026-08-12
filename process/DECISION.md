@@ -1,532 +1,159 @@
-# DECISION — quyết định quan trọng ảnh hưởng docs/domain/rules
+# DECISION — index quyết định quan trọng
+
+Nơi ghi các **quyết định quan trọng** làm thay đổi business/domain/spec/data model/rules, hoặc root-cause một lỗi non-obvious mà bản thân code không giải thích được lý do. **Không ghi tiến độ thường ở đây** — tiến độ (đã làm gì, còn gì) thuộc về [`PROCESS.md`](./PROCESS.md).
+
+## Cách dùng file này (2 tầng — đọc index luôn, mở chi tiết khi cần)
+
+1. **Luôn đọc file này** (chỉ bảng index bên dưới) khi bắt đầu một phase mới, cùng `PROCESS.md` + `phase-x.md`. Mỗi quyết định 1 dòng — đủ để biết "đã có quyết định gì, còn hiệu lực không".
+2. **Chỉ mở file chi tiết trong [`decisions/`](./decisions/)** khi việc đang làm chạm đúng chủ đề đó. Đừng đọc cả thư mục — mục đích của việc tách là để không phải nạp hết mọi lý do vào context.
+3. **Tra theo ngày:** mọi entry giữ nguyên mốc `YYYY-MM-DD [(n)]` làm định danh. Comment trong `src/` trỏ kiểu `// process/DECISION.md 2026-07-12` vẫn đúng — chỉ cần `grep` mốc ngày đó trong `process/decisions/`.
+4. **Ghi quyết định mới:** đọc [`decisions/CLAUDE.md`](./decisions/CLAUDE.md) (quy ước viết một entry + chọn file chủ đề).
+
+> Chỉ giữ các quyết định **còn hiệu lực / còn ràng buộc việc sau**. Quyết định đã đóng mà code hoặc `docs/rules/*` đã tự giải thích được lược bỏ — lịch sử đầy đủ nằm trong git.
 
-File này ghi các **quyết định quan trọng** làm thay đổi business/domain/spec/data model/rules, hoặc root-cause một lỗi non-obvious mà bản thân code không giải thích được lý do. **Không ghi tiến độ thường ở đây** — tiến độ (đã làm gì, còn gì) thuộc về [`PROCESS.md`](./PROCESS.md). Mỗi mục gồm: quyết định, lý do, và docs đã đồng bộ theo.
+## Bản đồ chủ đề
 
-**Đọc file này trước khi bắt đầu một phase mới** (cùng lúc đọc `PROCESS.md` + `phase-x.md`) để nắm bối cảnh các quyết định trước đó — tránh làm trái hoặc lặp lại tranh luận đã chốt.
+Ranh giới chủ đề trùng với [`docs/domain/*`](../docs/domain/README.md) để không phải nhớ thêm một bản đồ mới: đang sửa `docs/domain/03-dividends.md` thì file quyết định tương ứng là `decisions/dividends.md`.
 
-> Chỉ giữ các quyết định **còn hiệu lực / còn ràng buộc việc sau**. Quyết định đã đóng mà code hoặc `docs/rules/*` đã tự giải thích (vd bug login một lần, quy ước `ROUTES`/`SETTING_KEYS`) được lược bỏ khỏi đây — lịch sử đầy đủ nằm trong git.
-
-## 2026-07-10
-
-**Phân quyền màn Thành viên: user không có quyền mời không được lộ quota/danh sách allowlist.**
-- Bất biến (bảo mật): non-inviter chỉ thấy `MembersDeniedScreen` (1 dòng từ chối), **không** lộ tổng số thành viên / danh sách allowlist / section mời; trang `/settings/members/invite` guard `canInvite` **phía server**, không chỉ ẩn UI.
-- Cấu trúc: `/settings` (menu) ↔ `/settings/members` (danh sách) ↔ `/settings/members/invite` (form) tách 3 route (layout cũ gộp 1 màn quá dài).
-- Docs đã sync: `docs/rules/ui-ux-design.md` (molecule `SettingsMenuItem`).
-
-## 2026-07-11
-
-**Session regression: không phải bug** — triệu chứng thoáng qua không tái hiện, lỗi môi trường nhất thời.
-
-**PWA gộp vào Phase 1 — phạm vi cố ý tối giản.**
-- Ràng buộc bền: (1) **không cache số liệu tài chính offline** (app tài chính — tránh hiện số sai/cũ khi mất mạng); chỉ installable + cache asset tĩnh. (2) **Chưa làm Web Push/VAPID** — cảnh báo giá vẫn ở Backlog. (3) Service worker **viết tay** (`public/sw.js`), không dùng `next-pwa`/Serwist — tránh rủi ro tương thích Next 16 + Turbopack.
-- Docs đã sync: `docs/04-tech-stack.md` (mục "PWA"), `docs/03-roadmap.md` (Phase 1), `process/phase-1.md`.
-
-**Đổi rule cache tầng server: "cấm cache cả nắm" → "cache có chọn lọc".**
-- Bối cảnh: rule cũ cấm mọi cache vì số liệu tài chính phải tươi + quy mô nhỏ; bây giờ Phase 2–3 thêm `PriceQuote` + snapshot → đáng cache chọn lọc.
-- **Bất biến bảo mật (mọi phase):**
-  - Session/quyền **không bao giờ** cache xuyên request (thu hồi tức thời).
-  - **Footgun:** cache key cho dữ liệu scoped-user **phải gồm `userId` làm tham số hàm** (không đọc từ `auth()` bên trong cache) — nếu không → mọi user chung 1 entry = rò dữ liệu. Dữ liệu dùng chung (`PriceQuote`) cache key theo `symbol`.
-- Phase 2 ứng viên cache: `PriceQuote` (revalidate khớp EOD job). Phase 1 vẫn không cache (quy mô cá nhân nhỏ, không có chậm); điều kiện quay lại Phase 3 (snapshot dày) — xem ghi chú "Không thêm cache Phase 2" bên dưới.
-- Docs: `docs/rules/performance.md`.
-
-**Materialize `Holding.quantity`/`avgCost` — issue #18 (O(number) thay O(cashflow)).**
-- Thêm 2 cột cache (`quantity`, `avgCost`); overview đọc thuần 2 cột. **Bất biến:** nguồn sự thật `Cashflow`, ghi cache bằng `derivePosition()` trong **cùng transaction** mọi mutation ⚠️ **Phase 4 dividend cũng đổi `quantity`** → phải cập nhật cache theo bất biến.
-- Route tách `/holdings` ↔ `/holdings/closed` qua route group. Backfill đã áp.
-- Docs: `docs/rules/data-prisma.md` (mục "Materialized cache").
-
-**Issue #12: Suspense routes — áp rule #2 vs #3: chỉ tách Suspense khi Suspense vật lý tách được từ query.**
-- Ví dụ: `holdings/[id]/transactions/{new,edit}` tách (form không cần query). `settings/members/*` giữ async page (query quyết định render).
-- Docs: `docs/rules/component-architecture.md`.
-
-**Phase 2: BottomNav dùng chung màn gốc (không form/route con) — quyết định cũ "không header chrome riêng" vẫn giữ cho form.**
-- **Còn treo:** `NavOverrideForm` chưa có route thật; "Tuỳ chỉnh" (CUSTOM) cutoff chưa mockup.
-
-## 2026-07-12
-
-**`NavOverride`: `@@unique([holdingId, date])` + `@db.Date` — upsert tự động, sửa giá cùng ngày phải ghi đè.**
-
-**Cutoff selection: cookie + Route Handler `/api/cutoff` + `CutoffHardNavGuard` hard nav để kích active state.**
-- Lý do: Server Component không `cookies().set()` lúc render.
-- **Cảnh báo:** Next.js soft-nav bỏ qua re-render → phải hard nav riêng cho link cutoff, tôn trọng modifier keys (open tab).
-- `Setting` không lưu (read-only); "Tuỳ chỉnh" (CUSTOM) chưa mockup.
-
-## 2026-07-14
-
-**Đổi rule ưu tiên giá: so ngày `NavOverride` vs `PriceQuote`, không còn "nhập tay luôn thắng" (issue #40).**
-- Bối cảnh: STOCK/FUND định giá tự động nhưng vẫn cho sửa tay. Rule cũ (`resolvePrice()`, `src/lib/valuation.ts`) luôn ưu tiên `NavOverride` nếu tồn tại, bất kể ngày — một lần nhập tay giá sẽ shadow vĩnh viễn mọi `PriceQuote` mới hơn về sau, giá nhập tay cũ không tự nhường lại cho giá tự động mới.
-- Quyết định: `resolvePrice()` so `date` giữa 2 nguồn (đã lọc "gần nhất ≤ D" ở tầng query, không đổi), dùng nguồn có `date` mới hơn; cùng ngày → vẫn ưu tiên NavOverride. Chỉ có 1 nguồn (GOLD/BOND không có PriceQuote) → hành vi không đổi.
-- Docs đã sync: `docs/domain/04-pricing-and-valuation.md` (mục "Ưu tiên giá tại ngày D" + thêm ví dụ staleness).
-
-**`pnpm e2e` chạy trên DB Postgres riêng, ephemeral — tách hẳn khỏi DB dev.**
-- Bối cảnh: trước đây `pnpm e2e` (`playwright.config.ts` webServer chạy `pnpm dev`) dùng chung `DATABASE_URL` với dev (`.env`, service `db` cổng 5433) — test và data đang thao tác tay lẫn vào cùng 1 DB.
-- Quyết định: thêm service `db-test` (`docker-compose.test.yml`, project name riêng `navtrack-test`, cổng 5434, data ở tmpfs — không named volume) + `.env.test`. `pnpm e2e` đổi thành `node scripts/e2e.mjs`: tự `docker compose -f docker-compose.test.yml up --wait` → `prisma migrate deploy` vào DB test → `playwright test` (kế thừa `DATABASE_URL` đã override qua biến môi trường tiến trình con, không cần sửa `playwright.config.ts`) → `down` khi xong (kể cả fail, trong `finally`). Project name riêng đảm bảo `down` không đụng service `db` (dev) dù chung `docker-compose.yml`/network mặc định.
-- Docs đã sync: `README.md` (mục "Chạy e2e"), `docs/rules/testing.md` (mục "End-to-end").
-
-**Issue #34: dedup constraint cho `Snapshot` đã đóng băng — khóa `(userId|holdingId, date, period)`, thực hiện bằng 2 partial unique index (raw SQL), không phải `@@unique`.**
-- Khóa duy nhất: `(userId, date, period)` cho snapshot tổng danh mục (`holdingId = null`), và `(holdingId, date, period)` cho snapshot theo từng vị thế.
-- **`period` nằm trong khóa** vì cùng một `date` lịch có thể hợp lệ sinh 2 dòng khác nhau: cron tháng (`PERIODIC`, fire 01/01 ghi cho 31/12 năm trước) và cron cuối năm (`YEAR_END`, cũng fire 01/01 ghi cho cùng 31/12) — 2 mốc báo cáo khác mục đích, không phải trùng lặp cần chặn.
-- **Vì sao không dùng `@@unique` thường:** `holdingId` nullable, và Postgres coi mỗi `NULL` là khác biệt trong unique index thường (`NULL != NULL`) — một `@@unique([userId, date, period])` khai trong `schema.prisma` sẽ **không** chặn được nhiều dòng snapshot tổng danh mục trùng mốc (vì `holdingId` luôn null với các dòng này, Postgres không coi là trùng). Prisma DSL cũng không hỗ trợ `WHERE` cho `@@unique` nên không thể tự thu hẹp phạm vi bằng field thường. Giải pháp: 2 **partial unique index** viết tay bằng raw SQL trong migration `20260714075356_add_snapshot_unique_constraint` (`CREATE UNIQUE INDEX ... WHERE "holdingId" IS NULL` / `WHERE "holdingId" IS NOT NULL`) — chỉ đánh dấu bằng comment `// NOTE:` cạnh model `Snapshot` trong `schema.prisma`, không có block `@@unique` tương ứng. Vì đây không phải cấu trúc khai báo được ở DSL, các lần `prisma migrate dev` sau không diff/drop nhầm 2 index này.
-- Phạm vi cố ý hẹp: issue #34 chỉ thêm ràng buộc DB, **không** viết logic ghi (upsert Server Action, cron workflow "Chốt số liệu hôm nay") — để issue Phase 3 sau.
-- Docs đã sync: `prisma/schema.prisma` (comment `NOTE:`), `docs/02-data-model.md` (comment tương ứng trong code block + bullet mới trong "Ghi chú thiết kế" + xoá caveat "bản nháp" đã chốt), `docs/domain/06-snapshots.md` (bullet dedup trong "Quy tắc & bất biến" + gộp 2 ca biên cũ thành 1 rule đã chốt), `process/phase-3.md` (tick mục Model `Snapshot`), `process/PROCESS.md` (Phase 3 → 🟨).
-
-**Issue #36: job Python `jobs/snapshot-cron/` chốt `Snapshot{PERIODIC}`/`{YEAR_END}` — viết lại công thức định giá bằng SQL/Python, không gọi API route Next.**
-- **Vì sao không cho job gọi API route:** vi phạm ranh giới ("Python và TS chỉ chia sẻ schema Postgres"). Công thức định giá đơn giản (so `date` giữa `NavOverride`/`PriceQuote` mới nhất ≤ D, `nav = quantity * price`) — viết lại bằng Python + SQL, giống tiền lệ `AUTO_PRICED_ASSET_TYPES` (ĐỒNG BỘ THỦ CÔNG giữa 2 phía).
-- **`Snapshot.source` = `AUTO` cho tổng danh mục** (`holdingId = null`) bất kể holding đóng góp dùng giá `MANUAL` hay `AUTO` — tổng danh mục là sum, không phải giá từ 1 `NavOverride`. `MANUAL` chỉ cho giá trị ≡ 1 giá nhập tay (cấp Holding).
-- **Ca biên thiếu giá:** Holding không resolve được giá → không ghi dòng Snapshot cho Holding đó, log rõ. Tổng danh mục: còn ≥ 1 Holding biết giá → ghi tổng = sum (PARTIAL, log mã thiếu); toàn bộ thiếu → bỏ qua. Không có cờ "PARTIAL" trong schema.
-- Docs đã sync: `docs/domain/06-snapshots.md`, `docs/04-tech-stack.md`, `docs/rules/project-structure.md`, `README.md`, `process/phase-3.md`.
-
-## 2026-07-15
-
-**Integration test Python: snapshot-cron + price-fetcher trên Postgres thật ephemeral.**
-- **Tái dùng `docker-compose.test.yml`/`.env.test` cho cả 2 job** (đã là hạ tầng ephemeral độc lập, không dựng compose riêng).
-- **Script Node (`scripts/python-integration-test.mjs`) orchestrate docker + migrate + pytest**, không để Python tự gọi docker (giữ ranh giới Python↔TS: chỉ chia sẻ schema Postgres).
-- **snapshot-cron:** marker `@pytest.mark.integration` + `addopts = "-m 'not integration'"` trong pyproject.toml để pytest mặc định bỏ integration test (nhanh dev loop). Guard DB_URL phải là `:5434` trong fixture autouse.
-- **price-fetcher:** monkeypatch `main.fetch_price` (chỉ tầng high, không mock vnstock), verify `get_symbols_to_fetch()` + idempotent trên constraint thật, tự quét tất cả job có `test_integration.py` thay hardcode tên job.
-- Docs đã sync: `docs/rules/python-job.md`, `docs/rules/testing.md`, `HARNESS.md`, `README.md`, `jobs/*/README.md`.
-
-## 2026-07-15 (2)
-
-**Issue #37: Snapshot thủ công (`MANUAL`) — Serializable transaction + `findFirst` rồi create/update, re-chốt idempotent.**
-- **Không dùng `.upsert()`:** khóa dedup là 2 partial unique index raw SQL (không `@@unique` trong schema), Prisma Client không sinh input `where` compound. Dùng `findFirst` + `create`/`update` trong `db.$transaction({ isolationLevel: Serializable })`. An toàn kép: Serializable chặn race, partial unique index thật chặn create trùng (catch P2034 + P2002).
-- **Re-chốt "hôm nay" nhiều lần = upsert idempotent, `ok: true` luôn**, không lỗi — chốt lại phải ghi đè (đã được partial unique index + Serializable đảm bảo), không phải chặn UI bấm nút.
-- **Thêm `Snapshot.updatedAt @default(now()) @updatedAt`** — reflect lần chốt gần nhất khi re-chốt. `@default(now())` (khác `updatedAt` khác) backfill NOT NULL non-interactively. **Cập nhật cùng lúc `jobs/snapshot-cron/main.py`:** thêm `"updatedAt": now()` vào INSERT/DO UPDATE SET.
-- **`Snapshot.date` là `TIMESTAMP(3)` không `@db.Date`** — dùng `Date` cố định 00:00:00 UTC (không `endOfDay()` có 23:59:59.999) để ổn định giữa nhiều lần gọi cùng ngày.
-- **Ca biên thiếu giá MANUAL:** mirror cron (#36) — tách logic thuần `planManualSnapshot()` để unit test, action gọi rồi ghi.
-- Docs đã sync: `docs/02-data-model.md`, `docs/domain/06-snapshots.md`, `process/phase-3.md`.
-
-## 2026-07-15 (3)
-
-**Issue #46: `getSnapshotHistory()`/`getSnapshotDetail(id)` — badge suy từ `period`, breakdown liên kết via `(userId, date, period)`, comparison threshold 1 VND.**
-- **Badge suy từ `Snapshot.period` không thêm field schema** — không phân biệt "MANUAL do giao dịch" vs "MANUAL do user bấm"; chấp nhận gộp (PERIODIC/YEAR_END/MANUAL → badge khác nhau).
-- **`/snapshots/[id]` liên kết breakdown per-holding với tổng** qua query `(userId, date, period, holdingId IS NOT NULL)` — dùng khóa dedup có sẵn, không cần FK/index. 404 nếu snapshot không user hiện tại / là per-holding / `frozen=false`.
-- **`recomputedComparison`:** suy ngược `quantity = frozenValue / historicalPrice`, nhân giá hiện tại — so sánh ảnh hưởng **giá**, không mua/bán. Thiếu giá → fallback `frozenValue`, không NaN. Ngưỡng 1 VND (VND không lẻ, đủ sensitive).
-- Logic thuần tách riêng (`snapshot-history.ts`, `snapshot-recompute.ts`) để unit test không cần DB.
-- Docs đã sync: `docs/domain/06-snapshots.md`, `process/phase-3.md`.
-
-## 2026-07-16
-
-**Issue #52: `DIVIDEND_PAR_VALUE` Setting mới; `avgCost` giữ nguyên khi STOCK dividend; SL-tại-ngày-ghi replay cả Cashflow + Dividend.**
-- **`DIVIDEND_PAR_VALUE` + `DIVIDEND_TAX_RATE` đều là Setting mới** (trước #52, chỉ có `MAX_MEMBERS`); seed `effectiveFrom = 2020-01-01`: `TAX_RATE = "5"`, `PAR_VALUE = "10000"`. Không hard-code mệnh giá (Setting = runtime config).
-- **`avgCost` giữ nguyên** — `recordDividend` chỉ `update({ quantity })`, KHÔNG gọi `derivePosition()`/`buildQuantityTimeline()` lại (STOCK dividend chỉ CỘNG, không "bán vượt" cần validate).
-- **SL-tại-ngày-ghi:** tổng quát `derivePosition()` thành `buildQuantityTimeline()` — phát lại TOÀN BỘ Cashflow + Dividend STOCK, cộng "probe event" (`delta=0`) tại ngày ghi để đọc `.before`. Cần vì ghi cổ tức có thể lùi ngày so với giao dịch gần nhất.
-- **`Dividend` không lưu `percent`** — suy ngược `percentLabel`/`quantityBefore/After` từ data + `buildQuantityTimeline()`, không thêm cột schema.
-- **`recordDividend` không trigger snapshot** — chưa quyết định nghiệp vụ.
-- Docs đã sync: `docs/domain/03-dividends.md`, `docs/domain/09-settings.md`, `docs/domain/01-assets-and-holdings.md`, `process/phase-4.md`.
-
-## 2026-07-16 (2)
-
-**Issue #52 fix: `computeStockDividend` floor `stockQuantity` + user override, tolerance 2 đơn vị.**
-- Bối cảnh: `stockQuantity = quantity × percent/100` không làm tròn → số lẻ CP (vd 105 × 12% = 12.6) — vô lý.
-- `computeStockDividend()` trả `{ rawStockQuantity, stockQuantity, wasRounded }`. `stockQuantity = floor(raw)` mặc định lưu DB. Thêm `stockQuantityOverride` vào schema cho phép user sửa; validate sai lệch ≤ `TOLERANCE = 2` so với raw. **Validate TRONG transaction** (sau khi có `quantityAtDate`/`rawStockQuantity` từ `holding.cashflows/dividends`), override sai → return `{ ok: false, fieldErrors }`.
-- Cache `Holding.quantity` cộng `finalStockQuantity` (floor hoặc override); `avgCost` giữ nguyên.
-- **Không lưu `wasRounded`/`rawAddedQuantity`** — chỉ derive trong `DividendRecordedResult` để display cảnh báo.
-- Docs đã sync: `docs/domain/03-dividends.md`.
-
-## 2026-07-16 (3)
-
-**Thêm Phase 7 — Trái tức (lãi trái phiếu) vào roadmap, ngoài trình tự ưu tiên gốc.**
-- Bối cảnh: `docs/domain/03-dividends.md` mục "Ca biên" từ đầu đã cố tình để ngỏ "cổ tức của trái phiếu... xử lý cụ thể khi làm Phase liên quan" — Phase 4 (đã ✅ xong) chỉ scope cổ tức tiền mặt/cổ phiếu cho STOCK/FUND, không bao gồm lãi trái phiếu (công thức khác: coupon rate × mệnh giá theo kỳ, không phải `% × parValue` cố định).
-- Quyết định: tạo **Phase 7** mới (`process/phase-7.md`, thêm dòng roadmap `docs/03-roadmap.md`) thay vì gộp vào Phase 4 đã đóng hoặc để mãi trong Backlog không phase — vì đây là việc đủ lớn (mở rộng schema + Server Action + UI) để cần theo dõi như một phase riêng, nhưng không thuộc trình tự ưu tiên gốc (chỉ làm khi có nhu cầu, không chặn Phase 5/6).
-- Chia 3 issue qua `issue-breakdown`, thứ tự: **Schema & Setting** (không phụ thuộc) → **Design & UI** (mở rộng `DividendForm` có sẵn, dùng mock cho field mệnh giá/coupon rate mới, chạy song song Schema) → **Server Action + tính toán** (phụ thuộc cả 2, cần Props contract thật từ UI + bảng đã migrate từ Schema).
-- **Điểm cố ý chưa chốt, để ngỏ cho issue lúc implement quyết định** (không tự chọn thay): (1) mệnh giá/coupon rate nhập tay mỗi lần ghi (nhất quán cách cổ tức tiền mặt `percent` hiện đã hoạt động) hay lưu cố định trên `Holding` — đề xuất mặc định "nhập tay mỗi lần" vì mỗi trái phiếu mệnh giá khác nhau, không có Setting mặc định dùng chung hợp lý như `DIVIDEND_PAR_VALUE` của cổ phiếu; (2) thuế lãi trái phiếu dùng chung `DIVIDEND_TAX_RATE` hay cần `Setting` key riêng (`docs/domain/07-tax.md` mục "Ca biên" đã ghi mức thuế là "điểm còn mở" từ Phase 1, chưa nói riêng về trái phiếu).
-- Docs đã sync: `docs/03-roadmap.md` (mục Phase 7), `process/PROCESS.md` (bảng trạng thái + nhật ký), `process/phase-7.md` (mới).
-
-## 2026-07-16 (4)
-
-**Issue #59: `derivePosition()` cũ (chỉ-Cashflow, đã xoá — xem 2026-07-24 (4)) một mình không đủ khi Holding từng nhận cổ tức cổ phiếu — thêm hàm mới xử lý cả cổ tức cổ phiếu (`derivePositionIncludingStockDividends()`, sau đổi tên thành `derivePosition()` ở 2026-07-24 (4)), dùng ở 4 action mua/bán + `getHoldingDetail()`.**
-- Bối cảnh: viết e2e cho issue #52 phát hiện trang chi tiết vị thế hiện sai SL sau khi nhận cổ tức cổ phiếu. Đào sâu hơn phát hiện phạm vi rộng hơn ban đầu tưởng: không chỉ `getHoldingDetail()` (display sai) mà cả 4 action ghi giao dịch (`createHolding`/`addTransaction`/`updateTransaction`/`deleteTransaction`, `features/holdings/actions.ts`) đều gọi `derivePosition()` cũ (chỉ biết `Cashflow`) rồi **ghi đè toàn bộ** cache `Holding.quantity`/`avgCost` qua `persistPosition()` — mỗi lần mua/bán/sửa/xoá SAU khi nhận cổ tức cổ phiếu sẽ **xoá mất** phần SL cổ tức đã cộng trước đó (không chỉ hiển thị sai, mà mất dữ liệu cache thật). Đồng thời `wentNegative` (cờ "bán vượt") cũng tính từ Cashflow-only, có thể **chặn nhầm một lệnh bán hợp lệ** khi SL bán nằm trong phần cổ tức cổ phiếu đã nhận (không phải mua).
-- Quyết định: thêm `derivePositionIncludingStockDividends(cashflows, stockDividends)` (`lib/cost-basis.ts`) — kết hợp `avgCost` từ `derivePosition()` cũ (giữ nguyên không đổi, chỉ dẫn xuất từ `Cashflow`, cổ tức cổ phiếu không đổi avgCost) với SL/`wentNegative` phát lại đúng thứ tự thời gian gồm cả `Dividend{STOCK}` qua `buildQuantityTimeline()`. **`derivePosition()` cũ giữ nguyên không đổi** (vẫn đúng/đủ riêng cho `avgCost`, unit test cũ không cần sửa) — tránh rủi ro đổi hàm đã có test suite lớn bao phủ. (Về sau, ở 2026-07-24 (4), `derivePosition()` cũ bị xoá hẳn và `derivePositionIncludingStockDividends()` chiếm lại tên đó.)
-- **Di chuyển `buildQuantityTimeline()`/`PositionTrailEvent` từ `features/dividends/position-trail.ts` ra `lib/position-trail.ts`** (`docs/rules/project-structure.md`: "chỉ đẩy lên `lib/` chung khi thực sự tái dùng ở nhiều feature") — giờ dùng chung cả `features/holdings/` (qua `cost-basis.ts`) lẫn `features/dividends/` (giữ nguyên 2 chỗ dùng cũ, chỉ đổi đường import).
-- **Giao dịch ĐANG XỬ LÝ (chưa lưu DB) dùng `id: "__candidate__"` + `createdAt` = mốc xa nhất có thể** (`CANDIDATE_CREATED_AT`, cùng pattern `PROBE_CREATED_AT` của `dividends/actions.ts`) khi đưa vào `buildQuantityTimeline()` — đảm bảo LUÔN được coi là sự kiện gần nhất khi trùng ngày với cashflow/dividend đã ghi trước đó.
-- **Đồng ý (chủ động, không tự chốt thay) chấp nhận giới hạn:** tie-break cùng ngày giữa Cashflow và Dividend dựa vào `createdAt` thật (độ chính xác cấp mili-giây) — không có ca biên thực tế nào trong app cần chính xác hơn (domain chỉ nói "ngày", không nói "giờ trong ngày").
-- **Không viết migration backfill dữ liệu cũ** — app chưa có user thật ngoài dev/test (phi thương mại, mới ở Phase 4), không có Holding nào bị ảnh hưởng thật ngoài môi trường phát triển.
-- **Bài học ghi vào `docs/rules/data-prisma.md`** (mục "Materialized cache…"): khi thêm một NGUỒN GHI MỚI cho giá trị đã materialize (ở đây: cổ tức cổ phiếu ghi thêm vào `Holding.quantity`), phải rà **toàn bộ nơi recompute/derive lại giá trị đó** — không chỉ nơi vừa thêm nguồn ghi mới, mà cả các nơi ghi/đọc CŨ đã tồn tại từ trước (4 action mua/bán, 1 query display) mà giờ đã lỗi thời vì không biết nguồn ghi mới.
-- Docs đã sync: `docs/domain/01-assets-and-holdings.md` (mục "Cách tính"), `docs/domain/02-transactions-and-cost-basis.md` (mục "Quy tắc & bất biến" + "Cách tính"), `docs/domain/03-dividends.md` (sửa đường dẫn `position-trail.ts`), `docs/rules/data-prisma.md` (mục "Materialized cache…", thêm "Ca thật đã xảy ra").
-
-## 2026-07-17
-
-**Issue #61 (follow-up nhỏ của Phase 4): `recordDividend` tự tạo `NavOverride` bù pha loãng NAV; thêm `Dividend.paymentDate` (thuần thông tin).**
-- Bối cảnh: `STOCK` dividend cộng `Holding.quantity` NGAY khi ghi nhưng giá (`PriceQuote`/`NavOverride`) chưa đổi kịp → NAV vị thế bị thổi phồng tạm thời tới khi có giá mới. `CASH` dividend cũng lệch giá theo hướng ngược lại (tiền rời khỏi vốn công ty, giá ex-dividend thường giảm tương ứng ngoài thị trường thật nhưng hệ thống chưa phản ánh).
-- Quyết định: thêm 2 hàm thuần `computeStockDividendPriceAdjustment`/`computeCashDividendPriceAdjustment` (`features/dividends/dividend-math.ts`) và gọi trong `recordDividend` TRƯỚC `tx.dividend.create`, ghi `NavOverride` **tại `date`** (ngày chia, KHÔNG phải `paymentDate` mới thêm) qua `upsert` theo `(holdingId, date)` đã có sẵn. Đọc giá cũ TRONG transaction bằng `tx.navOverride.findFirst`/`tx.priceQuote.findFirst` (KHÔNG dùng `getLatestNavOverrides`/`getLatestPriceQuotes` của `lib/valuation.ts` — 2 hàm đó đọc `db` ngoài transaction + `unstable_cache`, không an toàn với race của transaction ghi cổ tức), nhưng vẫn TÁI DÙNG `resolvePrice()` (hàm thuần, không phụ thuộc nguồn đọc) để không lặp lại logic ưu tiên giá.
-- **`priceAlreadyReflectsMarket`** (field mới trong `recordDividendSchema`, KHÔNG lưu vào `Dividend`): cờ để user tắt hoàn toàn bước tự điều chỉnh khi biết giá hiện có đã đúng. Submit qua hidden input chuỗi `"true"/"false"` — dùng `z.enum(["true","false"]).transform()`, KHÔNG dùng `z.coerce.boolean()` (coi mọi string non-empty kể cả `"false"` là `true`).
-- **`Dividend.paymentDate` (mới, optional, `DateTime` không `@db.Date`** khớp kiểu `date` hiện có cùng model**)**: ngày tiền/CP thực về tài khoản — THUẦN THÔNG TIN, không dùng cho bất kỳ tính toán nào (không XIRR, không quantity timeline, không phải mốc ghi `NavOverride` — luôn ghi tại `date`).
-- **Không clamp giá điều chỉnh âm/0** — chưa chốt spec cho ca biên này (để ngỏ, ghi comment trong code).
-- **Không xử lý MISSING_PRICE** khác gì bình thường — bỏ qua bước tạo `NavOverride`, dividend vẫn ghi thành công.
-- **UI (checkbox `priceAlreadyReflectsMarket`, input `paymentDate`) do `design-implementer` làm riêng ngay sau đó** — kéo lại mockup Figma mới (`Phase 4 Screens.dc.html`, bản cập nhật cho issue #61) qua DesignSync thay vì dùng cache cũ trước Phase 4, sửa `DividendForm.tsx` bind đúng contract `business-implementer` đã chuẩn bị. e2e cho ca "tick checkbox" đã đổi từ inject `page.evaluate()` sang tương tác checkbox thật (`getByRole("checkbox")`) khi `verifier` kiểm chứng lại.
-- Docs đã sync: `docs/domain/03-dividends.md` (mục "Bù pha loãng NAV khi ghi cổ tức" mới, cập nhật Entity/field), `docs/domain/04-pricing-and-valuation.md` (thêm dòng cross-reference ở "Ca biên"), `docs/02-data-model.md` (field `paymentDate` trong snippet `Dividend`).
-
-## 2026-07-17 (2)
-
-**Đóng quyết định treo từ #52: ghi cổ tức KHÔNG tự trigger `Snapshot{period: MANUAL}` (khác mua/bán).**
-- Bối cảnh: mọi giao dịch mua/bán (`createHolding`/`addTransaction`/`updateTransaction`/`deleteTransaction`) tự gọi `freezeManualSnapshot()` sau khi commit — đóng băng một mốc `Snapshot{date: hôm nay, period: MANUAL}`. `recordDividend` không làm việc này, để ngỏ từ Phase 4 (#52) như một quyết định nghiệp vụ chưa chốt; issue #61 (bù pha loãng NAV) không đụng tới.
-- Quyết định: **giữ nguyên — không trigger.** Lý do: mua/bán là quyết định phân bổ vốn thật (tiền vào/ra), NAV danh mục thực sự đổi — đóng một mốc ngay sau đó tách bạch được "NAV đổi vì giao dịch" khỏi "NAV đổi vì giá thị trường". Ghi cổ tức thì ngược lại: cơ chế `NavOverride` bù pha loãng (#61) được thiết kế **cố tình giữ NAV gần như liên tục** qua sự kiện chia cổ tức (STOCK: SL tăng, giá giảm tương ứng, tổng giá trị bất biến; CASH: giá ex-dividend giảm đúng bằng phần gross rời khỏi vốn, NAV cũng gần bất biến — cổ tức nhận về chỉ sống trong dòng tiền XIRR, không phải một tài sản Navtrack theo dõi số dư). Một Snapshot MANUAL đóng ngay sau ghi cổ tức gần như sẽ trùng số với mốc gần nhất (chỉ lệch do làm tròn floor SL cổ phiếu), không mang thêm thông tin, trong khi tạo thêm nhiễu ở "Các mốc đã chốt" (UI hiện chỉ có 1 badge "THỦ CÔNG" chung cho mọi trigger MANUAL — user dễ nhầm là một giao dịch thật đã xảy ra ngày đó).
-
-## 2026-07-17 (3)
-
-**Thảo luận nghiệp vụ Phase 5 (thuế bán) trước khi implement — chốt 3 điểm, để ngỏ 2 điểm sang lúc implement/Phase 7.**
-- Bối cảnh: trao đổi với user (vai chuyên gia tài chính cá nhân) để soát bất cập spec `docs/domain/07-tax.md`/`process/phase-5.md` trước khi giao việc cho `planner`/`dev-cycle`. Phát hiện: (1) `TransactionForm.tsx` từ Phase 1 có sẵn field "Thuế" nhập tay tự do cho **cả BUY lẫn SELL**, nhưng Phase 5 dự định tự động tính thuế — chưa có quyết định UI rõ ràng; (2) VN không đánh thuế TNCN khi mua chứng khoán — field thuế trên BUY vốn dĩ sai bản chất; (3) `SALE_TAX_GOLD` là "điểm còn mở" từ Phase 1 chưa chốt mức; (4) mô hình thuế-khi-bán generic áp cho mọi `SELL` không phân biệt được "đáo hạn trái phiếu" (không phải chuyển nhượng, không chịu thuế) với "bán trước hạn" (chịu thuế 0.1%).
-- **Quyết định (1) — SELL: tự tính prefill, KHÔNG khoá field.** `taxAmount` tự resolve từ `SALE_TAX_<loại>` tại ngày bán, hiển thị làm giá trị mặc định trên form, nhưng người dùng sửa tay được — giống cơ chế `NavOverride` (giá trị tự động là gợi ý, không phải nguồn sự thật duy nhất), để khớp đúng số thực trừ trên sao kê CTCK khi có lệch làm tròn.
-- **Quyết định (2) — BUY: bỏ hẳn field thuế khỏi form.** `taxAmount` luôn `= 0` cho `Cashflow{type: BUY}`, không có input — đúng bản chất thuế VN (không có thuế khi mua).
-- **Quyết định (3) — `SALE_TAX_GOLD` seed `= 0`.** Cá nhân bán vàng miếng/trang sức tại VN không chịu thuế TNCN chuyển nhượng (khác chứng khoán/CCQ). Vẫn phải seed dòng `Setting` tường minh (không được để thiếu — nguyên tắc "thiếu cấu hình → báo lỗi" của `09-settings.md` áp dụng cả khi mức thuế là 0).
-- **Để ngỏ (chưa chốt, không tự chọn thay):**
-  - Đáo hạn trái phiếu (nhận lại gốc, không phải chuyển nhượng) vs bán trước hạn (chịu `SALE_TAX_BOND` 0.1%) — user hiện chỉ giữ trái phiếu tới đáo hạn, không bán thứ cấp, nên **chưa xử lý ở Phase 5**; dời bàn kỹ sang Phase 7 (đã thêm vào `process/phase-7.md` mục "Phụ thuộc / ghi chú" điểm (4)).
-  - Sửa một SELL đã ghi (đổi ngày/giá) có tính lại `taxAmount` theo ngày mới hay giữ nguyên giá trị cũ (có thể đã bị sửa tay theo (1)) — chưa chốt, cần quyết định lúc implement.
-- Docs đã sync: `docs/domain/07-tax.md`, `docs/domain/09-settings.md`, `docs/domain/02-transactions-and-cost-basis.md`, `process/phase-5.md`, `process/phase-7.md`.
-
-## 2026-07-17 (4)
-
-**Thêm tính năng mới "Chi phí ăn mòn" (cost drag) vào Phase 5 — tổng thuế + phí luỹ kế, % trên vốn đã bỏ vào.**
-- Bối cảnh: tiếp tục thảo luận nghiệp vụ Phase 5, user chọn hiện thực hoá ngay ý tưởng "tổng chi phí thuế + phí đã trả từ đầu" (một trong 3 ý tưởng gợi ý ngoài roadmap) — trả lời câu hỏi gốc của `business-overview.md`: Sheet cũ không cho biết chi phí giao dịch đã ăn vào lợi nhuận bao nhiêu.
-- **Phạm vi (đã hỏi user, chọn phương án gộp cả 3 nguồn):** `Σ Cashflow.taxAmount` (thuế bán, Phase 5) + `Σ Cashflow.feeAmount` (phí, có từ Phase 1) + `Σ Dividend.taxAmount` (thuế cổ tức tiền mặt, có từ Phase 4) — không giới hạn riêng trong dữ liệu mới của Phase 5 để con số phản ánh đúng tổng chi phí thật.
-- **Mẫu số % (đã hỏi user, chọn "vốn đã bỏ vào"):** ~~tái dùng `totalInvested` đã có sẵn trong `lib/portfolio-valuation.ts`~~ **→ ĐÃ SỬA ở 2026-07-17 (6): dùng `grossInvested` (vốn gộp) thay vì `totalInvested` (vốn ròng), vì vốn ròng vỡ khi đã bán nhiều.** Xem entry (6) bên dưới.
-- **Vị trí UI (đã hỏi user, chọn dòng phụ):** một dòng ghi chú nhỏ dưới card lãi/lỗ hiện có (`ReturnMetrics` trong `DashboardScreen.tsx`) — KHÔNG dựng card/tile riêng, giữ phạm vi UI của Phase 5 gọn (chỉ sửa component có sẵn, không thêm component mới).
-- **Không phải chỉ số hiệu suất riêng, không đưa vào XIRR** — XIRR đã tự phản ánh chi phí này qua dòng tiền thực rồi; đây chỉ là phần diễn giải thêm cho lãi/lỗ.
-- **Không cần schema/model mới** — mọi field cần đều đã tồn tại (`Cashflow.taxAmount/feeAmount`, `Dividend.taxAmount`), chỉ cần một hàm tổng hợp (business-implementer) + một dòng UI (design-implementer, mở rộng component có sẵn không cần mockup mới lớn). Mẫu số `grossInvested` tính thêm từ chuỗi `Cashflow` (xem (6)).
-- Docs đã sync: `docs/domain/07-tax.md` (mục "Chi phí ăn mòn" mới), `docs/domain/05-returns-xirr-and-pnl.md` (cross-reference), `docs/03-roadmap.md` (Phase 5), `docs/business-overview.md` (mục 5), `process/phase-5.md`.
-
-## 2026-07-17 (5)
-
-**Thêm 2 ý tưởng còn lại vào roadmap: "Cảnh báo tập trung" (Phase 6) và "Lịch dòng tiền sắp tới" (Phase 8 mới) — cùng đảo quyết định treo Phase 7 (1).**
-- Bối cảnh: tiếp tục danh sách 3 ý tưởng gợi ý ngoài roadmap ban đầu (idea 1 — chi phí ăn mòn — đã vào Phase 5 ở quyết định trên). User xác nhận đưa nốt idea 2 (cảnh báo tập trung) và idea 3 (lịch dòng tiền) vào domain docs + roadmap + phase-x.
-- **Cảnh báo tập trung (Phase 6):**
-  - **Phạm vi (đã hỏi user, chọn theo Holding):** cảnh báo theo từng `Holding` riêng lẻ, KHÔNG theo `AssetType` nhóm — sát rủi ro thực tế hơn dù `AllocationBar` theo nhóm đã có sẵn dễ tái dùng hơn.
-  - **Ngưỡng (đã hỏi user):** 30%, cấu hình qua `Setting{CONCENTRATION_WARNING_THRESHOLD}` (group mới `RISK`) — user chủ động chọn "cấu hình trên Settings" thay vì hard-code, nhất quán nguyên tắc "cấu hình được, không hard-code" của `07-tax.md`.
-  - Resolve `atDate = hôm nay` (không effective-dated theo giao dịch) — cùng pattern với `MAX_MEMBERS`.
-  - Vị thế `MISSING_PRICE` loại khỏi tính cảnh báo (không mặc định 0%) — nhất quán nguyên tắc "thiếu giá không mặc định 0".
-  - Docs: `docs/domain/04-pricing-and-valuation.md` (mục "Cảnh báo tập trung" mới), `docs/domain/09-settings.md`, `process/phase-6.md`, `docs/03-roadmap.md`.
-- **Lịch dòng tiền sắp tới (Phase 8 mới):**
-  - **Phạm vi (đã hỏi user, chọn chỉ trái phiếu):** chỉ đáo hạn + coupon trái phiếu — cố tình KHÔNG dự đoán cổ tức STOCK/FUND vì không có ngày/mức cố định theo hợp đồng, dự đoán sẽ không đáng tin.
-  - **Đảo quyết định treo Phase 7 điểm mở (1)** (đã hỏi user, chọn lưu cố định trên Holding) — **→ ĐÃ SỬA MỘT PHẦN ở 2026-07-25 (2): vẫn "lưu cố định" nhưng chuyển sang bảng riêng `BondTerms`, và BỎ `nextCouponDate` cộng tay (thay bằng `firstCouponDate` + suy runtime).** Nội dung gốc: mệnh giá/coupon rate **lưu cố định trên `Holding`** (5 field mới: `parValue`/`couponRatePercent`/`couponFrequencyMonths`/`maturityDate`/`nextCouponDate`, chỉ có ý nghĩa khi `type = BOND`) thay vì "nhập tay mỗi lần ghi" như đề xuất mặc định ban đầu của Phase 7 — cần thiết để suy ra "kỳ tới" cho Phase 8. `recordDividend` (Phase 7) đọc từ `Holding`, không hỏi lại; tự cộng `couponFrequencyMonths` vào `nextCouponDate` sau mỗi lần ghi thành công, vẫn cho user sửa tay.
-  - **Phase 8 phụ thuộc chặt Phase 7** (đọc field Phase 7 thêm, không tự thêm schema) — không phải trình tự ưu tiên gốc, giống Phase 7.
-  - Ước tính đáo hạn KHÔNG trừ thuế (nhất quán quyết định "đáo hạn không chịu SALE_TAX_BOND" ở `07-tax.md`); ước tính coupon hiển thị số gộp trước thuế (công thức thuế lãi trái phiếu chính xác vẫn là điểm mở của Phase 7, không tự chọn thay ở đây).
-  - Docs: `docs/domain/10-cashflow-calendar.md` (file mới), `docs/domain/README.md` (index #10), `docs/domain/01-assets-and-holdings.md`, `docs/02-data-model.md` (5 field mới trên `Holding`), `process/phase-7.md` (đảo điểm mở (1)), `process/phase-8.md` (file mới), `docs/03-roadmap.md` (Phase 7 cập nhật + Phase 8 mới), `process/PROCESS.md` (bảng trạng thái + nhật ký).
-- Ca biên đã cân nhắc: khi `MISSING_PRICE` (không có giá cũ để bù), NAV có thể lệch thật do SL tăng "chay" không giá đi kèm — nhưng đúng lúc này Snapshot cũng tự bỏ qua Holding đó (không resolve được giá, theo rule ở `06-snapshots.md`), nên trigger snapshot cũng không cứu được ca này.
-- Docs đã sync: `docs/domain/03-dividends.md` (mục "Bù pha loãng NAV khi ghi cổ tức", bỏ khung "quyết định treo", ghi rõ đã chốt + lý do).
-
-## 2026-07-17 (3)
-
-**Đóng review finding #5 (PR #62): `computeCashDividendPriceAdjustment` trả `null` khi giá điều chỉnh ra âm/0.**
-- Bối cảnh: `giá_mới = giá_cũ − grossAmount/SL` (nhánh CASH) là phép TRỪ nên có thể ra âm/0 thật — ca thực tế: CP giao dịch **dưới mệnh giá** (khá phổ biến ở CP nhỏ/thanh khoản thấp trên TTCK Việt Nam) kết hợp **%cổ tức cao** trên mệnh giá (một số công ty chia cổ tức đặc biệt >100% mệnh giá từ thanh lý tài sản/lợi nhuận bất thường), hoặc **nhiều đợt cổ tức liên tiếp cùng holding** dồn giá xuống dần (mỗi đợt trừ tiếp vào giá đã điều chỉnh của đợt trước). Nhánh `STOCK` KHÔNG có rủi ro này — `giá_mới = giá_cũ × SL_trước/SL_sau` là phép NHÂN với tỷ lệ luôn dương, không thể ra âm/0 trừ khi `giá_cũ` vốn đã hỏng sẵn (ngoài phạm vi tính năng này).
-- **Trước fix:** `if (newPrice)` ở `recordDividend` (`features/dividends/actions.ts`) chỉ kiểm tra `newPrice !== null` — một `Decimal` instance LUÔN truthy trong JS bất kể giá trị âm/0/dương, nên giá âm/0 vẫn bị ghi thẳng vào `NavOverride` trước fix này.
-- Quyết định: **xử lý giống `MISSING_PRICE`** — `computeCashDividendPriceAdjustment()` trả `null` khi kết quả `<= 0` (dùng `.gt(0)`, không dùng `.isPositive()` vì API đó có thể coi `0` dương tùy dấu nội bộ của decimal.js). Caller (`recordDividend`) không cần sửa gì thêm — `if (newPrice)` đã coi `null` = bỏ qua tạo `NavOverride`, dividend vẫn ghi thành công bình thường. Không clamp về một sàn tối thiểu (vd 1 VND) — giá trị đó không phản ánh đúng công thức bù trừ, không mang ý nghĩa tài chính thật, dễ gây hiểu nhầm hơn là hữu ích.
-- Không thêm log cảnh báo riêng cho ca này — giữ nhất quán với `MISSING_PRICE` (cũng không có log riêng, xem `docs/domain/03-dividends.md` "Không xử lý MISSING_PRICE khác gì bình thường").
-- Docs đã sync: `docs/domain/03-dividends.md` (mục "Bù pha loãng NAV khi ghi cổ tức", đổi "Ca biên chưa xử lý" thành đã chốt).
-
-## 2026-07-17 (6)
-
-**Sửa A1: "Chi phí ăn mòn" đổi mẫu số từ `totalInvested` (vốn ròng) sang `grossInvested` (vốn gộp đã triển khai `Σ|BUY.amount|`).**
-- Bối cảnh: rà soát lại nghiệp vụ dưới góc nhìn tài chính (thảo luận với user), phát hiện mẫu số `totalInvested` chốt ở (4) là **sai** cho chỉ số chi phí. `totalInvested = -(Σ Cashflow.amount + Σ Dividend.netAmount)` là **vốn ròng** — đã bị phần đã bán + cổ tức rút bớt. Khi user bán nhiều, mẫu số co lại (bán sạch → về ~0 hoặc âm) làm `costDragPercent` phình vô lý (thậm chí âm), dù chi phí thật không đổi. Ví dụ: mua 100tr, bán bớt thu 80tr → vốn ròng ~20tr; chi phí 2tr chia vốn ròng ra 10% (sai), chia vốn gộp 100tr ra 2% (đúng).
-- Quyết định: **mẫu số = `grossInvested` = `Σ |Cashflow.amount|` trên các dòng `type = BUY`** (tổng tiền mặt đã chi ra để mua, gồm cả phí mua), tính tới `cutoffDate`. Lý do tài chính: chi phí ăn mòn là chi phí tích luỹ trên **hoạt động giao dịch** → mẫu số phải là vốn đã *rót vào để mua* (chỉ đi lên, không bị bán làm co) chứ không phải vốn *còn lại*. Cân nhắc turnover (Σ|BUY|+Σ|SELL|) nhưng chọn `Σ|BUY|` vì trực giác hơn với user cá nhân ("phí ăn X% số tiền tôi từng rót vào"). `grossInvested = 0` (chưa mua gì) → 0%, không chia 0.
-- `totalInvested` (vốn ròng) **vẫn đúng** cho `navDeltaPercent` (lợi suất trên vốn đang làm việc) — không đụng tới chỗ đó; chỉ tách khái niệm cho riêng chi phí ăn mòn.
-- Tính năng chưa implement (chỉ mới ở docs) nên đây là sửa spec, không đụng code.
-- Docs đã sync: `docs/domain/07-tax.md` (công thức + ví dụ ca bán nhiều), `docs/domain/05-returns-xirr-and-pnl.md` (cross-reference), `docs/03-roadmap.md` (Phase 5), `process/phase-5.md`, cùng ghi chú đính chính ở entry (4).
-
-## 2026-07-17 (7)
-
-**Rà soát nghiệp vụ dưới góc nhìn tài chính — chốt A2 (sửa docs), log C1/C2/B1 thành issue để sửa sau; B2 giữ ở Backlog.**
-- Bối cảnh: tiếp tục rà bất cập nghiệp vụ với user. Phân loại theo "đã phản ánh vào code hay chưa": vấn đề nằm trong code đã ship → tạo issue sửa sau; vấn đề chỉ ở spec Phase 5+ chưa code → sửa docs ngay.
-- **A2 (sửa docs — spec Phase 6 chưa code):** cảnh báo tập trung dùng `NAV(danh mục)` làm mẫu số; khi danh mục còn mã `MISSING_PRICE` thì mẫu số là **NAV một phần** (`navValueIsPartial`), làm `concentrationPercent` của các mã *có giá* bị thổi phồng → báo động giả (vd FPT 180tr + trái phiếu 300tr chưa nhập giá → FPT "100%"). **Quyết định: khi `navValueIsPartial` thì TREO cảnh báo tập trung** (không kết luận trên mẫu số khuyết), kèm ghi chú cần cập nhật giá — giống cách NAV gắn dấu `*`. Chỉ tính khi NAV danh mục đầy đủ. Docs: `docs/domain/04-pricing-and-valuation.md` (mục "Cảnh báo tập trung"), `process/phase-6.md` (tiêu chí).
-- **C1/C2/B1 (đã phản ánh trong code Phase 1/2/4 → log issue, sửa sau):**
-  - **#65 (C1):** dòng tiền cổ tức/coupon vào XIRR đặt tại `date` (ngày chia) thay vì `paymentDate` (ngày tiền thực về) — `xirr-cashflow.ts:21`; lợi suất bị thổi nhẹ, rõ hơn với coupon trái phiếu kỳ dài. Sẽ đảo một phần quyết định #61 ("paymentDate thuần thông tin") khi làm.
-  - **#66 (C2):** phí mua không gộp vào `avgCost` (`cost-basis.ts:54`) → "lãi đã thực hiện" per-lot hơi cao hơn thực. Hai hướng (A gộp phí vào cost basis / B giữ + sửa nhãn), chốt lúc implement.
-  - **#67 (B1):** lãi/lỗ tuyệt đối gộp chung đã-thực-hiện vs chưa-thực-hiện (`portfolio-valuation.ts`) — đề xuất tách, gộp làm ở Phase 6, phụ thuộc C2.
-- **B2 (benchmark lãi suất tiết kiệm):** đã nằm ở Backlog (`docs/03-roadmap.md`) — đây là câu hỏi gốc của `business-overview.md` ("có hơn gửi tiết kiệm không?"). Không tạo issue trùng; nếu muốn kéo lên phase gần thì sửa roadmap (chưa làm, chờ user quyết).
-
-## 2026-07-18
-
-**Bề mặt preview component dev-only + Playwright MCP — để `design-implementer` tự soi UI thay vì dựng mù.**
-- Bối cảnh: `design-implementer` dựng Presentational không thấy được thành phẩm, tệ nhất với component design-first chưa wire vào route nào.
-- Cấu trúc: `src/app/preview/<slug>/page.tsx` render component cô lập + sample props (import component thật, cấm chép markup). Soi qua Playwright MCP (`.mcp.json` → `scripts/playwright-mcp.mjs`). **Việc soi/chụp là của orchestrator (`dev-cycle`/main context), KHÔNG phải subagent** — ảnh chụp bên trong subagent kẹt lại đó, không tới được user; orchestrator chụp rồi `SendUserFile` để user thấy bằng chứng thật.
-- **Footgun (đã trả giá khi làm):** chặn production **ở `src/proxy.ts` (trả 404 TRƯỚC khi route render)**, KHÔNG dùng `notFound()` trong page/layout — `notFound()` vẫn để Next render page rồi **nhúng markup vào payload RSC ở body 404** → lộ nội dung. Mẹo `pageExtensions` đuôi `.dev.tsx` **không dùng được** cho App Router/Turbopack (resolver khớp `tsx` trước, coi `page.dev` ≠ `page`). `force-dynamic` ở `preview/layout.tsx` để không prerender tĩnh (khỏi sinh HTML chứa sample markup trong build output).
-- **Bất biến:** soi UI **không phải cổng verify** — e2e suite + unit test vẫn là source of truth (soi chỉ self-check lúc author). Chạy được cả Cloud lẫn Local vì component cô lập không cần Docker/DB (khác e2e — xem `TOOLS.md`). Trên Cloud, wrapper ép `--executable-path /opt/pw-browsers/chromium` (revision lệch sẽ fail launch).
-- Docs sync: `docs/rules/component-architecture.md` (mục "Bề mặt preview" + quy tắc viết preview page), `docs/rules/testing.md`, `TOOLS.md` (dòng "Soi UI component qua browser"), `.claude/agents/design-implementer.md`, `.claude/skills/dev-cycle/SKILL.md`, `CLAUDE.md`.
-
-**`design-fetcher`: owner DUY NHẤT kéo mockup Claude Design, front-load digest cho cả chuỗi.**
-- Bối cảnh: `design-implementer` tự kéo DesignSync lúc implement → mọi khâu chạy trước (`planner`, `issue-breakdown`) đều mù, không biết phase có mấy màn/component/state.
-- Quyết định: tách agent `design-fetcher` chạy ĐẦU phase, là nơi **duy nhất** gọi DesignSync + ghi `.claude/design-cache/`; sinh digest `process/UI_phase_N.md` (màn → component → atom tái dùng → Props phác thảo). `design-implementer` thành **người đọc** (bỏ `DesignSync`/`ToolSearch` khỏi tools), chỉ firm up phần Props khi component thật ra đời. `planner`/`issue-breakdown`/`business-implementer` đều đọc digest.
-- **Bất biến:** file mockup để kéo **do user/caller chỉ định**, `design-fetcher` KHÔNG tự suy từ số phase (`Phase {N} Screens.dc.html` chỉ là quy ước tên tham khảo); chưa rõ thì `list_files` báo lại cho người gọi chọn, không tự đoán.
-- Docs sync: `.claude/agents/design-fetcher.md` (mới), `design-implementer.md`, `planner.md`, `business-implementer.md`, `.claude/skills/{dev-cycle,issue-breakdown}/SKILL.md`, `CLAUDE.md`.
-- **Footgun phát hiện sau (2026-07-18):** `DesignSync` là deferred tool — nạp qua `ToolSearch` gắn với phiên hiện tại, **không lan xuống subagent** được spawn qua Agent tool dù `.claude/agents/design-fetcher.md` liệt kê `DesignSync` trong `tools`. `design-fetcher` chạy như subagent độc lập bị chặn hoàn toàn ở bước gọi `DesignSync` (mọi `ToolSearch` từ subagent đều trả "No matching deferred tools found"). Xử lý tạm: phiên chính tự gọi `DesignSync` thay khi subagent báo bị chặn — phá vỡ tạm thời bất biến "duy nhất design-fetcher gọi DesignSync". Đã log issue riêng để theo dõi/fix hạ tầng (xem GitHub issue tương ứng, tạo qua `issuer`).
-
-## 2026-07-18 (2)
-
-**Thảo luận đối chiếu mockup Phase 5 thật (`Phase 5 Screens.dc.html`, 6 màn 5a-5f) trước khi implement — chốt 2 điểm còn mở, mở rộng phạm vi UI theo mockup.**
-- Bối cảnh: `design-fetcher` kéo mockup Phase 5 lần đầu (chưa có trong cache), sinh digest `process/UI_phase_5.md`. Đối chiếu với `process/phase-5.md`/`docs/domain/07-tax.md` phát hiện mockup giải quyết luôn 1 điểm mở cũ + mở rộng phạm vi 2 chỗ so với mô tả hiện có. Đã hỏi lại user xác nhận từng điểm (không tự chọn thay).
-- **Quyết định (1) — sửa một SELL đã ghi: TÍNH LẠI thuế theo ngày mới, không giữ nguyên giá trị cũ.** Đóng điểm mở ghi ở `docs/domain/07-tax.md` (mục "Ca biên") và quyết định 2026-07-17 (3). Đổi **ngày** bán của một SELL đã ghi → form tự resolve lại `SALE_TAX_<loại>` tại ngày mới (effective dating), hiển thị giá trị cũ (gạch ngang) cạnh giá trị mới tính lại + tên `Setting`/ngày hiệu lực áp dụng (mockup 5f). Giá trị tính lại vẫn **sửa tay được** sau đó — không tự khôi phục một giá trị user từng tự sửa tay trước đó (không có cách phân biệt "giá trị cũ do auto-tính" với "giá trị cũ do user tự sửa" trong dữ liệu hiện có).
-- **Quyết định (2) — giữ sheet chi tiết "chi phí ăn mòn" trong Phase 5 (mở rộng so với mô tả cũ).** `process/phase-5.md` trước đây chỉ mô tả "một dòng phụ tĩnh" (quyết định 2026-07-17 (4)); mockup 5e vẽ thêm một bottom sheet mở từ dòng phụ đó, breakdown đúng 3 nguồn đã có sẵn trong công thức `costDragAmount` (phí giao dịch / thuế bán / thuế cổ tức) kèm % đóng góp mỗi nguồn + stacked bar. User chọn làm luôn trong Phase 5 thay vì cắt bớt — không cần field/hàm tổng hợp mới, chỉ là một cách trình bày khác của 3 con số đã tính.
-- **Quyết định (3) — cấu trúc lại `ReturnMetrics`/card lãi-lỗ Dashboard, ghi rõ trong `phase-5.md` thay vì để design-implementer tự quyết lúc code.** Mockup 5d tách card lãi/lỗ (thực nhận) thành card đứng riêng full-width (có footer "Chi phí ăn mòn" tappable) khỏi hàng 2 cột XIRR; hàng 2 cột mới ghép "XIRR (sau thuế)" với chỉ số **mới** "Vốn đã bỏ ra mua" (hiển thị trực tiếp `grossInvested`, khác `ReturnMetrics` hiện tại là 2 cột XIRR+PnL cạnh nhau). Khác tiền lệ Phase 4 (để design-implementer tự bám mockup, ghi lại ở "điểm lệch so với plan" sau khi xong) — lần này ghi rõ trước trong `phase-5.md` vì đây là thay đổi cấu trúc component có sẵn (`src/components/ReturnMetrics`), không phải component mới.
-- **Chốt phụ:** nhãn "Lãi/lỗ (thực nhận)" — bỏ chữ "cân nhắc" trong `phase-5.md` cũ, dùng cố định (mockup nhất quán ở mọi màn 5a-5d).
-- Docs đã sync: `docs/domain/07-tax.md` (mục "Ca biên" + "Chi phí ăn mòn"), `process/phase-5.md` (Công việc cần làm + Tiêu chí hoàn thành), `process/UI_phase_5.md` (mới, digest tiền-triển khai).
-
-## 2026-07-18 (3)
-
-**Issue #76 — chốt hướng fix chính thức: chuyển trách nhiệm gọi `DesignSync` từ subagent `design-fetcher` sang orchestrator (main context).**
-- Bối cảnh: footgun ghi ở entry 2026-07-18 phía trên (`design-fetcher` chạy như subagent độc lập không gọi được `DesignSync` — `ToolSearch` từ subagent luôn trả "No matching deferred tools found") mới chỉ có "xử lý tạm" (phiên chính tự gọi thay khi subagent báo bị chặn). Đã cân nhắc phương án "biến `design-fetcher` thành Skill" (chạy trong chính context gọi, né được vấn đề vì Skill không spawn session mới) nhưng loại bỏ: `get_file` có thể trả tới 256KB/file, chạy như Skill sẽ đổ thẳng raw HTML vào context của phiên điều phối (`dev-cycle`/`issue-breakdown`), làm phình context các bước sau chạy chung phiên (`planner`, `business-implementer`...) — đúng thứ mà kiến trúc "agent riêng, chỉ trả digest cô đọng" đang cố tránh.
-- **Quyết định:** giữ nguyên `design-fetcher` là **agent** (không đổi sang Skill), nhưng đổi **ai** gọi `DesignSync`: orchestrator (phiên chính khi user gọi trực tiếp, hoặc `dev-cycle`/`issue-breakdown` khi điều phối tự động — luôn chạy ở main context có `DesignSync`) tự `ToolSearch select:DesignSync` → `list_files`/`get_file` → `Write` raw HTML ra `.claude/design-cache/raw/` + entry cơ bản (`designFile`, `cachedAt`) vào `index.json` **TRƯỚC KHI** spawn `design-fetcher`. `design-fetcher` bỏ `DesignSync`/`ToolSearch` khỏi `tools:`, chỉ `Read` raw cache đã có sẵn trên đĩa (không qua text response/prompt) để chưng cất digest — giữ nguyên cách ly context của kiến trúc multi-agent, không cần platform hỗ trợ gì thêm.
-- Prompt spawn `design-fetcher` giờ **bắt buộc** kèm đường dẫn raw cache đã fetch; thiếu đường dẫn → `design-fetcher` dừng và báo lỗi lại người gọi (lỗi ở orchestrator chưa fetch trước, không tự đoán/tự gọi vì không còn tool đó).
-- Docs đã sync: `.claude/agents/design-fetcher.md` (bỏ `DesignSync`/`ToolSearch` khỏi `tools`, đổi toàn bộ mô tả "Đầu vào"/"Nguồn mockup"/"Cache local"/"Quy trình"), `.claude/skills/dev-cycle/SKILL.md` (Bước 0b), `.claude/skills/issue-breakdown/SKILL.md` (Bước 1 mục 7).
-
-## 2026-07-18 (4)
-
-**Bổ sung requirement Phase 5: phí mua/bán tự tính qua `Setting` (mặc định 0.3% theo TPS), tách theo `AssetType` × chiều BUY/SELL — đồng thời đóng issue #66 (gộp phí mua vào `avgCost`).**
-- Bối cảnh: `feeAmount` từ Phase 1 tới nay 100% nhập tay tự do (không auto-calc), khác hẳn `taxAmount` đã có cơ chế `SALE_TAX_<loại>` từ Phase 5. User đề xuất áp cùng cơ chế Setting cho phí, mặc định theo biểu phí CTCK đang dùng (TPS, 0.3%), vẫn override được theo từng giao dịch (phòng ca cổ phiếu/công ty khác nhau có phí khác).
-- **Quyết định (1) — tách theo từng `AssetType`** (đã hỏi user, không chọn 1 key chung áp mọi loại): `TRANSACTION_FEE_<chiều>_<STOCK/FUND/BOND/GOLD>` — cùng pattern `SALE_TAX_<LOẠI>`. Lý do đề xuất ban đầu (1 key chung, chỉ áp STOCK/FUND) bị bác — user chọn tách đủ 4 loại để nhất quán với thuế, phòng trường hợp sau này BOND/GOLD cũng phát sinh phí qua kênh khác.
-- **Quyết định (2) — tách riêng 2 key theo chiều mua/bán** (đã hỏi user, không dùng 1 mức chung cho cả 2 chiều dù hiện tại cùng 0.3%): `TRANSACTION_FEE_BUY_<LOẠI>` / `TRANSACTION_FEE_SELL_<LOẠI>` — tổng **8 key mới**, group `FEE`. Phòng trường hợp CTCK áp biểu phí khác nhau giữa mua và bán sau này.
-- **Khác biệt so với thuế (quan trọng):** phí áp dụng cho **CẢ BUY lẫn SELL** (thuế chỉ áp SELL, VN không đánh thuế mua) — vì đây là phí công ty chứng khoán thu trên mỗi lệnh khớp, không phải thuế TNCN do luật quy định. Cùng UX prefill-nhưng-sửa-được như thuế (không khoá field).
-- **Quyết định (3) — đóng issue #66 (đang treo từ 2026-07-17 (4)):** chọn **hướng A** (gộp phí mua vào cost basis) trong 2 hướng từng để ngỏ. Lý do chốt ngay đợt này: một khi phí auto-prefill khác `0` cho MỌI giao dịch mua (thay vì thường bị bỏ trống như trước), sai số `avgCost` do bỏ sót phí sẽ lộ rõ và thường xuyên hơn hẳn — không còn hợp lý để treo tiếp. Công thức mới: `giá vốn mới = (SL cũ × giá vốn cũ + (SL mua × giá mua + phí mua)) / (SL cũ + SL mua)`. **Lãi/lỗ đã thực hiện** khi bán chỉ trừ phí/thuế **của lần bán** (phí mua đã nằm trong giá vốn bình quân, tránh trừ trùng).
-- **Mức seed:** `STOCK` = `0.3%` (đã xác nhận, theo TPS). `FUND`/`BOND`/`GOLD` **chưa chốt mức** — để ngỏ, seed `0` mặc định (chưa dùng kênh tính phí % cho 2 loại BOND/GOLD hiện tại) theo đúng nguyên tắc "seed tường minh, không thiếu dòng" đã áp cho `SALE_TAX_GOLD`. Cần xác nhận lại lúc implement nếu phát sinh nhu cầu.
-- **Không cần schema/migration mới** — `Setting` đã là bảng key-value generic, chỉ cần seed thêm dòng.
-- Docs đã sync: `docs/domain/07-tax.md` (mục mới "Phí giao dịch (mua & bán)", cập nhật "Mục đích"/"Entity"/"Ca biên"/"Ví dụ"), `docs/domain/02-transactions-and-cost-basis.md` (công thức `avgCost` + "Lãi/lỗ đã thực hiện" + Ví dụ), `docs/domain/09-settings.md` (bảng "Các key hiện có" + Ví dụ), `process/phase-5.md` (Mục tiêu + Công việc cần làm + Tiêu chí hoàn thành + Phụ thuộc/ghi chú), `docs/02-data-model.md` (ghi chú `Setting`).
-
-## 2026-07-18 (5)
-
-**Chốt 4 điểm còn mở trong plan nháp Phase 5 (`process/phase-5-plan-DRAFT.md`) — trước khi implement, chưa code.**
-- Bối cảnh: agent `planner` lên plan triển khai Phase 5, để lại 5 điểm cần user xác nhận (1 điểm kỹ thuật thuần do orchestrator tự quyết, không tính). Đi qua từng điểm, user chọn theo đề xuất ở cả 4.
-- **(1) `SALE_TAX_BOND` = 0.1%.** Tra cứu thực tế (không suy diễn): Nghị định 253/2026/NĐ-CP + Thông tư 87/2026/TT-BTC (hiệu lực 01/07/2026) quy định thu nhập từ chuyển nhượng trái phiếu chịu thuế TNCN 0.1% trên giá chuyển nhượng mỗi lần — cùng mức và công thức với cổ phiếu/chứng chỉ quỹ, không có mức riêng cho trái phiếu. Seed `SALE_TAX_BOND = 0.1%` cùng `effectiveFrom = BASELINE_DATE`. **Không đổi** quyết định 2026-07-17 về việc đáo hạn trái phiếu (nhận gốc từ tổ chức phát hành) vẫn để ngỏ tới Phase 7 — mức 0.1% này chỉ áp cho SELL (chuyển nhượng thứ cấp), xem `docs/domain/07-tax.md` mục "Ca biên".
-- **(2) Nút "Đặt lại" đồng bộ cho cả card Thuế lẫn card Phí trong `TransactionForm`.** Mockup 5a/5b chỉ vẽ nút này ở card Thuế — nhận định đó là thiếu sót lúc dựng mockup hơn là chủ đích (không có lý do nghiệp vụ để 2 card cùng cơ chế "tự điền, sửa tay" lại khác nhau ở đúng điểm này). `design-implementer` thêm nút "Đặt lại" cho cả 2 card khi implement, không chỉ bám đúng pixel mockup.
-- **(3) Card "Phí giao dịch" cho màn bán Vàng hiện `0 ₫` + badge, không ẩn.** Nhất quán với tiền lệ `SALE_TAX_GOLD = 0` (quyết định 2026-07-17) vẫn hiện rõ trên UI kèm badge — tránh người dùng không phân biệt được "phí = 0 đã seed tường minh" với "màn này chưa làm phần phí". Mockup 5c hiện không vẽ card phí riêng cho vàng — đây là mở rộng nhỏ so với mockup, cùng tinh thần "seed tường minh, không âm thầm dùng 0" đã áp dụng nhất quán trong Phase 5.
-- **(4) 6 key `TRANSACTION_FEE_BUY/SELL_<FUND/BOND/GOLD>` seed = 0%** (chỉ `STOCK` = 0.3%) — xác nhận lại đúng như `phase-5.md`/`docs/domain/07-tax.md` đã ghi "mặc định 0 nếu chưa dùng kênh tính phí %", không có mức thật nào khác cần áp ngay.
-- **(Không hỏi, tự quyết kỹ thuật)** Gộp 1 component `AutoFilledAmountCard` dùng chung cho card Thuế/Phí thay vì viết 2 khối JSX riêng — thuần DRY, không ảnh hưởng nghiệp vụ, đúng tiền lệ tái dùng pattern `NavOverrideForm`.
-- Docs đã sync: `docs/domain/07-tax.md` (mục "Ca biên" — `SALE_TAX_BOND`, mục "Phí giao dịch" — mức FUND/BOND/GOLD), `process/phase-5.md` (mục "Công việc cần làm"), `process/phase-5-plan-DRAFT.md` (mục "Quyết định còn mở" → đánh dấu đã chốt).
-
-## 2026-07-19
-
-**Issue #65 — mốc dòng tiền XIRR của cổ tức tiền mặt đổi từ `date` (ngày chia) sang `paymentDate ?? date` (tiền thực về, fallback `date`) — đảo một phần quyết định 2026-07-17 #61.**
-- Bối cảnh: log ở entry 2026-07-17 (7) mục C1 — `buildXirrCashflows` (`lib/xirr-cashflow.ts`) ghép điểm cổ tức tại `Dividend.date` (ngày chia), trong khi `paymentDate` (ngày tiền thực về tài khoản, có thể trễ vài tuần) từ #61 chỉ để hiển thị, không dùng cho tính toán nào.
-- **Quyết định:** `XirrCashflowInput.dividends` nhận thêm `paymentDate: Date | null`; điểm dòng tiền XIRR của cổ tức CASH đặt tại `paymentDate ?? date` thay vì luôn `date`. Áp dụng ở 3 nơi build input: `lib/portfolio-valuation.ts::getAllCashDividendsForXirr` (dashboard + widget XIRR toàn danh mục), `features/holdings/queries.ts::getCashDividends` (chi tiết một vị thế), `features/holdings/queries.ts::getCashDividendsForHoldings` (danh sách vị thế đang mở, batch).
-- **Lý do tài chính:** XIRR quy đổi lợi suất theo thời gian (annualized) — đặt dòng tiền dương sớm hơn thời điểm tiền thực sự về tay sẽ thổi nhẹ lợi suất tính được (dòng tiền dương xuất hiện sớm hơn → nghiệm r lớn hơn thực tế). Sai số này rõ nhất với coupon trái phiếu (Phase 7/8), nơi khoảng trễ chia→trả thường dài hơn cổ tức cổ phiếu vài tuần.
-- **KHÔNG đổi** 2 mốc khác vẫn dùng `Dividend.date`: mốc ghi `NavOverride` bù pha loãng (`features/dividends/dividend-math.ts`/`actions.ts`) và mốc `buildQuantityTimeline()` (`lib/position-trail.ts`, số lượng nắm giữ tại ngày chia) — cả hai gắn với **ngày chia** theo đúng bản chất nghiệp vụ (pha loãng NAV xảy ra tại ngày chia; số lượng cổ tức cổ phiếu cộng vào đúng ngày chia), không liên quan tới thời điểm tiền/CP thực về.
-- Việc lọc `date <= cutoffDate` ở tầng query (3 hàm trên) **giữ nguyên theo `date`** (ngày chia) — không đổi sang lọc theo `paymentDate`, tránh vênh với "cổ tức đã ghi nhận tính tới mốc chốt" (một cổ tức chia trước cutoff nhưng `paymentDate` rơi sau cutoff vẫn được tính, chỉ lệch mốc dòng tiền trong chuỗi XIRR).
-- Không đụng Prisma schema/migration — field `paymentDate` đã tồn tại từ #61.
-- Docs đã sync: `docs/domain/03-dividends.md` (mục "Entity / field"), `docs/domain/05-returns-xirr-and-pnl.md` (mục "Cách tính"), `docs/02-data-model.md` (comment field `paymentDate` trong snippet `Dividend`).
-- Tham chiếu: GitHub issue #65.
-
-## 2026-07-21
-
-**Rà soát spec Phase 6 (cảnh báo tập trung + XIRR toàn danh mục) dưới góc nhìn chuyên gia tài chính — 4 tinh chỉnh, chưa code nên sửa spec trực tiếp.**
-- Bối cảnh: dùng subagent đóng vai chuyên gia tài chính đọc `process/phase-6.md` + `docs/domain/04-pricing-and-valuation.md` mục "Cảnh báo tập trung" để đánh giá độc lập trước khi implement. Phát hiện 4 điểm: rule A2 (treo cảnh báo toàn danh mục khi có `MISSING_PRICE`, chốt ở entry 2026-07-17 (7)) quá bảo thủ; ngưỡng 30% cố định gây báo động giả với danh mục ít mã; không có cơ chế chống nhấp nháy quanh ngưỡng; biểu đồ phân bổ theo nhóm và badge cảnh báo theo mã là hai lát cắt không liên kết, dễ gây hiểu lầm "đã đa dạng" trong khi có mã lệch. Đã hỏi lại user từng điểm (không tự chọn thay).
-- **(1) Materiality cho `MISSING_PRICE` — thu hẹp rule A2 (đã hỏi user, chọn 5%):** thay vì treo cảnh báo *toàn danh mục* bất kể mã thiếu giá chiếm bao nhiêu, chỉ treo khi `missingPriceShare > 5%` — `missingPriceShare` ước lượng bằng `totalCostBasis` (không phải NAV, vì mã thiếu giá không có giá thị trường để tính NAV) của các `Holding MISSING_PRICE` trên tổng NAV(có giá)+costBasis(thiếu giá). Dưới 5%, vẫn cảnh báo bình thường trên các mã có giá (mẫu số loại phần thiếu giá) kèm ghi chú NAV thiếu một phần. `5%` là hằng số code, không phải `Setting` (tham số chống nhiễu hiển thị, khác khẩu vị rủi ro).
-- **(2) Ghi chú "tập trung tự nhiên do ít mã" (đã hỏi user, chọn để app tự tính thay vì hard-code số mã cố định):** thay vì chọn một ngưỡng N Holding tuỳ ý, dùng chính công thức toán học: nếu `100 / n > threshold` (n = số Holding mở có giá) thì ngay cả chia đều tuyệt đối cũng đã vượt ngưỡng — mọi badge trong ca này kèm ghi chú ngữ cảnh giải thích, tránh hiểu nhầm "chọn lệch" khi thực chất là hệ quả của có ít mã.
-- **(3) Hysteresis (đã hỏi user, chọn buffer 3 điểm %, áp dụng luôn trong Phase 6 thay vì để Backlog):** badge bật ở `threshold`, chỉ tắt khi xuống dưới `threshold − 3`, chống nhấp nháy khi giá dao động sát ngưỡng. Cần lưu trạng thái cảnh báo trước đó per-`Holding` giữa các lần tính — cách lưu cụ thể (field DB...) để ngỏ cho `business-implementer` quyết định lúc code.
-- **(4) Chú thích liên kết giữa biểu đồ phân bổ (theo nhóm) và cảnh báo tập trung (theo mã) (đã hỏi user, chọn thêm chú thích nhỏ, không làm drill-down):** khi có ≥1 Holding đang cảnh báo, hiện dòng chú thích nhỏ dưới biểu đồ phân bổ tài sản trỏ xuống bảng vị thế.
-- **Không đổi:** cách tính XIRR toàn danh mục (đã đúng trong code — gộp cashflow mọi Holding thành một chuỗi, giải một lần, không cộng dồn XIRR riêng lẻ) — chỉ làm rõ tường minh nguyên tắc này vào domain doc để tránh implementer hiểu nhầm khi động tới Tab "Đã đóng" của Phase 6.
-- Docs đã sync: `docs/domain/04-pricing-and-valuation.md` (mục "Cảnh báo tập trung" — thu hẹp A2 + 3 mục mới), `docs/domain/05-returns-xirr-and-pnl.md` (mục "Quy tắc & bất biến", câu làm rõ XIRR toàn danh mục), `docs/domain/09-settings.md` (ghi chú 5%/3 điểm % không phải `Setting`), `process/phase-6.md` (Công việc cần làm + Tiêu chí hoàn thành), `docs/03-roadmap.md` (Phase 6).
-
-**`design-fetcher` kéo mockup Phase 6 thật (`Phase 6 Screens.dc.html`, 10 màn 6a-6j), sinh digest `process/UI_phase_6.md`; 4 điểm cần xác nhận đã hỏi user, chọn theo đề xuất cả 4.**
-- Bối cảnh: digest liệt kê 9 điểm lệch/cần xác nhận giữa mockup và `phase-6.md`; 4 điểm ảnh hưởng kiến trúc/nghiệp vụ được hỏi user trước khi giao `planner`, 5 điểm còn lại (bố cục 6b/6c đơn giản hơn 6a/6e, giữ pattern `formatMoney` bullet thay vì CSS blur mockup vẽ, bỏ mục "Biểu thuế & phí" ngoài scope ở 6f, route riêng cho màn Phân bổ 6d thay vì Sheet, tab mặc định "Mua" khi bấm "Mở lại vị thế" ở 6i) là quyết định kỹ thuật thuần theo khuyến nghị digest, không cần hỏi.
-- **(1) Nút mắt header (6e) và toggle "Chế độ ẩn số tiền" (6f) — cùng một trạng thái, cả hai ghi `User.hideAmountsByDefault` ngay lập tức** khi bấm/gạt — không có tầng "override phiên tạm thời" riêng, tránh 2 tầng state không cần thiết.
-- **(2) "XIRR bình quân" của vị thế đã đóng (tab 6g) — weighted average theo vốn mua vào từng vị thế đã đóng**, không phải trung bình cộng đơn giản — nhất quán cách XIRR toàn danh mục gộp cashflow theo tỷ trọng thay vì cộng dồn XIRR riêng lẻ (đã chốt entry trên).
-- **(3) Ghi chú "tập trung tự nhiên do ít mã" (biến thể 2, badge 6j) — chỉ thêm dòng giải thích cho Holding ĐÃ có badge (đã vượt threshold)**, không tự tạo badge mới cho Holding đang dưới ngưỡng riêng lẻ dù `100/n > threshold` đúng toàn danh mục.
-- **(4) Chú thích liên kết cảnh báo tập trung trên biểu đồ phân bổ (6d) — luôn dùng câu chung "N mã đang vượt ngưỡng tập trung..."**, kể cả khi N=1; không nêu đích danh tên mã/% dù mockup vẽ ví dụ cụ thể — khớp đúng câu chữ `phase-6.md` đã định nghĩa, tránh thêm nhánh logic riêng cho N=1.
-- Docs đã sync: không đổi domain docs (đây là quyết định UI/kiến trúc state, không phải công thức nghiệp vụ mới) — chỉ ghi nhận ở đây để `planner`/implementer bám đúng, tham chiếu `process/UI_phase_6.md` mục "Điểm lệch/cần xác nhận".
-
-## 2026-07-24
-
-**Issue #67 — tách `realizedPnl`/`unrealizedPnl` khỏi `absolutePnl` trên card "Lãi/lỗ" Dashboard; hàm tính viết mới thay vì mở rộng `derivePosition()`.**
-- Bối cảnh: log 2026-07-17 (7) mục B1 để lại từ trước — user xác nhận đưa vào Phase 6 (đóng gói cùng các tính năng hoàn thiện dashboard khác) thay vì làm standalone ngoài phase, vì đây cũng chỉ là một chỉ số diễn giải thêm cho `absolutePnl` đã có (không phải chỉ số hiệu suất riêng, không đổi XIRR), tương tự tinh thần "chi phí ăn mòn" ở Phase 5.
-- **(a) Không mở rộng `derivePosition()`/`CashflowInput` (`lib/cost-basis.ts`) — viết hàm thuần riêng `computeRealizedGainForHolding`/`computeUnrealizedGain` ở `lib/realized-pnl.ts`.** Lý do: `CashflowInput` hiện tại (`type/date/quantity/pricePerUnit/feeAmount`) phục vụ đúng nhu cầu ghi giao dịch (4 Server Action ở `features/holdings/actions.ts`, có test suite lớn bao phủ) — không có `taxAmount`/không cần `amount` đã materialize. Chỉ số realized/unrealized cần chính xác `Cashflow.amount` đã materialize (gồm phí mua, trừ phí+thuế bán) để khớp đúng dòng tiền XIRR, khác input `derivePosition()` cần. Mở rộng `derivePosition()` để nhét thêm nhu cầu đọc-only này sẽ buộc sửa 1 hàm nền tảng của write-path chỉ vì 1 chỉ số hiển thị — rủi ro không cần thiết. `computeRealizedGainForHolding` dùng CÙNG công thức avgCost bình quân di động (tương đương đại số, không phát minh khác đi), chỉ khác nguồn dữ liệu đầu vào (`amount.abs()` đã gồm phí thay vì `quantity*pricePerUnit + feeAmount` tách rời).
-- **(b) `unrealizedPnl` dùng `quantity`/`avgCost` HIỆN TẠI (cache materialize trên `Holding`), không phải tại `cutoffDate`** — khi mốc chốt khác "hôm nay", con số không chính xác tuyệt đối. **Đây là giới hạn CÓ SẴN của toàn cơ chế cutoff trong `portfolio-valuation.ts`** (NAV toàn danh mục cũng tính theo `quantity` hiện tại của `Holding`, không phải tại cutoff) — không phải lỗi mới phát sinh từ issue #67, và **cố ý không mở rộng phạm vi sửa** vấn đề cutoff-accuracy cho quá khứ trong lần này.
-- **Bất biến đã verify bằng unit test đối chiếu tay** (`src/lib/realized-pnl.test.ts`): `realizedPnl + unrealizedPnl == absolutePnl` khớp tuyệt đối (sai lệch 0 VND) trên portfolio giả lập nhiều holding (1 đã đóng SL=0, 1 bán một phần còn mở, có cổ tức tiền mặt) khi cutoff = hôm nay và không thiếu giá.
-- **Không cờ `isPartial` riêng cho 2 field mới** — tái dùng `absolutePnlIsPartial`/`navValueIsPartial` đã có, vì chỉ `unrealizedPnl` bị ảnh hưởng khi thiếu giá (cùng điều kiện NAV không đầy đủ).
-- **Không đổi Prisma schema** — mọi field cần (`Cashflow.holdingId/quantity/amount`, `Dividend.netAmount`, `HoldingSummary.totalCostBasis`) đã tồn tại.
-- Docs đã sync: `docs/domain/05-returns-xirr-and-pnl.md` (mục "Quy tắc & bất biến" + "Cách tính"), `docs/business-overview.md` (mục 5), `process/phase-6.md` (checklist mới), `process/PROCESS.md` (Phase 6 → 🟨 + nhật ký).
-- Tham chiếu: GitHub issue #67.
-
-## 2026-07-24 (2)
-
-**Code review PR #87 — 2 quyết định thiết kế cho fix `realizedPnl` khi có cổ tức cổ phiếu + cờ cảnh báo `pnlSplitIsApproximate`.**
-- Bối cảnh: PR #87 (gộp issue #83 + #82 + #67) chưa merge, chạy code review đa góc nhìn tìm ra 9 finding. Nghiêm trọng nhất: `computeRealizedGainForHolding()` (`lib/realized-pnl.ts`) tính sai `realizedPnl` khi holding có cổ tức cổ phiếu — hàm chỉ phát lại `Cashflow` (BUY/SELL) trong khi cổ tức cổ phiếu cộng thẳng vào `Holding.quantity` mà không tạo `Cashflow` (`features/dividends/actions.ts`), đúng vấn đề issue #59 đã giải quyết ở write-path bằng `derivePosition()` (khi đó tên `derivePositionIncludingStockDividends()`).
-- **(a) Quyết định thiết kế "2 bộ đếm song song" ở `computeRealizedGainForHolding` — `avgCostQuantity`/`avgCost` (CHỈ track BUY/SELL) tách riêng khỏi `realQuantity` (track CẢ BUY/SELL lẫn cổ tức cổ phiếu).** Lý do KHÔNG dùng `realQuantity` làm mẫu số cho công thức bình quân di động (averaging): sẽ pha loãng `avgCost` bởi cổ tức cổ phiếu, sai quy tắc domain đã chốt ("cổ tức cổ phiếu không đổi avgCost", `docs/domain/03-dividends.md`) và làm `avgCost` ở đây lệch khỏi `avgCost` cache thật trên `Holding` (chỉ derive từ `Cashflow`, mirror `derivePosition()`). `realQuantity` CHỈ dùng để quyết định đúng thời điểm reset `avgCost`/`avgCostQuantity` về 0 (khi vị thế THỰC SỰ đóng hết, kể cả phần số lượng đến từ cổ tức) — đổi điều kiện reset từ `avgCostQuantity.isZero()` sang `realQuantity.isZero()` là fix mấu chốt, không đổi 1 dòng công thức averaging nào khác. Verify bằng số tính tay trong `src/lib/realized-pnl.test.ts` (BUY 100 → cổ tức +20 → SELL 120 → BUY 50 → SELL 30, tổng `realizedGain` kỳ vọng 130.000; nếu không reset đúng sẽ ra avgCost lô mới 13.333,33 thay vì 12.000 đúng).
-- **(b) Quyết định thêm cờ `pnlSplitIsApproximate` (thay vì sửa cơ chế cutoff-accuracy tổng thể).** Giới hạn "`unrealizedPnl` dùng `quantity`/`avgCost` HIỆN TẠI, không phải tại `cutoffDate`" đã chốt là chấp nhận được ở entry 2026-07-24 (b) phía trên (issue #67) — chỉ thêm cờ `pnlSplitIsApproximate: boolean = (selection.key !== "TODAY")` vào `XirrAndPnlCore`/`PortfolioValuation` để UI cảnh báo khi mốc chốt khác hôm nay, KHÔNG mở rộng phạm vi sửa cutoff-accuracy trong lần này (vẫn ngoài phạm vi, cùng lý do đã ghi ở (b) phía trên).
-- Đồng thời dọn 3 trùng lặp/lệch nhỏ tìm được cùng đợt review: tách `sortByPositionTrailOrder()` (`lib/position-trail.ts`) dùng chung giữa `buildQuantityTimeline()` và `computeRealizedGainForHolding()` (tiebreak `(date, createdAt, id)` nhất quán toàn repo); `getAllCashflowsForXirr()` thêm `orderBy`/`id`/`createdAt` cho đúng tiebreak khi group theo holding; tách `paginateWithCursor()` (`lib/snapshot-history.ts`) dùng chung cho `getSnapshotHistory()`/`getMoreSnapshotHistory()` (trước đó lặp lại y hệt khối peek `LIMIT+1`/tính `hasMore`/`nextCursor`), đồng thời bỏ field `hasMore` dư thừa khỏi kiểu trả về của `getSnapshotHistory()` (không consumer nào khác cần ngoài `nextCursor !== null`).
-- Không sửa `derivePosition()` cũ / `CashflowInput` / `derivePositionIncludingStockDividends()` (`lib/cost-basis.ts`) hay 4 Server Action ghi giao dịch (`features/holdings/actions.ts`) — giữ nguyên quyết định 2026-07-24 (a) ở entry issue #67 phía trên, chỉ sửa lớp đọc (`lib/realized-pnl.ts`).
-- Không đổi Prisma schema — mọi field cần (`Cashflow.id/createdAt`, `Dividend.id/createdAt/stockQuantity`) đã tồn tại.
-- Docs đã sync: `docs/domain/05-returns-xirr-and-pnl.md` (mục "Quy tắc & bất biến" — 2 gạch đầu dòng mới), `process/PROCESS.md` (nhật ký).
-- Tham chiếu: code review PR #87.
-
-## 2026-07-24 (3)
-
-**Sửa lần 2 PR #87 — retrofit thiết kế "2 bộ đếm song song" thành "1 bộ đếm `realQuantity` duy nhất" cho CẢ `computeRealizedGainForHolding` (đã merge, sửa lại) LẪN `derivePositionIncludingStockDividends` (bug write-path chưa fix).**
-- Bối cảnh: thiết kế "2 bộ đếm song song" chốt ở entry `2026-07-24 (2)` (a) chỉ đúng cho ca **đóng hết vị thế rồi mở lại** — điều kiện reset `avgCostQuantity`/`avgCost` (`realQuantity.isZero()`) không bao giờ kích hoạt ở ca **bán một phần (không đóng hết, kể cả tính CP từ cổ tức) rồi mua tiếp**, vì vị thế chưa từng thực sự chạm 0. `avgCostQuantity` (bộ đếm chỉ-Cashflow) khi đó đã lệch khỏi `realQuantity` (có tính cổ tức) mà không được xoá, bị dùng làm mẫu số/tử số bình quân sai ở lần BUY kế tiếp. Rà lại phát hiện `derivePositionIncludingStockDividends()` (`lib/cost-basis.ts`, write-path thật — cache `avgCost`/`totalCostBasis` trên `Holding`, dùng ở 4 Server Action ghi giao dịch + `getHoldingDetail`) mắc **cùng họ bug** nhưng CHƯA từng fix: hàm này lấy `avgCost` thẳng từ `derivePosition(cashflows)` cũ (chỉ-Cashflow, đã xoá — xem 2026-07-24 (4)) — chỉ biết BUY/SELL, không biết cổ tức cổ phiếu.
-- **Quyết định: đổi cả hai hàm từ "2 bộ đếm + reset tường minh" sang "1 bộ đếm `realQuantity` duy nhất" (gồm cả BUY/SELL lẫn cổ tức cổ phiếu).** `avgCost` chỉ đổi ở BUY, dùng `realQuantity` NGAY TRƯỚC sự kiện đó (không phải biến cashflow-only riêng) làm cơ sở bình quân: `newAvgCost = (realQuantityTrước*avgCostCũ + tiềnMua) / (realQuantityTrước+SLMua)`. Khi vị thế đóng hết thật (`realQuantityTrước=0`), số hạng `0*avgCostCũ=0` tự "quên" avgCost cũ — không cần bước reset tường minh riêng, đúng cho CẢ ca đóng hết LẪN ca bán một phần. `derivePositionIncludingStockDividends()` áp dụng cùng công thức, tái dùng `before`/`after` sẵn có từ `buildQuantityTimeline()` (`lib/position-trail.ts`) làm `realQuantityTrước`/`SL sau BUY` — không thêm vòng lặp tính quantity riêng.
-- Verify bằng số tính tay, ca biên "bán một phần rồi mua tiếp" (BUY 100 → cổ tức +20 → SELL 105, real còn 15 không về 0 → BUY 85 → SELL 100 đóng hết): `avgCost` sau BUY 85 = 171.500 (`src/lib/cost-basis.test.ts`), tổng `realizedGain` = 8.060.000 (`src/lib/realized-pnl.test.ts`, so với 4.022.500 sai theo thiết kế "2 bộ đếm" cũ). Test "đóng hết rồi mua lại" (130.000, `2026-07-24 (2)`) chạy lại vẫn đúng với thiết kế mới — không đổi số kỳ vọng, chỉ khác cách hiện thực bên trong.
-- **Production chưa có record cổ tức cổ phiếu nào** (user xác nhận) → không cần script recompute/migration dữ liệu cũ, chỉ áp dụng cho giao dịch mới từ giờ trở đi.
-- Không đổi chữ ký `derivePosition()` cũ, `derivePositionIncludingStockDividends()`, `computeRealizedGainForHolding()` — chỉ đổi cách tính bên trong. Không đổi 4 Server Action ghi giao dịch, `getHoldingDetail`, hay chỗ gọi `computeRealizedGainForHolding` ở `portfolio-valuation.ts`. Không đổi Prisma schema.
-- Không xử lý ca lý thuyết "cổ tức xen giữa lúc `realQuantity=0` và BUY kế tiếp" (holding không giữ cổ phần nào mà vẫn nhận cổ tức) — trạng thái dữ liệu không hợp lệ theo domain, chỉ ghi chú comment trong code.
-- Docs đã sync: `docs/domain/05-returns-xirr-and-pnl.md` (mục "Quy tắc & bất biến" — sửa lại mô tả cơ chế reset cho khớp thiết kế mới), `process/PROCESS.md` (nhật ký).
-- Tham chiếu: PR #87 (sửa lần 2, tiếp theo entry `2026-07-24 (2)`).
-
-## 2026-07-24 (4)
-
-**Sửa lần 3 PR #87 — xoá `derivePosition()` cũ (chỉ-Cashflow), đổi tên `derivePositionIncludingStockDividends()` thành `derivePosition()`, gộp toàn bộ test về một hàm duy nhất — phát hiện VÀ sửa lần 4: bug thật "avgCost không reset về 0 khi đóng hết vị thế bằng SELL không có BUY sau đó".**
-- Bối cảnh: sau fix lần 2 (entry `2026-07-24 (3)`), `derivePositionIncludingStockDividends()` không còn gọi `derivePosition(cashflows)` cũ để lấy `avgCost` nữa → `derivePosition()` cũ không còn production caller nào, chỉ còn sống trong `cost-basis.test.ts`. Thảo luận với user phát hiện 2 vấn đề: (1) test suite của `derivePositionIncludingStockDividends()` thiếu case trực tiếp cho "mua có phí"/"số lượng thập phân" — trước đây được bảo vệ GIÁN TIẾP qua test của `derivePosition()` cũ (khi hàm mới còn delegate `avgCost` cho nó), sự bảo vệ gián tiếp đó đã đứt sau fix lần 2; (2) giữ `derivePosition()` cũ làm "oracle đối chiếu" không có giá trị thật — công thức `avgCost` trong `derivePositionIncludingStockDividends()` là COPY trực tiếp từ `derivePosition()` cũ (cùng người, cùng lúc viết), không phải 2 cách tính độc lập. Giữ 2 bản công thức song song (dù 1 bản chỉ còn sống trong test) chính là pattern đã gây ra chuỗi bug retrofit ở entry `2026-07-24 (2)` và `(3)`.
-- **Quyết định (sửa lần 3): xoá hẳn `derivePosition()` cũ (hàm + test suite riêng), đổi tên `derivePositionIncludingStockDividends()` thành `derivePosition()`** (chiếm lại tên cũ — giờ là cài đặt DUY NHẤT, tên "IncludingStockDividends" không còn ý nghĩa "thêm vào một hàm gốc khác" nữa). Viết lại toàn bộ 10 test case của `derivePosition()` cũ để gọi hàm mới với `stockDividends=[]`, gộp vào đầu describe hiện có (trước các test có cổ tức) — đồng thời tự động lấp gap coverage (phí, số thập phân) lên đúng hàm sản xuất thật mà không cần viết test mới. Xoá test "không có cổ tức nào -> kết quả khớp `derivePosition()` thuần" (không còn gì để đối chiếu sau khi gộp).
-- **Bug phát hiện khi gộp test (sửa lần 4):** test "bán đúng hết số lượng đang giữ -> quantity và avgCost về 0" FAIL trên hàm mới — `avgCost` trả về 100.000 thay vì 0. Nguyên nhân: cơ chế "tự quên `avgCost` cũ nhờ nhân `realQuantityTrước=0`" (chốt ở sửa lần 2) chỉ kích hoạt tại **lần BUY kế tiếp** (vì vòng lặp `avgCost` chỉ duyệt qua BUY) — nếu chuỗi sự kiện kết thúc ngay sau một lệnh SELL đóng hết vị thế (không còn BUY nào sau), không có "lần BUY kế tiếp" nào để kích hoạt việc quên, nên `avgCost` bị kẹt ở giá trị cũ dù `quantity` thật đã về 0. Đây là regression có thật đưa vào từ sửa lần 2 (2026-07-24 (3), đã có sẵn trong PR #87 trước khi bắt đầu việc rename/dedup này) — không phải lỗi do rename gây ra, chỉ bị phơi ra khi gộp test trực tiếp vào hàm sản xuất thật. Ảnh hưởng thật: `Holding.avgCost` (materialize) hiện sai (khác 0) cho một vị thế đã bán sạch không mua lại — hiển thị trong `HoldingSummary` (cả tab "Đã đóng"), dù `totalCostBasis` vẫn đúng (nhân với `quantity=0`).
-- **Quyết định (sửa lần 4): thêm reset tường minh `if (quantity.isZero()) avgCost = new Decimal(0);` ngay trước `return`, dùng `quantity` thật (dividend-aware, đã tính đúng ở vòng lặp `buildQuantityTimeline()` phía trên) — không dùng một biến cashflow-only riêng.** Nhất quán với thiết kế "real quantity là nguồn sự thật duy nhất" xuyên suốt hàm này (cùng tinh thần sửa lần 2). Không cần sửa `computeRealizedGainForHolding()` (`lib/realized-pnl.ts`) — hàm đó không trả `avgCost` ra ngoài (chỉ dùng nội bộ để tính `realizedGain`), nên `avgCost` "kẹt" ở cuối hàm không ảnh hưởng giá trị trả về.
-- 4 call site sản xuất thật (`features/holdings/actions.ts` — 4 Server Action, `features/holdings/queries.ts::getHoldingDetail`) đổi tên lời gọi, tham số truyền vào không đổi.
-- Docs đã sync: `docs/domain/05-returns-xirr-and-pnl.md`, `docs/domain/01-assets-and-holdings.md`, `docs/domain/02-transactions-and-cost-basis.md`, `docs/rules/data-prisma.md`, `process/PROCESS.md` (nhật ký).
-- Tham chiếu: PR #87 (sửa lần 3 + 4, tiếp theo entry `2026-07-24 (3)`).
-
-## 2026-07-24 (5)
-
-**Chốt quy ước viết e2e theo Page Object Model + tách tài liệu e2e ra khỏi production code.**
-- Bối cảnh: bộ e2e hiện tại (`e2e/*.spec.ts`) viết lối thủ tục — gọi `page.getByRole/locator` trực tiếp trong spec, trùng lặp selector nặng, có chỗ bám class Tailwind (`div.rounded-2xl.border-border`) làm selector giòn, và tri thức domain (redirect `?cashflowId=`, DatePicker input hidden, timezone lệch ngày...) nằm rải rác trong comment từng spec. Cần một quy ước để spec mới nhất quán và gom tri thức lại một nơi.
-- **Quyết định:** áp dụng **Page Object Model** cho e2e — ba tầng rạch ròi: **page object** (theo màn hình, ở `e2e/pages/`, giữ URL + selector + action), **component object** (widget dùng lại xuyên màn), **fixture** cross-cutting (ở `e2e/support/`, đã có sẵn: session, dates, date-picker, urls). Spec chỉ mô tả ý định + kỳ vọng, gọi page object.
-- **Chiến lược selector:** role/label-first (repo có **0 `data-testid`** — dựa vào selector khả truy cập đúng khuyến nghị Playwright); `input[name="..."]` được phép cho form field (hợp đồng ổn định với Server Action); **cấm bám class CSS/Tailwind**; `data-testid` là **ngoại lệ có kiểm soát** — chỉ thêm vào `src/` khi selector khả truy cập thật sự không phân biệt được, nêu rõ trong PR.
-- **Assertion:** locator là API chính của page object, `expect` nằm ở **spec** (giữ ý định kỳ vọng dễ đọc); chỉ thêm assertion helper trong page object khi lặp ≥3 lần.
-- **Tách tài liệu e2e vs production (mục tiêu token/ngữ cảnh):** tri thức e2e gom vào `e2e/` + `docs/rules/` để khi Claude làm e2e chỉ nạp context e2e, không kéo `src/` vào; page object tập trung selector giúp người viết spec không phải mở internals component. Scoped `e2e/CLAUDE.md` auto-load chỉ khi làm trong `e2e/`.
-- **Phạm vi lần này: chỉ tài liệu**, không tạo `e2e/pages/` thật, không refactor spec đang xanh (tránh rủi ro vỡ test). Refactor spec cũ sang POM theo dõi ở GitHub issue riêng — spec **mới** viết theo POM ngay; spec cũ đụng tới đâu POM hoá tới đó.
-- Docs đã sync: `docs/rules/e2e-page-object.md` (rule mới — gồm mục "Best practices" gom lại: test independence/isolation cho `fullyParallel`, cấm logic điều khiển trong page object, tránh trừu tượng hoá non), `docs/coding-rules.md` (index), `docs/rules/testing.md` (mục End-to-end trỏ sang), `CLAUDE.md` (root — mục "Đọc khi cần" trỏ tường minh tới `e2e/CLAUDE.md`), `e2e/CLAUDE.md` (instruction scoped), `e2e/GOTCHAS.md` (nhật ký bẫy, seed từ bug thật đã gặp).
-
-## 2026-07-25
-
-**Tách spec e2e (`*.spec.ts`) ra `e2e/tests/`, không còn nằm chung cấp với `pages/`/`support/`.**
-- Bối cảnh: sau khi PR #97 POM hoá xong toàn bộ 9 spec (đóng issue #88), `e2e/` có 9 file `*.spec.ts` nằm ngang hàng với 2 thư mục hạ tầng (`pages/`, `support/`) ngay tại root — khó phân biệt nhanh đâu là test thật, đâu là code dùng chung khi liệt kê thư mục.
-- **Quyết định:** chuyển toàn bộ `*.spec.ts` vào `e2e/tests/`; `pages/`, `support/`, `CLAUDE.md`, `GOTCHAS.md` giữ nguyên vị trí (ngang hàng với `tests/`, không lồng vào trong). `playwright.config.ts` đổi `testDir` sang `./e2e/tests`. Import trong spec từ `./pages/...`/`./support/...` đổi thành `../pages/...`/`../support/...`.
-- Docs đã sync: `e2e/CLAUDE.md` (bản đồ thư mục), `docs/rules/e2e-page-object.md` (sơ đồ cấu trúc mục 3 + các path ví dụ), `docs/rules/testing.md` (path ví dụ), `.claude/agents/verifier.md` + `.claude/agents/e2e-verifier.md` (phạm vi sửa `e2e/tests/*.spec.ts`).
-
-## 2026-07-25 (2)
-
-**Rà spec Phase 7 (trái tức) dưới góc nhìn tài chính + kỹ thuật trước khi implement — chốt toàn bộ 4 điểm mở treo từ 2026-07-17, phát hiện thêm 3 lỗi thiết kế chưa từng có trong spec. Phạm vi đợt này: CHỈ tài liệu, không đụng code.**
-
-Bối cảnh: user đặt vấn đề "5 field trái phiếu nên tách bảng riêng thay vì thêm cột vào `Holding`", rà lại cả spec thì thấy chuyện đặt cột ở đâu không phải vấn đề nặng nhất.
-
-- **(1) Tách bảng `BondTerms` (1-1 với `Holding`) — đồng ý, nhưng KHÔNG vì lý do "tránh cột thừa".** Cột NULL trong Postgres gần như miễn phí (null bitmap) và bảng chỉ có vài chục dòng, nên lý do dung lượng không đứng vững. Ba lý do thật: (a) nhóm field này không dừng ở 5 — còn `issuerType` (thuế), `firstCouponDate` (mốc neo lịch), và sẽ còn nữa nếu mở rộng (ngày phát hành, day-count) → `Holding` phình thành god-table; (b) ngữ nghĩa khác hẳn — `Holding` là **vị thế** (position), `BondTerms` là **đặc tả công cụ** (instrument spec), hai thực thể tách bạch kinh điển trong tài chính; (c) tách bảng làm lộ ra `nextCouponDate` không thuộc nhóm đó → dẫn tới quyết định (2). Lưu ý đã ghi vào docs: tách bảng **không** tự cho ràng buộc "chỉ BOND mới có" — vẫn phải validate ở app.
-- **(2) Bỏ `nextCouponDate` (cộng tay) → `firstCouponDate` (mốc neo tĩnh) + suy runtime.** Đảo thiết kế ghi ở `docs/domain/10-cashflow-calendar.md` cũ. Thiết kế cũ ("cộng `couponFrequencyMonths` vào `date` vừa ghi") tái phạm đúng thứ mà bất biến `Holding.quantity`/`avgCost` cấm — cộng/trừ tay trên giá trị suy ra được — và gây 2 lỗi nghiệp vụ cụ thể: **lịch coupon trôi dần** (cộng từ ngày nhận thực tế thay vì lịch hợp đồng, sai số tích luỹ qua các kỳ) và **nhảy ngược về kỳ đã nhận** khi user ghi bù kỳ cũ bỏ sót. Suy runtime rẻ (vài phép cộng tháng, không replay lịch sử) nên không có lý do materialize. Giữ `nextCouponDateOverride` cho ca tổ chức phát hành đổi lịch thật (tinh thần `NavOverride`).
-- **(3) Trái tức KHÔNG bù pha loãng NAV — lỗi chưa từng có trong spec, mức độ nghiêm trọng nhất đợt rà.** `recordDividend` (Phase 4) tự tạo `NavOverride` trừ giá theo cổ tức gộp/CP. Logic đó đúng với cổ phiếu (tiền rời khỏi vốn công ty → thị giá điều chỉnh) nhưng **sai với trái phiếu**: coupon là nghĩa vụ trả lãi theo hợp đồng, **clean price không giảm theo coupon** (cái reset là lãi dồn tích trong dirty price — Navtrack không mô hình hoá). Vì `recordDividend` là hàm dùng chung, để mặc định chạy qua sẽ kéo giá trái phiếu tụt **tích luỹ** qua từng kỳ, NAV sai dần âm thầm không có tín hiệu lỗi. Nhánh `BOND_COUPON` phải chặn tường minh ngay đầu.
-- **(4) Thuế lãi trái phiếu: 2 key riêng, KHÔNG dùng chung `DIVIDEND_TAX_RATE`.** Đã **tra cứu thực tế** (không suy diễn) theo yêu cầu của user: lãi trái phiếu doanh nghiệp là thu nhập từ đầu tư vốn, chịu **5%** khấu trừ tại nguồn; **lãi trái phiếu Chính phủ và chính quyền địa phương được MIỄN thuế TNCN** — khoản 7 trong 22 trường hợp miễn thuế tại **Nghị định 253/2026/NĐ-CP** (hiệu lực 01/07/2026, đúng nghị định đã dùng làm căn cứ cho `SALE_TAX_BOND` ở 2026-07-18 (5)). Vì mức thuế **phụ thuộc tổ chức phát hành**, một key duy nhất không biểu diễn được → `BOND_INTEREST_TAX_RATE_CORPORATE = 5` + `BOND_INTEREST_TAX_RATE_GOVERNMENT = 0` (seed tường minh cả giá trị 0, tiền lệ `SALE_TAX_GOLD`), chọn theo `BondTerms.issuerType` mới. **Miễn thuế chỉ áp cho phần LÃI** — bán trái phiếu Chính phủ trước hạn vẫn chịu `SALE_TAX_BOND` 0.1%, không được suy rộng.
-- **(5) Đáo hạn: thêm `CashflowType.MATURITY`, thuế tính trên phần lợi tức chứ không phải 0 cứng.** Đóng điểm mở treo từ 2026-07-17 (`docs/domain/07-tax.md` mục "Ca biên"). Chọn enum mới thay vì "ghi SELL rồi tự xoá thuế" vì với người dùng Navtrack **giữ tới đáo hạn là ca thường xuyên**, bán thứ cấp mới là ngoại lệ — luồng thường xuyên không nên đi mượn hình thức của luồng hiếm. Tra cứu xác nhận: đáo hạn không phải chuyển nhượng (không chịu 0.1%) nhưng phần chênh giữa mệnh giá nhận về và giá vốn **là lãi**, chịu thuế lãi ở trên → `taxAmount = max(0, (pricePerUnit − avgCost) × quantity) × thuế lãi`. Mua đúng par thì `avgCost ≥ parValue` (đã gồm phí mua) → ra 0 tự nhiên, không cần nhánh riêng. Giả định đã ghi rõ: dùng `avgCost` (gồm phí mua) làm căn cứ trừ là rộng hơn luật một chút, lệch về phía thấp, form không khoá nên sửa được.
-- **(6) Đóng băng thông số trái tức vào `Dividend`** (`parValueApplied`/`couponRatePercentApplied`). Đóng điểm mở (3) cũ về `percentLabel`: không cần công thức suy ngược nào, đọc thẳng giá trị đã lưu. Lý do: `BondTerms` sửa được về sau (nhập sai, trái phiếu thả nổi) — nếu lịch sử đọc lại giá trị hiện tại thì mọi kỳ cũ hiển thị sai, trái nguyên tắc "thuế/phí đã tính không hồi tố".
-- **(7) Ràng buộc thứ tự: trái tức kỳ cuối trùng ngày đáo hạn.** `buildQuantityTimeline()` sort theo `date` rồi `createdAt`; ghi `MATURITY` trước rồi ghi coupon kỳ cuối **cùng ngày** → "SL tại ngày trả lãi" = 0 → coupon ra **0 đồng**, sai âm thầm, mà đó lại là thứ tự thao tác tự nhiên nhất. Quy ước: trong cùng một ngày, `Dividend` xếp **trước** `Cashflow{type: MATURITY}` — tie-break theo bản chất sự kiện, không theo `createdAt`.
-- **(8) Rule mới về enum (user yêu cầu bổ sung sau khi thấy footgun ở (9)).** Enum nghiệp vụ khai ở `prisma/schema.prisma` là nguồn sự thật duy nhất, TS **dẫn xuất** từ `@prisma/client` — cấm khai lại union literal song song; giá trị runtime gom vào `src/lib/enums.ts` với `satisfies` + check bắt **thiếu** giá trị (dùng `import type` để không kéo Prisma vào bundle Client Component). Mọi điểm rẽ nhánh theo enum dùng `switch` exhaustive + `assertNever`; nhãn UI dùng `Record<EnumType, string>`; cấm `if/else` hay ternary nhị phân khi nhánh `else` mang giả định về giá trị còn lại. ESLint hiện chưa bật type-aware linting nên `@typescript-eslint/switch-exhaustiveness-check` chưa dùng được — `assertNever` + `Record` là cơ chế thực thi vì chỉ cần compiler. Ghi ở `docs/rules/typescript-style.md` (mục "Enum") + `docs/rules/schema.md` + index `docs/coding-rules.md`.
-- **(9) Nợ kỹ thuật phải trả TRƯỚC khi thêm giá trị enum ở Phase 7** — đã grep, không suy đoán. Code dividends dùng **kiểm tra nhị phân** khắp nơi: `queries.ts` có `if (type === "CASH") … else` với nhánh else non-null-assert `stockQuantity` (`BOND_COUPON` rơi vào đây → sai/crash), `DividendRowsFilter.tsx` hiện nhãn "Cổ phiếu" cho mọi loại không phải CASH, `getTotalCashDividendReceived` + caller của `lib/xirr-cashflow.ts` lọc cứng `type: "CASH"` (**không sửa thì tiêu chí "trái tức vào chuỗi XIRR" không đạt mà không test nào fail**), `types.ts`/`schemas.ts` khai lại union song song. Với `CashflowType` rủi ro thấp hơn: code hầu như chỉ hỏi `=== "BUY"` nên `MATURITY` tự hành xử đúng ở `derivePosition`/cost basis/cost drag; chỉ 3 chỗ phải sửa (`ClosedHoldingsSection.tsx` lọc `=== "SELL"` để tìm lần đóng vị thế — không sửa thì trái phiếu đáo hạn không hiện đúng ở mục "đã đóng"; `CashflowTimeline.tsx`; `TransactionForm.tsx`). Danh sách đầy đủ đã ghi thành checklist trong `process/phase-7.md` mục 2.
-- **Ngoài phạm vi, ghi rõ trong `phase-7.md` để không bị hiểu là bỏ sót:** lãi dồn tích (accrued interest) khi mua/bán giữa hai kỳ coupon; trái phiếu lãi suất thả nổi; trái phiếu trả gốc dần (amortizing).
-- Docs đã sync: `docs/02-data-model.md`, `docs/domain/03-dividends.md`, `docs/domain/07-tax.md`, `docs/domain/09-settings.md`, `docs/domain/10-cashflow-calendar.md`, `docs/rules/typescript-style.md`, `docs/rules/schema.md`, `docs/coding-rules.md`, `process/phase-7.md` (viết lại), `process/phase-8.md`.
-
-## 2026-07-26
-
-**Chốt bộ quy tắc clean code cho toàn app trước khi refactor ~3.000 dòng tầng action/queries. Phạm vi đợt này: CHỈ tài liệu, không đụng code.**
-
-Bối cảnh: user nêu "actions code dài và khó đọc, các sql không reuse được". Rà bằng số đo thay vì cảm nhận: 9 hàm dài trên 100 dòng, 8 bản sao khối `select` cashflow/cổ tức, 3 cài đặt song song của cùng quy tắc delta, 8 comment kiểu "xem ghi chú tương tự ở X", `features/*/actions.ts` + `queries.ts` có **0 unit test**.
-
-- **(1) Quy tắc số 1 — phân biệt "lặp tri thức" và "lặp hình dạng", đo bằng connascence.** Câu hỏi chuẩn không phải "hai đoạn có giống nhau không" mà "đổi cái này có buộc đổi cái kia không". Có → gộp ngay, không chờ Rule of Three. Không → để yên, áp AHA (*"prefer duplication over the wrong abstraction"* — gỡ abstraction sai đắt hơn xoá code lặp). Cần luật này vì hai áp lực ngược nhau đều có thật ở repo: chuỗi bug issue #59 do **lặp**, còn ép DRY mù quáng thì tạo coupling giả. Thang ưu tiên: mọi mức dynamic > mọi mức static; trong static thì Algorithm > Position > Meaning > Type > Name.
-- **(2) Ba ca lặp nặng nhất đã định danh (sửa theo thứ tự này, không theo thứ tự dễ).** (a) **Connascence of Value** — hằng `new Date(8640000000000000)` khai 2 lần, 2 tên (`CANDIDATE_CREATED_AT` ở `holdings/actions.ts`, `PROBE_CREATED_AT` ở `dividends/actions.ts`), ràng nhau bằng comment; mức nguy hiểm nhất mà trông vô hại nhất. (b) **Connascence of Algorithm** — quy tắc delta `BUY +/SELL −/STOCK +` cài 3 lần (`lib/cost-basis.ts`, `dividends/actions.ts`, `dividends/queries.ts`), đúng pattern `DECISION.md` 2026-07-24 (4) đã chốt phải gộp nhưng đã mọc lại ở nhánh cổ tức. (c) **Connascence of Meaning** — bất biến issue #59 ("vị thế = Cashflow + cổ tức CP") rải trong 8 khối `select`, giữ bằng comment thay vì bằng type.
-- **(3) Thêm tầng `features/*/repository.ts` — nơi DUY NHẤT chạm Prisma, kể cả đường ghi.** Theo khuyến nghị Data Access Layer của Next.js: một tầng server-only tự làm authorization, để check `userId` tồn tại **một** chỗ thay vì lặp tay ở 5 action với 5 câu chữ khác nhau. Ba vai tách bạch `Row → Domain → DTO`: `repository.ts` (Prisma, `Decimal`) → `lib/*.ts` (thuần) → `queries.ts` (format, `string`). **Ranh giới transaction: truyền `tx: Prisma.TransactionClient` tường minh qua tham số**, không dùng AsyncLocalStorage/CLS (ẩn control flow) và không bọc Unit of Work (`db.$transaction` đã là). Repository **không tự mở** transaction — caller mở, nếu không hai lời gọi repository không nằm chung transaction được. ⚠️ Chưa verify được `db` có gán được vào chỗ nhận `Prisma.TransactionClient` không (container nghiên cứu không có `node_modules`) — chạy `pnpm typecheck` xác nhận trước khi dựa vào default param.
-- **(4) Kích thước hàm: KHÔNG đặt giới hạn số dòng.** Luật "hàm phải ngắn" của *Clean Code* không có cơ sở thực nghiệm; thứ có kiểm chứng là **Cognitive Complexity**, và nó phạt **lồng nhau**, không phạt độ dài. Đo tách hai loại thì thấy rõ: `getHoldingDetail` 198 dòng nhưng **1 cấp rẽ nhánh** (dài-tuyến-tính, để yên); `updateTransaction` lồng 9 cấp nhưng chỉ 2 cấp rẽ nhánh — phần còn lại là cây `select` (tự khỏi khi trích select shape); chỉ `recordDividend` phức tạp thật (415 dòng, 5 cấp rẽ nhánh, 3 trách nhiệm) → ưu tiên tách cao nhất. Tiêu chí tách: **>1 trách nhiệm** hoặc **lồng rẽ nhánh ≥ 4**. Lint dùng `sonarjs/cognitive-complexity` + `max-depth`, **không** dùng `max-lines-per-function` (bắt oan hàm dài-tuyến-tính, bỏ lọt hàm ngắn-rối).
-- **(5) Comment: phân 3 loại, chỉ 1 loại là mùi.** Giữ và viết thêm loại "giải thích vì sao" (lịch sử bug, lý do nghiệp vụ — `cost-basis.ts` là mẫu tốt). Loại phải diệt: **comment trỏ sang chỗ khác** (*"xem ghi chú ở X"*, *"khớp với Y"*, *"cùng pattern Z"*) — đó không phải tài liệu mà là cơ chế thực thi thủ công cho một Connascence of Meaning; đếm số comment loại này = đếm số chỗ chờ lệch. Repo hiện có 8.
-- **(6) Backfill dữ liệu dẫn xuất viết bằng TypeScript, cấm công thức nghiệp vụ trong SQL migration.** Ca thật: `20260711092933_backfill_holding_position/migration.sql` tự khai là *"a hand-written SQL REPLICA of derivePosition()"* kèm dặn *"if that logic changes, add a NEW migration"*; sau đó `derivePosition()` **đã đổi** (issue #59) và không có migration mới nào. Hậu quả lần này bằng 0 nhờ may mắn về thứ tự thời gian (backfill chạy trước khi tính năng cổ tức tồn tại), nhưng **cơ chế đã thất bại** — quy tắc ép bằng comment trong file bất biến thì không ai theo. Đây là Connascence of Algorithm xuyên ngôn ngữ, compiler không với tới, và công cụ drift detection hiện có chỉ dò lệch **schema** chứ không dò lệch **logic** → cách duy nhất là không tạo ra. Lý do chính đáng duy nhất để viết SQL thuần (hiệu năng bảng cực lớn) không tồn tại ở quy mô Navtrack. Migration cũ giữ nguyên (bất biến); luật áp cho migration mới.
-- **(7) Test: rút phần thuần ra khỏi vỏ, KHÔNG mock Prisma.** `features/*/actions.ts` + `queries.ts` hiện 0 test, chỉ được phủ bởi e2e — mà e2e cần Docker nên không chạy được trên Claude Cloud (`TOOLS.md`), tức nửa số phiên làm việc không có lưới an toàn. Mock DB bắt lỗi gõ sai nhưng bỏ lọt vi phạm constraint/quan hệ sai và tạo test xanh giả → không dùng. Thay vào đó rút phần thuần (vd ~80 dòng cuối `recordDividend` dựng `DividendFormState`) ra hàm thuần có `.test.ts`, để vỏ mỏng tới mức không còn gì đáng test.
-- **(8) Component: ranh giới client đang ĐÚNG, ghi thành luật để không xói mòn.** Đo: 34/128 component có `"use client"`, và các `*Screen` (`DashboardScreen` 291 dòng, `HoldingDetailScreen` 227, `SnapshotDetailScreen` 238) đều là Server Component — chỉ form/chart/sheet là client. Bổ sung luật: **cấm `"use client"` ở `*Screen`/`*Section`/`layout.tsx`** (đánh dấu một component là client thì mọi component nó import cũng thành client).
-- **(9) Component: props nổ → dùng children/slot.** `DashboardScreenProps` = **25 props** (5/75 Props type có ≥10). Nguyên nhân: Props phản chiếu shape `PortfolioValuation` và `page.tsx` spread thẳng vào — thêm một chỉ số phải sửa 3 chỗ. Luật: **biến thiên ở dữ liệu → props; biến thiên ở cấu trúc → children/slot**. Container là Server Component nên truyền JSX xuống không tốn gì.
-- **(10) Component: thêm tiêu chí tách theo ranh giới stream.** Trong RSC, đơn vị tách không chỉ là "tái dùng được" mà còn là ranh giới `<Suspense>` và ranh giới cache/revalidate — một vùng UI có nguồn dữ liệu riêng và tốc độ riêng **phải** là component riêng, kể cả khi chỉ dùng một lần. Atomic Design không có khái niệm này; khi hai tiêu chí xung đột, ranh giới stream thắng.
-- Docs đã sync: `docs/rules/clean-code.md` (**mới**), `docs/rules/data-prisma.md` (tầng `repository.ts` + ranh giới transaction), `docs/rules/schema.md` (backfill), `docs/rules/testing.md` (core/shell), `docs/rules/component-architecture.md` (cấm client ở Screen/Section, slot, ranh giới stream), `docs/rules/project-structure.md` (ba vai trong feature), `docs/coding-rules.md` (index).
-
-## 2026-07-28
-
-**Tách variant component thay vì switch lặp lại theo enum — rule mới, phát hiện qua code review PR #102.**
-
-Bối cảnh: review PR #102 (issue #100, dọn nợ enum) phát hiện `DividendForm.tsx` phình tới 884 dòng với **9 chỗ** `switch(type)`/IIFE cho cùng một biến `type: DividendType`, mỗi chỗ đều có nhánh chết `case "BOND_COUPON": return null` (giá trị UI chưa cho chọn — `SegmentedControl` chỉ có CASH/STOCK). Nguyên nhân gốc: rule "switch exhaustive cho mọi điểm rẽ nhánh enum" (`typescript-style.md` mục "Enum", chốt 2026-07-25 (8)) áp đúng ở **từng điểm rẽ nhánh** nhưng không có giới hạn cho việc **cùng một biến bị rẽ nhánh nhiều lần trong cùng một component** — khoảng trống đó là thứ thực sự gây phình file, không phải bản thân việc dùng `switch`.
-
-- **Rule mới:** khi cùng một biến enum bị `switch`/ternary/IIFE để chọn JSX khác nhau ở **≥ 3 chỗ** trong một component, dừng thêm switch tại chỗ — tách theo **variant component** (1 component/giá trị enum, vd `CashDividendFields`/`StockDividendFields`), container rẽ nhánh **đúng một lần** để chọn component nào render. Phần dùng chung giữa các biến thể (không phụ thuộc enum) tách thành atom/molecule nhỏ nhận props thuần, để cả hai variant cùng gọi thay vì nhân đôi JSX.
-- **Khác với rule "props nổ → children/slot" (2026-07-26 (9)):** rule đó xử lý nhiều **vùng UI độc lập** trong một layout (Dashboard 8 vùng, mỗi vùng chỉ hiện 1 lần). Rule mới này xử lý một **enum lặp lại xuyên suốt nhiều vùng không liền kề** — khác cơ chế nên không dùng chung giải pháp `children`.
-- **Kế hoạch chia cụ thể cho `DividendForm.tsx`** (áp dụng ngay sau khi rule được ghi): atom dùng chung `PreviewBreakdownCard` (card header+2 hàng+footer highlight — CASH và STOCK **cùng shape**, chỉ khác data, không cần switch), `PreviewFormulaRow` (icon Sigma + children là câu chữ, khác cấu trúc câu theo type nên dùng children chứ không phải data), `InfoNote` (icon+tone+children), `PaymentDateField` (DatePicker dùng chung + children là ghi chú khác nhau theo type). Hai variant `CashDividendFields`/`StockDividendFields` tự tính preview (`pricePerShare`/`grossAmount`/`taxAmount`/`netAmount` cho CASH, `stockDividend`/`addedQuantity`/`afterQuantity` cho STOCK) và lắp các atom trên. `DividendForm` chỉ giữ phần thật sự chung (PageHeader, HoldingSwitcher, SegmentedControl, checkbox điều chỉnh giá, nút submit, wiring `useActionState`).
-- **Điểm không tách trọn vẹn được, chấp nhận có chủ đích:** nút Submit (dùng chung) cần biết `overrideInvalid` — giá trị chỉ STOCK tính được (so lệch tolerance số làm tròn) — nên `StockDividendFields` phải báo ngược lên `DividendForm` qua callback (`onValidityChange`), không cô lập 100% xuống variant component được. `percentDecimal` (dùng cho điều kiện disable chung) không phụ thuộc `type` nên tính ở `DividendForm`, không cần báo ngược.
-- **Không tách `BondCouponDividendFields` ngay bây giờ** — issue #101 chưa triển khai UI trái tức (`SegmentedControl` chưa có option này), tạo component rỗng lúc này chỉ chuyển dead code từ switch sang file riêng, không giải quyết gì. Thêm khi #101 thật sự làm UI.
-- Docs đã sync: `docs/rules/typescript-style.md` (mục "Enum" — thêm giới hạn), `docs/rules/component-architecture.md` (mục mới "Biến thiên theo enum nghiệp vụ lặp lại → tách variant component").
-
-## 2026-07-28 (2)
-
-**Implement Phase 7 lớp Server Action — issue #58 (trái tức) + #101 (tất toán đáo hạn). 5 quyết định phát sinh lúc code mà spec chưa phủ.**
-
-- **(1) Thứ tự "Dividend trước `Cashflow{MATURITY}` cùng ngày" hiện thực bằng HẠNG (`rank`), thắng cả `createdAt`.** Spec đã yêu cầu quy ước này (`03-dividends.md` ca biên) nhưng không nói cài thế nào. `sortByPositionTrailOrder()` (`lib/position-trail.ts`) nay sort theo `(date, rank, createdAt, id)` — `rank` chèn **trước** `createdAt` vì đây là quy ước domain ("lãi phát sinh trên số dư TRƯỚC khi tất toán"), phải thắng thứ tự người dùng bấm nút. `cashflowEventRank()` là nguồn DUY NHẤT xếp hạng (switch exhaustive), dùng ở `buildPositionEvents()`, `derivePosition()` và `computeRealizedGainForHolding()` — không nơi nào tự so `type === "MATURITY"`. Nếu chỉ dựa `createdAt` như trước: ghi tất toán rồi mới ghi trái tức kỳ cuối cùng ngày → "SL tại ngày trả lãi" = 0 → trái tức ra **0 đồng**, sai âm thầm; và `wentNegative` báo "bán vượt" oan.
-
-- **(2) Kỳ trả lãi trên lịch sử được SUY NGƯỢC, không đọc `BondTerms` hiện tại.** Schema (#56) chỉ đóng băng `parValueApplied`/`couponRatePercentApplied`, **không** đóng băng `couponFrequencyMonths` — nhưng nhãn lịch sử là `9%/năm · kỳ 6 tháng`, tức kỳ trả lãi nằm TRONG nhãn. Đọc từ `BondTerms` hiện tại sẽ vi phạm tiêu chí "sửa điều khoản không làm đổi nhãn của kỳ đã ghi". Giải: đảo ngược công thức `computeBondCoupon()` — `freq = gross × 1200 / (par × rate × SL)` (`deriveCouponFrequencyMonths()`). Chọn cách này thay vì **thêm cột `couponFrequencyMonthsApplied`**: mọi thừa số đều đã lưu nên phép đảo là chính xác tuyệt đối (không phải ước lượng), và tránh một migration nữa khi migration của #56 còn chưa chạy được. Không ra số tháng nguyên (user sửa tay số tiền) → trả `null`, ẩn phần "· kỳ N tháng" thay vì bịa.
-
-- **(3) Thuế trái tức + thuế đáo hạn nhận giá trị sửa tay; thuế cổ tức `CASH` thì KHÔNG.** Cả hai màn Phase 7 dùng `AutoFilledAmountCard` (`fieldName="taxAmount"`) nên client thực sự gửi `taxAmount` lên — đúng nguyên tắc "form chỉ prefill, không khoá field" (`07-tax.md`). Nhưng nới lỏng này **không được lan** sang `CASH`: `recordDividendSchema` từ chối request `CASH`/`STOCK` có kèm `taxAmount` thay vì bỏ qua âm thầm ("không tin client"). Khi user sửa thuế, `netAmount` tính lại theo thuế hiệu lực.
-
-- **(4) Điều khoản trái phiếu là ROUTE RIÊNG `/holdings/[id]/bond-terms`, không nhét vào form sửa vị thế.** Đảo mô tả ở `phase-7.md` mục 4 và `UI_phase_7.md` điểm 3 (dự kiến lắp `BondTermsFields` vào `NewHoldingForm`). Lý do: đây là **đích** của mọi chỗ báo thiếu điều khoản — màn chặn 7g ("Nhập điều khoản ngay"), link "Sửa điều khoản" trên thẻ tóm tắt ở form ghi trái tức — nên cần một URL ổn định; nhét vào form vị thế thì các chỗ đó phải trỏ tới một form dài không liên quan rồi mong user tự cuộn xuống đúng nhóm field. `BondTermsFields` (Presentational, #57) giữ nguyên, chỉ thêm `BondTermsForm` bọc state + gọi `saveBondTerms`.
-
-- **(5) `BondTerms` là dữ liệu của feature HOLDINGS, không phải dividends.** Truy vấn `findBondTerms`/`upsertBondTerms` sống ở `features/holdings/repository.ts`; nhánh ghi trái tức (`features/dividends/actions.ts`) import từ đó. Lý do: `BondTerms` là đặc tả của chính vị thế (1-1 với `Holding`, nhập trên màn vị thế) — để mỗi feature tự viết một truy vấn cùng bảng là đúng pattern lặp tri thức mà `clean-code.md` mục 1 cấm. Tương tự, hằng số `CASH_FLOW_DIVIDEND_TYPES` (`lib/enums.ts`) thay 3 chỗ tự viết `type: "CASH"` khi lọc dòng tiền XIRR — `phase-7.md` mục 3 đã nêu đích danh rủi ro "không sửa thì tiêu chí phase không đạt mà không test nào fail".
-
-- **Lỗ hổng phát hiện thêm khi rà (đã vá):** form sửa giao dịch (`TransactionForm`) chỉ có 2 lựa chọn Mua/Bán, nhưng sau #101 thì `Cashflow{MATURITY}` đã tồn tại thật và **sửa được qua form đó** — đổi `MATURITY` → `SELL` sẽ âm thầm chuyển sang chế độ thuế khác hẳn (0,1% trên toàn bộ mệnh giá hoàn trả) và đi vòng qua mọi kiểm tra của luồng tất toán. Vá: sửa một dòng `MATURITY` thì bộ chọn loại đổi thành nhãn tĩnh, các field khác vẫn sửa bình thường.
-
-- Docs đã sync: `docs/domain/03-dividends.md` (cách tính + hiển thị lịch sử + ca biên), `docs/domain/07-tax.md` (hàm thuần, chặn khi thiếu `BondTerms`, loại giao dịch không phải input client), `docs/domain/10-cashflow-calendar.md` (cài đặt `lib/bond-schedule.ts`, giới hạn thiếu `maturityDate`, `nextCouponDateOverride` chưa có UI), `process/phase-7.md` (tick mục 2-4 + tiêu chí, thêm mục "Trạng thái verify" và "Việc còn treo"), `process/UI_phase_7.md` (route thật).
-
-## 2026-07-28 (3)
-
-**Đảo quyết định (2) của mục 2026-07-28 (2) — kỳ trả lãi trên lịch sử trái tức phải là MỘT CỘT đóng băng, không phải phép đảo công thức. Phát hiện khi user hỏi lại "9% là số cố định à?".**
-
-Bối cảnh: mục (2) hôm nay chốt suy ngược kỳ trả lãi từ dữ liệu đã lưu — `freq = grossAmount × 1200 / (parValueApplied × couponRatePercentApplied × SL_tại_ngày_ghi)` — với lý do "mọi thừa số đều đã lưu nên phép đảo chính xác tuyệt đối" và "tránh thêm một migration khi migration #56 còn chưa chạy được".
-
-- **Cả hai lý do đều sai.**
-  - **Không phải mọi thừa số đều đã lưu.** `parValueApplied` và `couponRatePercentApplied` đóng băng thật, nhưng **`SL_tại_ngày_ghi` thì không** — nó được `buildQuantityTimeline()` phát lại từ toàn bộ `Cashflow`/`Dividend` **mỗi lần đọc**. Tôi đã tránh được phụ thuộc vào `BondTerms` nhưng thay bằng một phụ thuộc khác còn dễ đổi hơn: lịch sử giao dịch.
-  - **Không có migration nào để tránh.** `prisma/migrations/` chưa từng có migration cho `BondTerms`/`parValueApplied` (issue #56 mới chỉ sửa `schema.prisma`, `prisma migrate dev` chưa chạy lần nào vì hạ tầng). Nghĩa là chưa có một dòng dữ liệu thật nào, thêm cột lúc này gần như miễn phí — đúng thời điểm rẻ nhất để sửa.
-
-- **Ca hỏng cụ thể** (số thật, mockup TCB2528 — par 100tr, 9%/năm, kỳ 6 tháng, giữ 2 TP → gộp 9tr):
-  | Hành động | `SL_tại_ngày_ghi` | Nhãn hiển thị |
-  |---|---|---|
-  | Ghi trái tức | 2 | `kỳ 6 tháng` ✅ |
-  | Nhập bù 1 lệnh mua bị sót, lùi ngày trước đó | 3 | **`kỳ 4 tháng`** ❌ |
-  | Xoá 1 lệnh mua cũ | 1 | **`kỳ 12 tháng`** ❌ |
-
-  Cả 4, 6, 12 đều là kỳ trả lãi **hợp lệ ngoài đời**, nên kết quả sai không có vẻ gì bất thường — **sai âm thầm**, đúng loại lỗi mà cơ chế đóng băng sinh ra để chặn. Sửa/xoá giao dịch cũ là thao tác bình thường của app (4 Server Action đã có từ Phase 1), không phải ca hiếm.
-
-- **Quyết định:** thêm `Dividend.couponFrequencyMonthsApplied Int?`, ghi cùng lúc với 2 field đóng băng kia trong `recordBondCouponDividend`. Đường đọc (`getDividendHistory`) đọc thẳng cả 3 field, **không còn phép tính nào** — không có gì để trôi. Hàm `deriveCouponFrequencyMonths()` và 5 test của nó bị xoá hẳn thay vì giữ làm fallback: giữ lại một cài đặt song song đã biết là sai chính là pattern gây chuỗi bug retrofit ở `derivePosition`/`computeRealizedGainForHolding` (2026-07-24 (2)(3)).
-
-- **Bài học rút ra, áp cho lần sau:** "suy ngược từ dữ liệu đã lưu" chỉ an toàn khi **mọi** thừa số của phép đảo cũng bất biến. Trước khi thay một cột bằng một công thức đảo, liệt kê từng thừa số và hỏi "cái này có đóng băng không" — một thừa số derive-lại-lúc-đọc là đủ để phá bất biến. Tiền lệ ngược lại đã có sẵn trong repo và tôi đã bỏ qua: `percentLabel` của `CASH`/`STOCK` cũng suy ngược và cũng phụ thuộc `SL trước đó` — nhưng ở đó suy ngược là **bắt buộc** (`Dividend` không lưu `percent`, quyết định từ Phase 4), còn ở đây thì không.
-
-- Docs đã sync: `prisma/schema.prisma` (cột mới + comment nêu đích danh cái bẫy), `docs/02-data-model.md` (model `Dividend`), `docs/domain/03-dividends.md` (mục "Hiển thị lịch sử" — viết lại, bỏ mô tả cách suy ngược), `process/phase-7.md` (mục 1 + "Trạng thái verify").
-
-## 2026-07-29
-
-**Sửa 3 lỗi + 3 điểm sạch code từ review vòng 2 của PR #102 (phần #57 UI + #58/#101).** Cả 3 lỗi đều nằm ở đường ghi thật qua DB — vùng unit test không chạm và `pnpm e2e` chưa từng chạy được trên Claude Cloud.
-
-- **(1) Hằng số "một nguồn sự thật" KHÔNG phải cơ chế compiler — phải grep cả `src/lib/`, không chỉ `features/*/repository.ts`.** `CASH_FLOW_DIVIDEND_TYPES` được lập ra ở #58 đúng để chặn ca "thêm `BOND_COUPON` mà quên một chỗ lọc", nhưng lần rà đó chỉ tìm trong tầng repository và bỏ sót `getAllCashDividendsForXirr()` (`lib/portfolio-valuation.ts`) — một truy vấn `db.dividend` thẳng, sống ngoài DAL. Hệ quả: trái tức vào XIRR của **từng vị thế** nhưng biến mất khỏi XIRR / `absolutePnl` / chi phí ăn mòn **cấp danh mục**; hai con số lệch nhau âm thầm và trái phiếu chính phủ giữ tới đáo hạn (toàn bộ lợi nhuận nằm ở coupon) tụt XIRR về gần 0. Comment của chính hằng số đó cũng đếm sai ("2 repository function") — đã sửa thành 3 kèm ghi rõ chỗ dễ sót.
-  - **Bài học:** quên dùng một hằng số dữ liệu không bao giờ là lỗi build. Muốn chặn cứng thì phải bỏ hẳn cài đặt song song (gộp về `findCashDividendsForHoldings`), chưa làm được ở đây vì `computeXirrCore()` không có `userId` trong chữ ký. Ghi lại làm việc còn treo.
-
-- **(2) Khoá bằng UI không phải là khoá.** Mục 2026-07-28 (2) ghi lỗ hổng `MATURITY → SELL` là "đã vá", nhưng bản vá chỉ nằm trong `TransactionTypeField` (client) — `<input type="hidden" name="cashflowType">` vẫn sửa được. Tệ hơn, chiều ngược lại rộng hơn: `cashflowTypeEnum = z.enum(CASHFLOW_TYPES)` và #56 đã thêm `MATURITY` vào mảng đó, nên **cả 3 schema** (`newHolding`/`addTransaction`/`updateTransaction`) lặng lẽ nhận thêm một loại mà form không bao giờ hiển thị → tạo được `Cashflow{MATURITY}` trên vị thế **bất kỳ, kể cả vàng**, bỏ qua toàn bộ kiểm tra `holding.type = BOND` + `BondTerms` tồn tại của `settleMaturity`.
-  - **Quyết định:** tách `manualCashflowTypeEnum` (`BUY`/`SELL`) cho `transactionFields`; `updateTransactionSchema` **vẫn** nhận `MATURITY` (không thì không sửa nổi ngày/số lượng của một dòng đáo hạn) và việc chặn **đổi** loại chuyển xuống `updateTransaction`, nơi đọc được loại đang lưu trong DB. Chặn cả hai chiều.
-  - **Bài học:** một enum Prisma mở rộng ở phase sau sẽ **tự động** nới lỏng mọi `z.enum(<ENUM>)` đang dùng nó. Enum của *form* và enum của *DB* là hai thứ khác nhau ngay khi có một giá trị chỉ-hệ-thống-sinh — tách sớm, đừng đợi.
-
-- **(3) "Prefill sửa được" chỉ đúng khi client và server tính trên CÙNG một cơ sở.** `AutoFilledAmountCard` render `<input type="hidden">` **vô điều kiện**, nên `taxAmount` luôn có mặt trong `FormData` → nhánh tự tính của `recordBondCouponDividend` là code chết. Mà hai bên tính trên SL khác nhau: card dùng `Holding.quantity` (SL **hiện tại** — thứ duy nhất client có), server dùng **SL tại ngày trả lãi**. Kết quả `netAmount = gross(theo ngày trả lãi) − tax(theo SL hiện tại)`, sai tiền không tín hiệu, lộ ra đúng lúc **ghi bù một kỳ cũ** sau khi đã mua thêm — chính ca mà lịch trả lãi neo `firstCouponDate` sinh ra để hỗ trợ.
-  - **Quyết định:** thêm prop `submitWhenAuto` (mặc định `true`, giữ nguyên hành vi `TransactionForm` — ở đó schema dùng `.default("0")` nên field vắng mặt sẽ thành 0, không phải "số app tự tính"). `BondCouponFields` đặt `false`. Kèm guard server chặn `taxAmount > grossAmount` (`netAmount` là dòng tiền **dương** vào XIRR, giá trị âm sẽ trôi vào như thể trái tức làm mất tiền).
-  - **Quy tắc rút ra:** schema nhận field kiểu "prefill sửa được" phải để `.optional()`, **KHÔNG** `.default()` — "vắng mặt" phải mang nghĩa "dùng số server tự tính", không phải "bằng 0".
-
-- **(4) Không prefill con số mà form không hiển thị.** `settleMaturity` prefill `feeAmount` từ `TRANSACTION_FEE_SELL_BOND` "cho nhất quán", nhưng màn tất toán không có ô phí nào — một `Setting` khác `0` sẽ trừ vào `Cashflow.amount` một khoản user không thấy, lệch với dòng "Thực nhận" vừa xác nhận. Bỏ hẳn (mặc định `0`), khớp đúng lập luận nghiệp vụ "đáo hạn không qua lệnh khớp CTCK". Seed hiện là `0` nên chưa ai gặp — sửa trước khi có người chỉnh Setting.
-
-- **(5) Bất biến "type X ⇒ field Y có mặt" biểu diễn bằng union, không bằng `!`.** `RecordDividendTxCtx` chuyển từ object phẳng (`bond?: BondCouponContext` + 4 dấu `!` ở call site) sang union theo `type`. Dựng union đặt trong `buildRecordDividendTxCtx()` với `switch` — chỉ ở đó `type` mới thu hẹp về literal trong từng nhánh, viết inline bằng `if`/ternary thì TypeScript không giữ được liên hệ qua một biến `let` (đúng chỗ 4 dấu `!` cũ đã nấp). Cùng tinh thần union `RecordedDividend` không có `priceAdjustment` ở nhánh `BOND_COUPON`.
-  - **Còn treo:** `percent!` ở cuối `recordDividend` chưa bỏ được — `percent` bắt buộc theo `type` bằng `.refine()`, mà refine của zod không thu hẹp kiểu suy ra. Bỏ hẳn `!` đòi chuyển `recordDividendSchema` sang `z.discriminatedUnion("type", ...)`, kéo theo đổi đường lỗi + test, ngoài phạm vi lần sửa này. Tạm thời thêm guard runtime thật ngay đầu hàm để `!` dựa trên một kiểm tra đã chạy chứ không chỉ dựa vào refine ở file khác.
-
-- **(6) `assertBondHoldingType(holding.type)` trong `saveBondTerms` là dòng chết** — đứng sau early return `holding.type !== "BOND"` nên TS đã thu hẹp, assertion không thể ném. Xoá; giữ lại chính hàm đó cho các đường ghi không có kênh lỗi hướng user (seed/backfill), comment của nó đã sửa cho khớp thực tế.
-
-- Docs đã sync: `docs/domain/05-returns-xirr-and-pnl.md` (tập Dividend trong chuỗi XIRR + cái bẫy sót call site), `docs/domain/03-dividends.md` (nghĩa của "sửa tay" + chặn `tax > gross`), `docs/domain/07-tax.md` (phí đáo hạn mặc định 0, `MATURITY` không đi ngược vào form giao dịch thường), `src/lib/enums.ts` (comment đếm lại cho đúng), `src/lib/bond-terms.ts` (comment khớp thực tế).
-
-- **Việc còn treo (không chặn phase):**
-  - Gộp `getAllCashDividendsForXirr()` về `findCashDividendsForHoldings()` để bỏ hẳn truy vấn song song — cần thêm `userId` vào chữ ký `computeXirrCore()` (bản trong `portfolio-valuation.ts` cũng đang thiếu filter `holding: { userId }` mà bản repository đã có).
-  - `recordDividendSchema` → `z.discriminatedUnion("type", ...)`, xoá `percent!`.
-  - **e2e bắt buộc trước khi merge** (chỉ chạy được trên Claude Local): (a) ghi bù một kỳ trái tức cũ **sau khi đã mua thêm** — kiểm `gross`/`tax`/`net` cùng một cơ sở SL; (b) trái tức kỳ cuối trả đúng ngày đáo hạn, ghi tất toán **trước** rồi mới ghi trái tức — bất biến `SETTLEMENT_RANK`.
-
-## 2026-08-08
-
-**Mở rộng override thủ công sang `grossAmount` cho trái tức (`BOND_COUPON`) — theo đúng pattern `taxAmount` đã có (issue #58), cộng thêm 1 quyết định khác tiền lệ.**
-
-- **Bối cảnh:** `grossAmount` trái tức tính hoàn toàn tự động từ `BondTerms` (mệnh giá × lãi suất × kỳ hạn × SL replay tại ngày trả lãi). Bond lãi suất thả nổi (đã ghi nhận ngoài phạm vi Phase 7 — model giả định coupon rate cố định) khiến số tự tính lệch số thực nhận trên sao kê phát hành, không có lối sửa.
-- **(a) Mở rộng override sang gross theo đúng cơ chế tax đã có:** field `grossAmount` mới trong `recordDividendSchema`, cùng refine "chỉ nhận khi `type === BOND_COUPON`", cùng nguyên tắc "prefill sửa được" (`.optional()`, KHÔNG `.default()` — vắng mặt = dùng số server tự tính, xem mục 2026-07-29 (3)). `AutoFilledAmountCard` (`submitWhenAuto={false}`) đảm bảo field chỉ có mặt trong FormData khi user THẬT SỰ gõ, tránh đúng bug (3) ở trên (client tính theo SL hiện tại, server tính theo SL-tại-ngày-trả-lãi).
-- **(b) Thêm cờ `Dividend.grossAmountOverridden Boolean @default(false)` dù `taxAmount` không có tiền lệ (không có `taxAmountOverridden`).** Lý do khác biệt có chủ đích: `grossAmount` là số **gốc** dùng cho XIRR và báo cáo thuế (thuế/net đều tính từ nó), trong khi `taxAmount` chỉ là một khoản trừ. Khi audit lịch sử về sau, cần phân biệt được một `grossAmount` lệch so với công thức chuẩn là do (i) lãi suất coupon thật đổi (thả nổi), (ii) SL replay tại ngày trả lãi lệch (ghi bù/sửa giao dịch cũ), hay (iii) user tự sửa tay — thiếu cờ này thì không tài nào tách được 3 nguyên nhân chỉ từ con số đã lưu.
-- **(c) Đổi guard `taxAmount > grossAmount` sang so với `grossAmount` CUỐI CÙNG (đã qua override), không phải `computed.grossAmount` (số tự tính) — coi là bug fix ẩn trong tính năng mới, không phải hành vi mới độc lập.** Guard cũ vô tình đúng khi gross không override được (computed = final), nhưng giờ có override thì so với số tự tính sẽ để lọt ca user hạ gross xuống thấp hơn thuế đã prefill mà không bị chặn — `netAmount` âm trôi vào XIRR y hệt lỗ hổng gốc mà guard này sinh ra để chặn (docs/domain/03-dividends.md). `netAmount = grossAmount.minus(taxAmount)` và giá trị ghi DB đều đổi theo số cuối cùng tương ứng; `computed.grossAmount` gốc vẫn giữ nguyên biến riêng, không xoá (không dùng cho tính toán tài chính nữa, nhưng còn có thể cần cho UI so sánh "số tự tính vs số đã sửa").
-- **`parValueApplied`/`couponRatePercentApplied`/`couponFrequencyMonthsApplied` giữ nguyên hành vi cũ** — luôn đóng băng theo `BondTerms` gốc tại thời điểm ghi, độc lập hoàn toàn với việc `grossAmount` có bị sửa tay hay không (đây là 3 field mô tả ĐIỀU KHOẢN áp dụng, không phải SỐ TIỀN cuối cùng).
-- Docs đã sync: `docs/domain/03-dividends.md` (mục "Cách tính" nhánh `BOND_COUPON`), `prisma/schema.prisma` (comment field mới).
-- **Việc còn treo:** UI badge "đã chỉnh tay" ở lịch sử (`DividendRowsFilter.tsx`) và card `AutoFilledAmountCard` thứ hai cho gộp ở `BondCouponFields.tsx` đã hoàn thành trong cùng lượt này. Chỉ còn treo: soi UI qua Playwright + `pnpm e2e` cho luồng ghi trái tức có override gross — tạm hoãn (hết usage AI lượt này), làm ở lượt sau.
-## 2026-08-12
-
-**Từ chối hướng "thay Docker bằng Neon cho e2e trên Claude Cloud" — thêm process gate (`issuer` bắt buộc biết trạng thái e2e trước khi tạo PR) để đóng lỗ hổng đã ghi ở 2026-07-26 (7) thay vì mang DB thật lên Cloud.**
-
-- Bối cảnh: user đề xuất thay `docker-compose.test.yml` (Postgres ephemeral, tmpfs, tự sạch khi container down) bằng 1 connection string DB online (Neon) để Claude Cloud (không có Docker daemon) cũng tự chạy được `pnpm e2e` thật thay vì chỉ soi UI qua Playwright MCP. Lo ngại chính do user tự nêu: dữ liệu test không được dọn sạch hợp lý giữa các lần chạy.
-- **Từ chối hướng Neon.** Lo ngại của user đúng và thực chất nghiêm trọng hơn "tồn dư dữ liệu" — là **race/corruption thật**. Bộ e2e hiện tại được thiết kế với giả định chỉ 1 runner sở hữu toàn bộ DB tại một thời điểm: `playwright.config.ts` đã hạ `workers` xuống 1 chính vì lỗi race khi nhiều test cùng sửa `Setting`/`PriceQuote` dùng chung (`e2e/GOTCHAS.md` #14); cái "sạch" hiện tại đến từ việc **cả container bị huỷ và dựng lại** (tmpfs, không named volume), không phải từ logic dọn dữ liệu trong code. Một Neon URL cố định dùng chung giữa nhiều phiên Claude Cloud chạy song song sẽ tái tạo đúng loại race đó ở quy mô lớn hơn (2 phiên cùng `prisma migrate deploy`/`db seed`/thao tác chung 1 `userId` test) — có thể làm giảm độ tin cậy của e2e như "lưới an toàn" thay vì cải thiện nó. Đưa 1 connection string dùng chung vào cả 2 phiên còn **chủ động phá bỏ** sự cô lập tự nhiên đang có hôm nay (mỗi sandbox Cloud là máy riêng, không ai cầm credential DB nào).
-- Neon Database Branching (branch-per-run, gần tương đương tmpfs) có thể giữ đúng tinh thần ephemeral, nhưng là một khoản đầu tư hạ tầng riêng (project Neon tách khỏi prod để không ăn compute-hour vào ngân sách ~$0/tháng, kênh inject secret an toàn cho Cloud mà `TOOLS.md` chưa mô tả có tồn tại, cleanup + reaper theo TTL phòng process bị kill giữa chừng) — không tương xứng quy mô app cá nhân 1-2 người dùng. Để ngỏ cho tương lai nếu mục tiêu đổi thành "Cloud phải tự verify e2e độc lập, không phụ thuộc chờ Local".
-- **Gốc rễ thật của "nửa số phiên Cloud không có lưới an toàn" (2026-07-26 (7)) không hoàn toàn do thiếu DB trên Cloud, mà do quy trình thiếu gate cứng chặn merge khi PR được tạo từ phiên e2e mới `SKIP`.** `dev-cycle` (Bước 6) vẫn tự commit → push → tạo PR dù e2e chưa từng chạy thật, không có tín hiệu nào cảnh báo trên PR — checkbox `pnpm e2e pass` trong `.github/pull_request_template.md` có thể bị tick nhầm hoặc bị bỏ qua khi review.
-- **Quyết định:** `issuer` bắt buộc nhận trạng thái e2e (`ĐẠT`/`CHƯA ĐẠT`/`SKIP`/`N/A`, mặc định an toàn coi như `SKIP` nếu không được truyền — không tự đoán, không tự chạy `pnpm e2e` để xác nhận thay) từ người gọi khi giao việc tạo PR, phản ánh qua 3 lớp: banner cảnh báo là dòng đầu tiên của PR body khi khác `ĐẠT`/`N/A`, checkbox `pnpm e2e pass` trong Test plan để đúng thực tế (không tự tick), và **tạo PR ở trạng thái Draft** khi khác `ĐẠT`/`N/A` (gate cơ học thật — GitHub tự ẩn nút Merge — thay vì chỉ dựa vào chữ cảnh báo dễ lướt qua khi review; best-effort, tool không hỗ trợ tham số draft thì vẫn tạo PR thường kèm banner/checkbox). `dev-cycle` Bước 6 forward nguyên văn trạng thái e2e đã xác định ở Bước 4/5 khi spawn `issuer`.
-- **Không sửa `.github/pull_request_template.md`.** Banner chỉ nên xuất hiện có điều kiện (khi thực sự SKIP/CHƯA ĐẠT/chưa xác định) — một banner tĩnh nằm sẵn trong template sẽ buộc mọi PR (kể cả PR tạo tay, e2e đã chạy thật) phải nhìn thấy/tự xoá tay, nhiễu và dễ quên xoá đúng lúc cần giữ. Chèn động lúc tạo PR (việc của `issuer`, nơi duy nhất biết trạng thái e2e thật) sạch hơn, không cần đồng bộ 2 nơi mỗi khi đổi câu chữ banner.
-- **Không thêm label GitHub cho PR** — `TOOLS.md` chưa liệt kê tool gắn label PR cho cả 2 hạ tầng; banner + checkbox + Draft đã đủ rõ, không cần thêm phụ thuộc tool mới.
-- **Giới hạn đã biết:** cơ chế chỉ áp dụng lúc tạo PR — `issuer` không mở rộng quyền sang sửa/update PR đã có (chuyển Draft → Ready, tick lại checkbox sau khi rerun e2e pass trên Local là thao tác tay của người xác nhận, giữ đúng phạm vi "chỉ tạo PR" hiện tại của `issuer`).
-- Docs đã sync: `.claude/agents/issuer.md`, `.claude/skills/dev-cycle/SKILL.md`.
+| File | Mở khi đang làm |
+|---|---|
+| [`decisions/transactions-and-cost-basis.md`](./decisions/transactions-and-cost-basis.md) | `Cashflow`, `avgCost`, `derivePosition()`, cache `Holding.quantity` |
+| [`decisions/dividends.md`](./decisions/dividends.md) | cổ tức tiền mặt/cổ phiếu, bù pha loãng NAV |
+| [`decisions/bonds-and-cashflow-calendar.md`](./decisions/bonds-and-cashflow-calendar.md) | `BondTerms`, trái tức, `MATURITY`, lịch coupon (Phase 7-8) |
+| [`decisions/pricing-and-valuation.md`](./decisions/pricing-and-valuation.md) | `NavOverride`/`PriceQuote`, NAV, cảnh báo tập trung |
+| [`decisions/returns-xirr-and-pnl.md`](./decisions/returns-xirr-and-pnl.md) | XIRR, `absolutePnl`, realized/unrealized |
+| [`decisions/tax-and-fees.md`](./decisions/tax-and-fees.md) | thuế bán, phí giao dịch, chi phí ăn mòn |
+| [`decisions/snapshots.md`](./decisions/snapshots.md) | `Snapshot`, cron chốt số liệu, lịch sử mốc |
+| [`decisions/users-access-and-privacy.md`](./decisions/users-access-and-privacy.md) | allowlist, phân quyền, ẩn số tiền |
+| [`decisions/architecture-and-code-quality.md`](./decisions/architecture-and-code-quality.md) | clean code, repository layer, component/enum rule, cache, PWA |
+| [`decisions/agent-workflow-and-tooling.md`](./decisions/agent-workflow-and-tooling.md) | e2e infra, preview surface, DesignSync, gate tạo PR |
+| [`decisions/roadmap-and-scope.md`](./decisions/roadmap-and-scope.md) | thêm/đổi phase, đưa ý tưởng vào roadmap |
+
+Quyết định về `Setting` không có file riêng — nằm cùng chủ đề dùng nó (`DIVIDEND_PAR_VALUE` → dividends, `SALE_TAX_*`/`TRANSACTION_FEE_*` → tax-and-fees, `BOND_INTEREST_TAX_RATE_*` → bonds, `CONCENTRATION_WARNING_THRESHOLD` → pricing).
+
+---
+
+## Index quyết định
+
+`A` = Accepted (còn hiệu lực) · `S` = Superseded (giữ lại để không lặp lại tranh luận cũ).
+
+### Giao dịch & giá vốn → [`transactions-and-cost-basis.md`](./decisions/transactions-and-cost-basis.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-11 | Materialize `Holding.quantity`/`avgCost`; nguồn sự thật vẫn là `Cashflow`, ghi cache trong cùng transaction (#18) | A |
+| 2026-07-16 (4) | Vị thế phải replay cả cổ tức cổ phiếu, không chỉ `Cashflow` (#59) | S → 07-24 (4) |
+| 2026-07-24 (2) | "2 bộ đếm song song" cho `realizedPnl`; cờ `pnlSplitIsApproximate` | S → 07-24 (3) (điểm (b) vẫn A) |
+| 2026-07-24 (3) | Một bộ đếm `realQuantity` duy nhất; `avgCost` chỉ đổi ở BUY | A |
+| 2026-07-24 (4) | Xoá `derivePosition()` cũ, gộp về một hàm; reset `avgCost` khi `quantity = 0` | A |
+
+### Cổ tức → [`dividends.md`](./decisions/dividends.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-16 | `DIVIDEND_PAR_VALUE`/`DIVIDEND_TAX_RATE` là Setting; cổ tức CP không đổi `avgCost`; SL-tại-ngày-ghi (#52) | A |
+| 2026-07-16 (2) | `floor(stockQuantity)` + `stockQuantityOverride`, tolerance 2 đơn vị | A |
+| 2026-07-17 | Tự tạo `NavOverride` bù pha loãng NAV; thêm `Dividend.paymentDate` (#61) | A |
+| 2026-07-17 (2) | Ghi cổ tức **không** trigger `Snapshot{MANUAL}` | A |
+| 2026-07-17 (3) | `computeCashDividendPriceAdjustment` trả `null` khi giá điều chỉnh ra âm/0 ⚠️ nhãn trùng, xem ghi chú | A |
+
+### Trái phiếu & lịch dòng tiền → [`bonds-and-cashflow-calendar.md`](./decisions/bonds-and-cashflow-calendar.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-25 (2) | Tách bảng `BondTerms`; `firstCouponDate` thay `nextCouponDate`; trái tức KHÔNG bù pha loãng NAV; 2 key thuế lãi theo `issuerType`; thêm `CashflowType.MATURITY`; rule enum | A (điểm (2) đảo ở 07-28 (3)) |
+| 2026-07-28 (2) | Thứ tự sự kiện bằng `rank`; `BondTerms` thuộc feature holdings; route riêng `/bond-terms` | A (điểm (2) → S) |
+| 2026-07-28 (3) | Kỳ trả lãi phải là **cột đóng băng** `couponFrequencyMonthsApplied`, không phải phép đảo công thức | A |
+| 2026-07-29 | 3 lỗi đường ghi: sót call site XIRR, khoá-bằng-UI không phải khoá, prefill lệch cơ sở SL | A |
+| 2026-08-08 | Override thủ công `grossAmount` + cờ `grossAmountOverridden`; guard `tax > gross` so số cuối cùng | A |
+
+### Định giá & cảnh báo tập trung → [`pricing-and-valuation.md`](./decisions/pricing-and-valuation.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-12 | `NavOverride` `@@unique([holdingId, date])` + `@db.Date` | A |
+| 2026-07-14 | Ưu tiên giá so **ngày** giữa `NavOverride`/`PriceQuote`, không "nhập tay luôn thắng" (#40) | A |
+| 2026-07-21 | Materiality 5% cho `MISSING_PRICE`; ghi chú "ít mã"; hysteresis 3 điểm %; chú thích liên kết | A |
+| 2026-07-21 (2) | Mockup Phase 6: `hideAmountsByDefault` ghi ngay; XIRR bình quân weighted | A |
+
+### XIRR & lãi/lỗ → [`returns-xirr-and-pnl.md`](./decisions/returns-xirr-and-pnl.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-19 | Mốc dòng tiền XIRR của cổ tức = `paymentDate ?? date` (#65) | A |
+| 2026-07-24 | Tách `realizedPnl`/`unrealizedPnl`; hàm mới thay vì mở rộng `derivePosition()` (#67) | A |
+
+### Thuế, phí & chi phí ăn mòn → [`tax-and-fees.md`](./decisions/tax-and-fees.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-17 (3) | SELL prefill không khoá field; BUY bỏ hẳn field thuế; `SALE_TAX_GOLD = 0` ⚠️ nhãn trùng | A |
+| 2026-07-17 (4) | Thêm "Chi phí ăn mòn" vào Phase 5 (gộp 3 nguồn chi phí) | A (mẫu số sửa ở (6)) |
+| 2026-07-17 (6) | Mẫu số đổi `totalInvested` → `grossInvested` (`Σ|BUY.amount|`) | A |
+| 2026-07-18 (2) | Sửa SELL đã ghi → **tính lại** thuế theo ngày mới; giữ sheet chi tiết cost drag | A |
+| 2026-07-18 (4) | Phí tự tính qua `TRANSACTION_FEE_<chiều>_<LOẠI>` (8 key); đóng #66 — phí mua vào `avgCost` | A |
+| 2026-07-18 (5) | `SALE_TAX_BOND = 0.1%`; nút "Đặt lại" cả 2 card; card phí vàng hiện `0 ₫` | A |
+
+### Snapshot → [`snapshots.md`](./decisions/snapshots.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-14 | Dedup bằng 2 partial unique index raw SQL, không `@@unique` (#34) | A |
+| 2026-07-14 | Job Python tự viết công thức định giá bằng SQL/Python, không gọi API route (#36) | A |
+| 2026-07-15 (2) | Serializable + `findFirst` rồi create/update; re-chốt idempotent; `updatedAt` (#37) | A |
+| 2026-07-15 (3) | Badge suy từ `period`; breakdown liên kết qua khoá dedup; ngưỡng 1 VND (#46) | A |
+
+### Người dùng & riêng tư → [`users-access-and-privacy.md`](./decisions/users-access-and-privacy.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-10 | Non-inviter không được lộ quota/allowlist; guard `canInvite` phía server | A |
+
+### Kiến trúc & chất lượng code → [`architecture-and-code-quality.md`](./decisions/architecture-and-code-quality.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-11 | PWA tối giản: không cache số liệu tài chính offline, SW viết tay | A |
+| 2026-07-11 | Cache "có chọn lọc"; **cache key scoped-user phải gồm `userId` làm tham số** | A |
+| 2026-07-11 | Chỉ tách Suspense khi tách được vật lý khỏi query (#12) | A |
+| 2026-07-11 | BottomNav dùng chung màn gốc, không cho form/route con | A |
+| 2026-07-12 | Cutoff qua cookie + Route Handler + hard nav | A |
+| 2026-07-26 | 10 quy tắc clean code: connascence, tầng `repository.ts`, cognitive complexity, cấm SQL nghiệp vụ trong migration, core/shell test, ranh giới client/stream | A |
+| 2026-07-28 | Cùng enum rẽ nhánh ≥3 chỗ trong 1 component → tách variant component | A |
+
+### Quy trình agent & hạ tầng → [`agent-workflow-and-tooling.md`](./decisions/agent-workflow-and-tooling.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-14 | `pnpm e2e` chạy DB Postgres riêng ephemeral (`db-test`, tmpfs, cổng 5434) | A |
+| 2026-07-15 | Integration test Python orchestrate bằng script Node, tái dùng compose test | A |
+| 2026-07-18 | Bề mặt preview dev-only; chặn production ở `proxy.ts` không phải `notFound()` | A |
+| 2026-07-18 | `design-fetcher` là owner duy nhất kéo mockup, sinh digest `UI_phase_N.md` | A (cơ chế đổi ở (3)) |
+| 2026-07-18 (3) | Orchestrator gọi `DesignSync` rồi mới spawn `design-fetcher` (#76) | A |
+| 2026-07-24 (5) | Page Object Model cho e2e; selector role/label-first, cấm bám class CSS | A |
+| 2026-07-25 | Spec e2e chuyển vào `e2e/tests/` | A |
+| 2026-08-12 | Từ chối Neon cho e2e trên Cloud; `issuer` bắt buộc biết trạng thái e2e, PR Draft khi chưa `ĐẠT` | A |
+
+### Roadmap & phạm vi → [`roadmap-and-scope.md`](./decisions/roadmap-and-scope.md)
+
+| Ngày | Quyết định | |
+|---|---|---|
+| 2026-07-16 (3) | Thêm Phase 7 (trái tức), ngoài trình tự ưu tiên gốc | A |
+| 2026-07-17 (5) | Thêm cảnh báo tập trung (Phase 6) + lịch dòng tiền (Phase 8) | A |
+| 2026-07-17 (7) | Chốt A2; log #65/#66/#67 sửa sau; B2 benchmark giữ Backlog | A (C1/C2/B1 đã đóng) |
+
+---
+
+## Ghi chú định danh
+
+- **Nhãn `2026-07-17 (3)` bị dùng cho hai quyết định khác nhau** (lỗi có sẵn trong lịch sử file, giữ nguyên để không phá citation trong code): một ở [`dividends.md`](./decisions/dividends.md) (giá điều chỉnh âm/0 — đây là cái `docs/domain/03-dividends.md` đang trỏ tới), một ở [`tax-and-fees.md`](./decisions/tax-and-fees.md) (thảo luận thuế bán Phase 5).
+- **`2026-07-21 (2)`** là nhãn thêm mới cho một sub-entry vốn không đánh số trong file gốc; citation cũ dạng `2026-07-21` vẫn đúng cho cả hai entry cùng ngày.
+- Một số comment trong `src/` trỏ tới mốc ngày không tồn tại trong file (`2026-07-13`, `2026-07-15 (4)`, `2026-07-21 (1)`) — sai sẵn từ trước, không phát sinh do việc tách file.
+
+## Việc còn treo (rút từ các entry)
+
+- Gộp `getAllCashDividendsForXirr()` về `findCashDividendsForHoldings()` (cần `userId` trong chữ ký `computeXirrCore()`) — [bonds, 2026-07-29].
+- `recordDividendSchema` → `z.discriminatedUnion("type", ...)`, xoá `percent!` — [bonds, 2026-07-29].
+- e2e cho luồng trái tức: ghi bù kỳ cũ sau khi mua thêm; trái tức kỳ cuối trùng ngày đáo hạn; override gross — [bonds, 2026-07-29 và 2026-08-08].
+- `NavOverrideForm` chưa có route thật; cutoff "Tuỳ chỉnh" (CUSTOM) chưa mockup — [architecture, 2026-07-11].
+- B2 benchmark lãi suất tiết kiệm vẫn ở Backlog — [roadmap, 2026-07-17 (7)].
