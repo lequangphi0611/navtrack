@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { formatMoney, formatQuantity, formatSignedPercent } from "@/lib/format";
 import { parseDecimalOrNull } from "@/lib/parse-decimal";
 import { cn } from "@/lib/utils";
-import { AUTO_PRICED_ASSET_TYPES } from "@/lib/valuation";
+import { AUTO_PRICED_ASSET_TYPES } from "@/lib/valuation-resolution";
 
 import type { NavOverrideFormState } from "../../types";
 

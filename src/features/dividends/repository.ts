@@ -189,6 +189,8 @@ export async function insertDividend(
     parValueApplied?: string;
     couponRatePercentApplied?: string;
     couponFrequencyMonthsApplied?: number;
+    // BOND_COUPON — true khi user đã sửa tay grossAmount (docs/domain/03-dividends.md).
+    grossAmountOverridden?: boolean;
   },
   tx: Prisma.TransactionClient = db,
 ): Promise<{ id: string }> {
@@ -269,6 +271,8 @@ export type DividendHistoryDividend = {
   parValueApplied: Decimal | null;
   couponRatePercentApplied: Decimal | null;
   couponFrequencyMonthsApplied: number | null;
+  // BOND_COUPON — true khi user đã sửa tay grossAmount (docs/domain/03-dividends.md).
+  grossAmountOverridden: boolean;
 };
 
 export type DividendHistorySource = {
@@ -315,6 +319,7 @@ export async function findDividendHistorySource(
           parValueApplied: true,
           couponRatePercentApplied: true,
           couponFrequencyMonthsApplied: true,
+          grossAmountOverridden: true,
         },
       },
     },
@@ -357,6 +362,7 @@ export async function findDividendHistorySource(
         ? new Decimal(dividend.couponRatePercentApplied.toString())
         : null,
       couponFrequencyMonthsApplied: dividend.couponFrequencyMonthsApplied,
+      grossAmountOverridden: dividend.grossAmountOverridden,
     })),
   };
 }

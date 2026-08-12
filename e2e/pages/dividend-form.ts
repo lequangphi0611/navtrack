@@ -42,6 +42,18 @@ export class DividendForm {
     return this.page.getByText(/Chỉ được lệch tối đa 2 đơn vị/);
   }
 
+  // Card "Lãi gộp" (AutoFilledAmountCard, BondCouponFields — chỉ BOND_COUPON).
+  // Input hiển thị KHÔNG có `name` (giá trị thật đi qua input hidden riêng do
+  // chính card render, xem docstring AutoFilledAmountCard.tsx) nên phải tra
+  // qua aria-label, cùng tiền lệ TransactionForm.saleTaxInput/feeInput.
+  get grossAmountInput(): Locator {
+    return this.page.getByLabel("Lãi gộp");
+  }
+
+  async setGrossAmountOverride(value: string) {
+    await this.grossAmountInput.fill(value);
+  }
+
   // Checkbox "Giá hiện tại đã phản ánh đợt chia này" — input thật ẩn (`peer
   // sr-only`, GOTCHAS #11), UI hiển thị qua <label> bao ngoài.
   get reflectsMarketCheckbox(): Locator {

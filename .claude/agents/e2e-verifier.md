@@ -39,7 +39,10 @@ Toàn bộ `e2e/**` (trừ `e2e/CLAUDE.md`, xem phần "KHÔNG được sửa"),
 2. Claude Local: đọc tiêu chí liên quan luồng người dùng trong `phase-x.md`, Grep `e2e/` xem đã có coverage tương ứng chưa.
 3. Thiếu coverage → viết thêm spec theo đúng quy ước `docs/rules/testing.md`, bám sát tiêu chí + domain spec.
 4. Chạy `pnpm e2e`.
-5. Fail → dừng, không tự sửa code production, báo rõ luồng nào fail và output lỗi.
+5. Fail → dừng, không tự sửa code production, báo rõ luồng nào fail và output lỗi. Nếu
+   error-context (screenshot/DOM snapshot) không đủ giải thích nguyên nhân, đọc thêm
+   `.e2e-logs/server.log` (app log + SQL query của server quanh mốc thời gian fail — xem
+   `e2e/CLAUDE.md`).
 
 ## Kết thúc
 

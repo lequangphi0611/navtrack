@@ -20,6 +20,16 @@ dưới, đọc **trước khi viết/sửa/chạy** bất kỳ e2e nào — đ�
   rồi `down` — kể cả khi fail. **Không bao giờ** nhắm e2e vào DB dev.
 - **Claude Cloud:** **skip** — cần Docker, không có ở Cloud. Báo rõ "chưa verify e2e được
   trong Claude Cloud", **không báo pass giả** (xem [`../TOOLS.md`](../TOOLS.md)).
+- **Log server khi fail:** mỗi lần `pnpm e2e` chạy, server (app log qua pino + SQL query
+  qua Prisma) được ghi ra `.e2e-logs/server.log` (reset về 1 dòng marker `# e2e run started
+  <timestamp>` mỗi lần, không cần dọn tay). Khi 1 test fail và error-context (screenshot/DOM
+  snapshot) không đủ giải thích nguyên nhân, đọc thêm file này quanh mốc thời gian fail.
+  **Chỉ có log khi Playwright tự spawn `pnpm dev` mới** — nếu `reuseExistingServer` (local,
+  không CI) tái dùng 1 dev server đã chạy sẵn từ trước, server đó không có biến env log nên
+  sẽ không ghi gì thêm. **File chỉ còn đúng dòng marker, không có log nào nối theo** là dấu
+  hiệu của đúng trường hợp này — đừng hiểu nhầm thành "server không log gì" hay "chưa từng
+  chạy". Muốn chắc chắn có log, tắt mọi `pnpm dev` đang chạy sẵn ở port 3000 trước khi chạy
+  `pnpm e2e`.
 
 ## Bản đồ thư mục
 

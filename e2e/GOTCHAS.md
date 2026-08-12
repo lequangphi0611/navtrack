@@ -233,3 +233,27 @@ e2e` toàn bộ spec chạm route bị đổi UI trước khi merge, không ch�
   chung xuyên toàn bộ app (không riêng 1 màn) phải rà **mọi** helper e2e đụng tới nó, không chỉ
   spec của tính năng đang sửa — `DatePicker` xuất hiện ở transaction/dividend/bond-terms/nav-
   override nên một thay đổi nhỏ ở đây có bán kính ảnh hưởng rất rộng.
+
+## 19. `fs.createWriteStream(path, { flags: "w" })` trong app để log ra file — Next dev có nhiều render-worker/process con, mỗi bên tự ghi đè, log biến mất gần như ngay lập tức
+
+- **Triệu chứng:** thêm log server ra file (`.e2e-logs/server.log`, xem `lib/logger.ts`) để
+  `e2e-verifier` đọc khi test fail — chạy `pnpm e2e` xong file trống hoặc chỉ còn vài dòng
+  cuối, dù nhiều request/Server Action chắc chắn đã log suốt cả lần chạy. Thử cache qua
+  `globalThis` (pattern `globalForPrisma` ở `lib/db.ts`) vẫn KHÔNG hết — log vẫn bị xoá gần
+  như ngay khi vừa ghi.
+- **Nguyên nhân:** `globalThis` chỉ sống trong ĐÚNG 1 process. Next dev không chạy toàn bộ
+  request trong 1 process Node duy nhất — có thể phục vụ qua nhiều render-worker/process con
+  khác nhau, mỗi bên có `globalThis` riêng, KHÔNG chia sẻ được cache. `logger.ts` mở
+  `fs.createWriteStream(path, { flags: "w" })` (ghi đè) ở module cấp top-level: bất kỳ
+  worker/process nào (hoặc module bị Turbopack nạp lại trong 1 process) mở stream này cũng
+  coi mình là "lần đầu", ghi đè sạch log mà các worker khác vừa ghi — cache `globalThis` chỉ
+  giải quyết được phần "nạp lại module trong CÙNG 1 process", không giải quyết được phần
+  "nhiều process khác nhau cùng mở file".
+- **Cách né:** chuyển việc "xoá sạch từ lần chạy trước" ra NGOÀI app, về đúng 1 tiến trình
+  chạy chắc chắn chỉ 1 lần cho cả phiên `pnpm e2e` — `scripts/e2e.mjs` (orchestrator, không
+  bị Next reload) tự `writeFileSync(path, "")` reset file TRƯỚC khi spawn Playwright/webServer.
+  App phía dưới (`lib/logger.ts`) đổi hẳn sang `flags: "a"` (append) — dù bao nhiêu
+  process/module nào mở file, cũng chỉ nối thêm, không ai được xoá của ai. **Bài học chung:**
+  side-effect "reset trạng thái về rỗng" của 1 resource dùng chung giữa nhiều tiến trình
+  không tin cậy được nếu đặt trong chính app (app không biết mình có phải "lần đầu" thật hay
+  không) — phải đặt ở tầng orchestrator bên ngoài, nơi chắc chắn chỉ chạy đúng 1 lần.

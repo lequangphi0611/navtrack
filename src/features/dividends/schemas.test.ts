@@ -124,4 +124,31 @@ describe("recordDividendSchema — trái tức (BOND_COUPON)", () => {
       expect(result.success).toBe(false);
     }
   });
+
+  // Mirror tiền lệ taxAmount: gộp tự tính từ BondTerms cũng chỉ PREFILL, user
+  // sửa tay được (vd lãi suất thả nổi lệch số thực nhận trên sao kê phát hành).
+  test("BOND_COUPON nhận lãi gộp sửa tay (prefill, không khoá field)", () => {
+    const result = recordDividendSchema.safeParse({
+      ...bondFields,
+      grossAmount: "5000000",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.grossAmount).toBe("5000000");
+  });
+
+  // "Không tin client": CASH/STOCK tính gộp từ % nên một request tay gửi kèm
+  // grossAmount phải bị TỪ CHỐI thay vì bị bỏ qua âm thầm.
+  test("CASH/STOCK gửi kèm grossAmount -> từ chối", () => {
+    for (const type of ["CASH", "STOCK"] as const) {
+      const result = recordDividendSchema.safeParse({
+        holdingId: "holding-1",
+        type,
+        date: "2026-02-01",
+        percent: "10",
+        grossAmount: "1",
+      });
+      expect(result.success).toBe(false);
+    }
+  });
 });
