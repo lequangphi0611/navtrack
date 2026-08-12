@@ -87,7 +87,7 @@ Chỉ áp dụng khi Bước 2 có dựng/sửa component Presentational (có pr
 1. `git status` + `git diff` xem lại toàn bộ thay đổi (code + test verifier/e2e-verifier viết thêm + doc tiến trình nếu có).
 2. Tạo commit mới (không amend), message tiếng Anh theo quy ước `CLAUDE.md`, ưu tiên giải thích "vì sao" hơn "làm gì".
 3. Push lên nhánh hiện tại.
-4. Kiểm tra nhánh đã có PR mở chưa (mục "Kiểm tra nhánh hiện tại đã có PR mở chưa" ở [`TOOLS.md`](../../../TOOLS.md) — tool khác nhau giữa Claude Local/Cloud); nếu chưa, spawn Agent `subagent_type: issuer` để tạo PR (base branch: theo user chỉ định nếu có, mặc định `main` nếu không — xem `issuer.md`), theo `.github/pull_request_template.md`. Nếu đã có PR mở, push ở bước trên đã tự cập nhật PR đó.
+4. Kiểm tra nhánh đã có PR mở chưa (mục "Kiểm tra nhánh hiện tại đã có PR mở chưa" ở [`TOOLS.md`](../../../TOOLS.md) — tool khác nhau giữa Claude Local/Cloud); nếu chưa, spawn Agent `subagent_type: issuer` để tạo PR (base branch: theo user chỉ định nếu có, mặc định `main` nếu không — xem `issuer.md`), theo `.github/pull_request_template.md`. **Bắt buộc kèm theo trạng thái e2e đã xác định ở Bước 4/5** khi giao việc cho `issuer` (mục "Trạng thái e2e" trong `issuer.md`) — nguyên văn dòng `KẾT QUẢ:` của `e2e-verifier` nếu Claude Local đã chạy (`ĐẠT`/`CHƯA ĐẠT`), hoặc ghi chú skip Bước 4 đã tự ghi khi Cloud (`SKIP — không có Docker daemon trên Claude Cloud`). Nếu đã có PR mở, push ở bước trên đã tự cập nhật PR đó.
 
 ## Không làm
 - Không bỏ gate duyệt plan ở Full flow dù mục tiêu là "tự động".
