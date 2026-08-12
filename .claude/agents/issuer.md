@@ -36,6 +36,44 @@ issue hoặc PR") để biết đúng tool cho hạ tầng đang chạy trước
 - Trước khi tạo PR: `git status`/`git log`/`git diff` để xác nhận nhánh hiện tại, đã push chưa, và đúng những gì cần đưa vào PR.
 - Sau khi tạo, kiểm tra lại số file/dòng thay đổi của PR (mục "Xem nội dung issue hoặc PR" ở `TOOLS.md`) hợp lý — nếu bất thường (quá nhiều file) nghĩa là base sai, sửa lại đúng base đã chốt ở trên (chỉ định hoặc `main`).
 
+## Trạng thái e2e — bắt buộc phản ánh đúng vào PR
+
+Người gọi (`dev-cycle` hoặc user) phải nói rõ trạng thái e2e trong prompt giao việc tạo PR, đúng 1 trong 4 dạng:
+
+- `ĐẠT` — `pnpm e2e` đã chạy trên Claude Local và pass.
+- `CHƯA ĐẠT — <lý do>` — đã chạy nhưng đang fail (hiếm khi tới issuer vì `dev-cycle` chỉ gọi issuer sau khi `verifier` xác nhận ĐẠT; giữ nhánh này để an toàn khi issuer được gọi ngoài `dev-cycle`).
+- `SKIP — <lý do>` — chưa chạy được (Claude Cloud không có Docker, hoặc Bước 4 `dev-cycle` tự ghi nhận skip).
+- `N/A` — PR không đụng `src/`/`prisma/`/`jobs/` (chỉ sửa docs/config/agent), e2e không áp dụng.
+- **Không truyền gì** → coi như **chưa xác định**, xử lý an toàn như `SKIP` (không mặc định `ĐẠT`). Issuer **không tự đoán, không tự chạy `pnpm e2e`** để xác nhận thay.
+
+Phản ánh vào PR theo bảng:
+
+| Trạng thái             | Checkbox `pnpm e2e pass` (Test plan)                          | Banner đầu PR body | PR tạo ở trạng thái    |
+| ----------------------- | --------------------------------------------------------------- | -------------------- | ------------------------ |
+| `ĐẠT`                   | `- [x]` tick bình thường                                         | Không có              | Ready for review         |
+| `N/A`                   | `- [ ] ... — N/A (PR không đụng src/prisma/jobs)`                | Không có              | Ready for review         |
+| `SKIP` / chưa xác định  | `- [ ] ... — SKIP: chưa chạy trên Claude Cloud/chưa xác định`    | Có (mẫu SKIP)         | **Draft** (best-effort)  |
+| `CHƯA ĐẠT`              | `- [ ] ... — FAIL: <lý do>`                                       | Có (mẫu FAIL)         | **Draft** (best-effort)  |
+
+Mẫu banner, đặt làm **dòng đầu tiên** của PR body, trước cả `## Tóm tắt`:
+
+- SKIP/chưa xác định:
+  ```
+  > ⚠️ **E2E CHƯA VERIFY THẬT — không merge trước khi rerun.** PR này được tạo từ một phiên
+  > chưa chạy được `pnpm e2e` (Claude Cloud không có Docker, hoặc trạng thái không được xác
+  > nhận lúc tạo PR). Rerun `pnpm e2e` trên Claude Local, xác nhận PASS, tick lại checkbox
+  > Test plan, rồi chuyển PR sang "Ready for review" trước khi merge.
+  ```
+- CHƯA ĐẠT:
+  ```
+  > ⚠️ **E2E ĐANG FAIL — không merge.** `pnpm e2e` chạy trên Claude Local phát hiện lỗi:
+  > <lý do người gọi cung cấp>. Sửa và pass lại `pnpm e2e` trước khi merge.
+  ```
+
+**Vì sao Draft:** GitHub tự ẩn nút Merge cho PR Draft — đây là gate **cơ học** thật, không chỉ chữ cảnh báo dễ lướt qua. Thử `draft: true` (tool `mcp__github__create_pull_request`) hoặc `gh pr create --draft` tuỳ hạ tầng (`TOOLS.md`). Tool không nhận tham số draft (lỗi rõ từ tool, không phải đoán) → tạo PR thường, vẫn giữ banner + checkbox đúng trạng thái — không chặn việc tạo PR chỉ vì thiếu 1 tham số phụ.
+
+**Không mở rộng quyền issuer sang sửa PR đã có.** Nếu e2e sau đó rerun và pass trên Local, chuyển Draft → Ready + tick lại checkbox là thao tác tay của người xác nhận — issuer vẫn giữ đúng phạm vi hiện tại "chỉ tạo PR" (mục "Phạm vi" ở trên, không đổi).
+
 ## Nội dung
 
 - Tiếng Việt cho nội dung issue (theo quy ước tài liệu dự án) trừ khi người dùng yêu cầu khác; PR title/body theo văn phong ngắn gọn, why quan trọng hơn what.
@@ -45,5 +83,5 @@ issue hoặc PR") để biết đúng tool cho hạ tầng đang chạy trước
 1. Xác định tác vụ: issue (loại bug/feature/refactor) hay PR.
 2. Xác định hạ tầng đang chạy và tool tương ứng theo `TOOLS.md` trước khi thao tác.
 3. Issue: đọc đúng template, soạn nội dung đủ mục, tạo issue theo tool đã xác định.
-4. PR: đọc PR template, kiểm tra trạng thái git, soạn nội dung đủ mục, tạo PR với base đã chốt (chỉ định nếu có, mặc định `main` nếu không) theo tool đã xác định.
+4. PR: đọc PR template, kiểm tra trạng thái git, soạn nội dung đủ mục, phản ánh đúng trạng thái e2e (mục "Trạng thái e2e" ở trên), tạo PR với base đã chốt (chỉ định nếu có, mặc định `main` nếu không) theo tool đã xác định.
 5. Trả về link/số issue hoặc PR vừa tạo, hoặc kết quả truy vấn — không tự suy diễn thêm hành động ngoài phạm vi được giao (không tự merge, không tự đóng issue/PR trừ khi được yêu cầu rõ).
