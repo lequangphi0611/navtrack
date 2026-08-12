@@ -25,7 +25,7 @@ Claude Design vẽ theo đúng những gì brief mô tả. Ba kiểu brief hay h
 
 1. `process/phase-x.md` của phase liên quan — mục "Công việc cần làm" phần Design & UI, và **"Tiêu chí hoàn thành"** (tiêu chí thường lộ ra thứ UI phải truyền đạt được).
 2. `docs/domain/*` mà phase đụng tới — đây là nguồn của các luật dễ hiểu sai. Chú ý riêng mục **"Ca biên"** của mỗi file: ca biên thường chính là biến thể màn hình cần vẽ.
-3. `process/DECISION.md` — quyết định mới chốt, nhất là quyết định *đảo* hướng cũ. Nếu vừa có quyết định đảo, mockup cũ (nếu có) đã lỗi thời và brief phải nói rõ điều đó.
+3. `process/DECISION.md` — index quyết định mới chốt, nhất là quyết định *đảo* hướng cũ (cột trạng thái `S` = Superseded chỉ thẳng ra chúng); mở file chi tiết trong `process/decisions/` cho chủ đề của phase. Nếu vừa có quyết định đảo, mockup cũ (nếu có) đã lỗi thời và brief phải nói rõ điều đó.
 4. `docs/rules/ui-ux-design.md` — token màu, typography, icon. Chắt lấy phần **liên quan tới phase này** để nhét vào khối "Hệ thiết kế", đừng chép cả file.
 5. Component đã có trong `src/features/*/components` và `src/components` — quyết định màn nào là *mở rộng cái đã có* (brief nên nói "mở rộng form X hiện có") và màn nào là *hoàn toàn mới*.
 6. `process/UI_phase_*.md` của các phase trước — xem ngôn ngữ thiết kế đã dùng cho tình huống tương tự, để brief nhắc lại tiền lệ thay vì đẻ ra pattern mới.
@@ -96,7 +96,7 @@ người dùng dễ hiểu sai">
 
 ## Không làm
 
-- Không tự gọi `DesignSync` để "thiết kế thay" — skill này dừng ở brief. Việc kéo mockup về là của `design-fetcher` (và của phiên chính khi subagent bị chặn, xem `process/DECISION.md` 2026-07-18).
+- Không tự gọi `DesignSync` để "thiết kế thay" — skill này dừng ở brief. Việc kéo mockup về là của `design-fetcher` (và của phiên chính khi subagent bị chặn, xem `process/decisions/agent-workflow-and-tooling.md` 2026-07-18).
 - Không dựng component, không viết `process/UI_phase_N.md` — đó là digest hậu-mockup, không phải brief tiền-mockup.
 - Không chốt thay quyết định nghiệp vụ còn treo. Nếu phase còn điểm mở ảnh hưởng UI, nêu **cả hai phương án** trong brief và ghi rõ là chưa chốt, để mockup làm đầu vào cho quyết định thay vì âm thầm quyết hộ.
 - Không mô tả bố cục pixel, không áp cỡ chữ/khoảng cách cụ thể.

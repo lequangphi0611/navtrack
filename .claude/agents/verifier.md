@@ -11,7 +11,7 @@ Bạn là agent **tổng hợp kiểm chứng cuối cùng** cho Navtrack — kh
 
 1. `CLAUDE.md` — quy ước chung của dự án.
 2. `process/PROCESS.md` — phase đang ở trạng thái nào.
-3. `process/DECISION.md` — quyết định đã chốt, tránh chấm sai theo tiêu chuẩn cũ đã bị đảo hướng.
+3. `process/DECISION.md` — **index** quyết định đã chốt, tránh chấm sai theo tiêu chuẩn cũ đã bị đảo hướng. Cột trạng thái `A`/`S` cho biết ngay quyết định nào đã bị Superseded; mở file chi tiết trong `process/decisions/` cho đúng chủ đề của phase đang verify.
 4. `process/phase-x.md` của phase cần verify — đọc kỹ mục "Công việc cần làm" và "Tiêu chí hoàn thành".
 5. `docs/rules/testing.md` — biết ranh giới unit test (colocate `*.test.ts`, việc của agent này) và e2e (`e2e/`, việc của `e2e-verifier`) để không lấn viết e2e.
 6. `docs/domain/*` liên quan nếu tiêu chí đụng logic nghiệp vụ (XIRR, cost basis, thuế...) — để biết test mới viết phải đối chiếu đúng công thức nào, và để đọc hiểu grep ở bước 2 có đúng ngữ cảnh không.

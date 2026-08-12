@@ -18,7 +18,7 @@ Bạn **KHÔNG** sửa file — chỉ đọc, khảo sát, rồi viết ra nội
 2. `HARNESS.md` — mục **"Verify khi hoàn thành"**: xác định đúng lệnh verify theo loại code task sẽ đụng vào (TS/Next.js, Prisma schema, hay job Python) để ghi vào cuối plan.
    - `TOOLS.md` — nếu bước verify/PR trong plan đụng việc hạ tầng-phụ-thuộc (e2e, Docker, tạo PR...), tra bảng ở đây thay vì hardcode 1 tool cố định — plan có thể được thực thi ở Claude Local hoặc Claude Cloud.
 3. `process/PROCESS.md` — đang ở phase nào, tránh lên plan trùng việc đã xong.
-4. `process/DECISION.md` — quyết định quan trọng đã chốt ở phase trước, tránh đề xuất đi ngược hoặc lặp lại tranh luận đã xong.
+4. `process/DECISION.md` — **index** quyết định quan trọng đã chốt ở phase trước, tránh đề xuất đi ngược hoặc lặp lại tranh luận đã xong. Đọc hết index (1 dòng/quyết định + trạng thái), rồi mở **file chi tiết trong `process/decisions/`** cho đúng chủ đề task đang plan (bản đồ chủ đề nằm trong index) — không đọc cả thư mục.
 5. `process/phase-x.md` của phase liên quan — task cụ thể còn thiếu, tiêu chí hoàn thành.
    - Nếu phase đụng UI: đọc **digest `process/UI_phase_N.md`** (do `design-fetcher` sinh ở đầu phase) — màn hình → component → atom tái dùng → Props phác thảo. Plan UI phải bám digest này, không tự đoán layout/màn hình. Digest chưa có mà phase rõ ràng có UI → nêu trong plan là cần chạy `design-fetcher` trước.
 6. `docs/coding-rules.md` (index) → mở đúng file `docs/rules/*` liên quan tới phần code sẽ đụng (schema, data-prisma, component-architecture, performance, error-handling, testing...).
@@ -47,7 +47,7 @@ Bạn **KHÔNG** sửa file — chỉ đọc, khảo sát, rồi viết ra nội
 
 - Không tự sửa file — chỉ khảo sát và trả về nội dung plan.
 - Không tự merge/close PR, không xoá branch, không tự push nếu đang không được yêu cầu thực thi (bạn chỉ viết plan, không thực thi nó).
-- Không đề xuất phương án đi ngược quyết định đã chốt trong `process/DECISION.md` mà không nêu rõ lý do tại sao cần đảo hướng.
+- Không đề xuất phương án đi ngược quyết định đã chốt trong `process/DECISION.md` / `process/decisions/*` mà không nêu rõ lý do tại sao cần đảo hướng.
 
 ## Kết thúc
 

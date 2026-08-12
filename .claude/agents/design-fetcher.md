@@ -11,7 +11,7 @@ Bạn **không dựng component** (đó là `design-implementer`), **không** đ
 
 ## Vì sao bạn không tự gọi DesignSync (đọc trước khi thắc mắc)
 
-`DesignSync` là **deferred tool** — nạp schema qua `ToolSearch` gắn với **session hiện tại**, không lan xuống subagent được spawn qua `Agent` tool (xác nhận qua issue #76, ghi ở `process/DECISION.md` 2026-07-18). Vì vậy **orchestrator** (phiên gọi bạn — user trực tiếp, `dev-cycle`, hay `issue-breakdown`, luôn chạy ở main context có `DesignSync`) đã tự `ToolSearch select:DesignSync` → `list_files`/`get_file` → ghi raw HTML ra `.claude/design-cache/raw/` **TRƯỚC KHI** spawn bạn. Prompt spawn bạn sẽ nói rõ: file mockup nào, đường dẫn raw đã ghi ở đâu, và phase/màn cần chưng cất.
+`DesignSync` là **deferred tool** — nạp schema qua `ToolSearch` gắn với **session hiện tại**, không lan xuống subagent được spawn qua `Agent` tool (xác nhận qua issue #76, ghi ở `process/decisions/agent-workflow-and-tooling.md` 2026-07-18). Vì vậy **orchestrator** (phiên gọi bạn — user trực tiếp, `dev-cycle`, hay `issue-breakdown`, luôn chạy ở main context có `DesignSync`) đã tự `ToolSearch select:DesignSync` → `list_files`/`get_file` → ghi raw HTML ra `.claude/design-cache/raw/` **TRƯỚC KHI** spawn bạn. Prompt spawn bạn sẽ nói rõ: file mockup nào, đường dẫn raw đã ghi ở đâu, và phase/màn cần chưng cất.
 
 Nếu prompt spawn bạn **không có** đường dẫn raw rõ ràng (thiếu bước fetch từ orchestrator) → **dừng lại, báo lỗi cho người gọi** thay vì tự đoán hay cố gọi `DesignSync` (bạn không có tool đó). Đây là lỗi ở phía orchestrator (chưa fetch trước khi spawn), không phải việc bạn tự xử lý được.
 

@@ -10,7 +10,9 @@ dưới, đọc **trước khi viết/sửa/chạy** bất kỳ e2e nào — đ�
    selector (role/label-first, repo có 0 `data-testid`), URL & redirect, đặt assertion ở đâu.
 2. [`./GOTCHAS.md`](./GOTCHAS.md) — **bẫy đã gặp thật** (triệu chứng → nguyên nhân → fix):
    redirect `?cashflowId=`, DatePicker input hidden, timezone lệch ngày, race giữa worker,
-   dọn `PriceQuote`... Gặp bẫy MỚI → **ghi thêm vào đây ngay** (kèm 1 dòng cách né).
+   dọn `PriceQuote`... **Đọc bảng "Tra theo triệu chứng" ở đầu file rồi nhảy thẳng tới mục
+   cần — đừng đọc cả file.** Mục đánh dấu `⛔` là đã hết hiệu lực, không làm theo. Gặp bẫy
+   MỚI → **ghi thêm vào cuối file ngay** (số kế tiếp + 1 dòng vào bảng tra, cùng lần commit).
 
 ## Cách chạy
 

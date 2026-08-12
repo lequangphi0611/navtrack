@@ -16,13 +16,13 @@ Trạng thái: ⬜ Chưa bắt đầu · 🟨 Đang làm · ✅ Hoàn thành
 | 8 | Lịch dòng tiền sắp tới | ⬜ | [phase-8.md](./phase-8.md) |
 
 ## Cách dùng
-- Bắt đầu một phase → đổi trạng thái sang 🟨, đọc `phase-x.md` **và [`DECISION.md`](./DECISION.md)** (quyết định quan trọng đã chốt ở phase trước).
+- Bắt đầu một phase → đổi trạng thái sang 🟨, đọc `phase-x.md` **và [`DECISION.md`](./DECISION.md)** (index quyết định đã chốt ở phase trước; mở file chi tiết trong [`decisions/`](./decisions/) khi phase chạm đúng chủ đề).
 - Hoàn thành → đổi ✅, tick hết tiêu chí trong `phase-x.md`, ghi ngày hoàn thành.
 - Nếu phạm vi phase thay đổi, cập nhật cả `docs/03-roadmap.md` lẫn `phase-x.md` cho nhất quán.
 
 ## Nhật ký
 
-Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọng kèm lý do ghi ở [`DECISION.md`](./DECISION.md), không lặp lại chi tiết ở đây.
+Ghi ngắn gọn **đã làm gì** — 1 dòng/lần. Quyết định quan trọng kèm lý do ghi ở [`decisions/`](./decisions/) (index: [`DECISION.md`](./DECISION.md)), không lặp lại chi tiết ở đây.
 
 - 2026-07-09: Phase 1 — nền tảng: Auth.js Google OAuth + allowlist + PWA + nhập vị thế + CRUD mua/bán + unit test + e2e.
 - 2026-07-10: Phase 1 — UI mockup + tách route `/holdings/closed` + materialize `quantity`/`avgCost`.
