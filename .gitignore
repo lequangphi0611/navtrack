@@ -46,6 +46,7 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 /blob-report/
+/.e2e-logs/
 
 # Playwright MCP: ảnh soi UI component (design-implementer) — chỉ là artifact
 # tạm để main context gửi cho user, không cần persist qua git.

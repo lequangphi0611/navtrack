@@ -92,6 +92,15 @@ logger.info({ databaseUrl: process.env.DATABASE_URL, session }, "connected");
 logger.info({ userId, action: "addHolding" }, "holding created");
 ```
 
+- **Log ra file + SQL query khi chạy e2e (chỉ e2e, không phải production):** `scripts/e2e.mjs`
+  set biến `E2E_LOG_FILE`; khi biến này có mặt, `lib/logger.ts` ghi thêm 1 stream ra file
+  (`pino.multistream`, cạnh `stdout` như bình thường) và `lib/db.ts` bật thêm log SQL query
+  qua Prisma event (`log: [{ emit: "event", level: "query" }, ...]` + `$on`), đẩy qua cùng
+  `logger` — để agent `e2e-verifier` đọc lại được khi 1 test fail mà error-context không đủ
+  giải thích. Không bật SQL log cố định ở production: Prisma tự cảnh báo `query` level có
+  overhead, và câu SQL/params có thể chứa dữ liệu nhạy cảm — vi phạm luật "không log secret"
+  ở trên nếu bật ngoài phạm vi e2e. Xem `e2e/CLAUDE.md`.
+
 ## Job Python
 
 - Job Python dùng **logging của Python ra stdout** (GitHub Actions tự bắt) — pino là của TS, mỗi runtime một logger, cùng nguyên tắc.
