@@ -230,3 +230,137 @@ test("Tất toán đáo hạn TRƯỚC rồi ghi trái tức kỳ cuối CÙNG N
     await cleanupTestUser(session.userId);
   }
 });
+
+// Override thủ công `grossAmount` (process/DECISION.md 2026-08-08): trái
+// phiếu lãi suất thả nổi khiến số tự tính từ BondTerms lệch số thực nhận trên
+// sao kê — card "Lãi gộp" (AutoFilledAmountCard, submitWhenAuto=false) cho sửa
+// tay, y hệt cơ chế card Thuế đã có. Test này khoá lại 2 điểm dễ vỡ nhất khi
+// mở rộng override sang gross:
+// 1) Thuế KHÔNG tự tính lại theo gross đã sửa — vẫn dùng `computed.taxAmount`
+//    (theo BondTerms gốc), vì tổ chức phát hành tính thuế trên MỆNH GIÁ hợp
+//    đồng, không phải trên số tiền user gõ tay để khớp sao kê.
+// 2) `grossAmountOverridden` được ghi `true` và badge "ĐÃ CHỈNH TAY" hiện ở
+//    lịch sử — phân biệt được với kỳ tính hoàn toàn tự động khi audit lại.
+test("Chỉnh tay lãi gộp trái tức: thuế vẫn tính theo số tự động, net theo gross đã sửa, đánh dấu ĐÃ CHỈNH TAY ở lịch sử", async ({
+  browser,
+}) => {
+  const session = await createTestSession("bond-coupon-gross-override");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const buyDate = isoDate(daysAgo(200));
+  const couponDate = isoDate(daysAgo(10));
+
+  try {
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    let detail = await newHoldingPage.create({
+      symbol,
+      quantity: 1,
+      pricePerUnit: 10_000_000,
+      assetType: "Trái phiếu",
+      date: buyDate,
+    });
+
+    detail = await setBondTerms(detail);
+
+    // gross tự tính = 10.000.000 × 12% × 6/12 × 1 = 600.000, thuế 5% = 30.000
+    // — sửa tay gross lên 650.000 (mô phỏng lãi suất thả nổi trả cao hơn công
+    // thức cố định), KHÔNG động vào card Thuế.
+    const form = await detail.goToNewDividend();
+    await form.setDate(couponDate);
+    await form.setGrossAmountOverride("650000");
+    await form.submit();
+
+    await expect(form.successHeading(symbol)).toBeVisible();
+
+    // Thuế giữ nguyên 30.000 (tính từ gross TỰ ĐỘNG, không phải 650.000 vừa
+    // sửa) -> net = 650.000 − 30.000 = 620.000.
+    await expect(page.getByText(/gộp 650\.000/)).toBeVisible();
+    await expect(page.getByText(/− thuế 30\.000/)).toBeVisible();
+    await expect(page.getByText(/620\.000/)).toBeVisible();
+
+    const holdingId = holdingIdFromUrl(detail.url);
+    const dividend = await db.dividend.findFirst({
+      where: { holdingId, type: "BOND_COUPON" },
+    });
+    expect(dividend).not.toBeNull();
+    expect(new Decimal(dividend!.grossAmount!.toString()).toString()).toBe(
+      "650000",
+    );
+    expect(new Decimal(dividend!.taxAmount!.toString()).toString()).toBe(
+      "30000",
+    );
+    expect(new Decimal(dividend!.netAmount!.toString()).toString()).toBe(
+      "620000",
+    );
+    expect(dividend!.grossAmountOverridden).toBe(true);
+
+    // Badge lịch sử (DividendRowsFilter.tsx) — dòng gộp/thuế dùng formatMoney
+    // compact (650.000 -> "650k", 30.000 -> "30k").
+    const historyPage = await form.goToHistory();
+    await expect(historyPage.entry(/gộp 650k − thuế 30k/)).toBeVisible();
+    await expect(historyPage.entry("ĐÃ CHỈNH TAY")).toBeVisible();
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});
+
+// Guard đổi hành vi có chủ đích cùng PR (actions.ts: so `taxAmount` với
+// `grossAmount` CUỐI CÙNG đã qua override, không phải `computed.grossAmount`
+// tự tính) — nếu guard bị revert về so với số tự tính, ca này sẽ LỌT qua
+// (20.000 < 600.000 tự tính) thay vì bị chặn đúng (20.000 < 30.000 thuế NHƯNG
+// user đã hạ gross xuống dưới thuế), ghi sai netAmount ÂM vào XIRR mà không
+// có tín hiệu lỗi nào.
+test("Chỉnh tay lãi gộp xuống thấp hơn thuế đã tính: bị chặn, không ghi dòng trái tức nào", async ({
+  browser,
+}) => {
+  const session = await createTestSession("bond-coupon-gross-guard");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const buyDate = isoDate(daysAgo(200));
+  const couponDate = isoDate(daysAgo(10));
+
+  try {
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    let detail = await newHoldingPage.create({
+      symbol,
+      quantity: 1,
+      pricePerUnit: 10_000_000,
+      assetType: "Trái phiếu",
+      date: buyDate,
+    });
+
+    detail = await setBondTerms(detail);
+
+    // Thuế tự tính = 30.000 (5% × 600.000) không đổi; hạ gross tay xuống
+    // 20.000 -> 20.000 < 30.000 -> phải bị chặn bởi guard so với gross CUỐI
+    // CÙNG (đã override), không phải gross tự tính (600.000, sẽ không chặn
+    // nếu guard bị revert).
+    const form = await detail.goToNewDividend();
+    await form.setDate(couponDate);
+    await form.setGrossAmountOverride("20000");
+    await form.submit();
+
+    await expect(
+      page.getByText("Thuế không thể lớn hơn tiền lãi gộp của kỳ này"),
+    ).toBeVisible();
+    await expect(form.successHeading(symbol)).toHaveCount(0);
+
+    const holdingId = holdingIdFromUrl(detail.url);
+    const dividend = await db.dividend.findFirst({
+      where: { holdingId, type: "BOND_COUPON" },
+    });
+    expect(dividend).toBeNull();
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});
