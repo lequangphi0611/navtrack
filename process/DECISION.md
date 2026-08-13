@@ -51,11 +51,12 @@ Quyết định về `Setting` không có file riêng — nằm cùng chủ đ�
 
 | Ngày | Quyết định | |
 |---|---|---|
-| 2026-07-16 | `DIVIDEND_PAR_VALUE`/`DIVIDEND_TAX_RATE` là Setting; cổ tức CP không đổi `avgCost`; SL-tại-ngày-ghi (#52) | A |
+| 2026-07-16 | `DIVIDEND_PAR_VALUE`/`DIVIDEND_TAX_RATE` là Setting; cổ tức CP không đổi `avgCost`; SL-tại-ngày-ghi (#52) | S → 08-13 (điểm "avgCost giữ nguyên") |
 | 2026-07-16 (2) | `floor(stockQuantity)` + `stockQuantityOverride`, tolerance 2 đơn vị | A |
 | 2026-07-17 | Tự tạo `NavOverride` bù pha loãng NAV; thêm `Dividend.paymentDate` (#61) | A |
 | 2026-07-17 (2) | Ghi cổ tức **không** trigger `Snapshot{MANUAL}` | A |
 | 2026-07-17 (3) | `computeCashDividendPriceAdjustment` trả `null` khi giá điều chỉnh ra âm/0 ⚠️ nhãn trùng, xem ghi chú | A |
+| 2026-08-13 | Bugfix: `avgCost` PHẢI dilute qua cổ tức cổ phiếu (đảo điểm "giữ nguyên" của 2026-07-16) + backfill production | A |
 
 ### Trái phiếu & lịch dòng tiền → [`bonds-and-cashflow-calendar.md`](./decisions/bonds-and-cashflow-calendar.md)
 

@@ -50,6 +50,10 @@ export type DividendPositionSource = {
   symbol: string;
   unit: string;
   quantity: Decimal;
+  // Đọc thêm avgCost hiện có — cần để recordStockDividend() (actions.ts) áp
+  // công thức đóng dilute avgCost (process/DECISION.md 2026-08-13), KHÔNG còn
+  // "giữ nguyên" như trước.
+  avgCost: Decimal;
   cashflows: DividendPositionCashflow[];
   dividends: DividendPositionDividend[];
 };
@@ -70,6 +74,7 @@ export async function findDividendPositionSource(
       symbol: true,
       unit: true,
       quantity: true,
+      avgCost: true,
       cashflows: {
         select: {
           id: true,
@@ -96,6 +101,7 @@ export async function findDividendPositionSource(
     symbol: holding.symbol,
     unit: holding.unit,
     quantity: new Decimal(holding.quantity.toString()),
+    avgCost: new Decimal(holding.avgCost.toString()),
     cashflows: holding.cashflows.map((cf) => ({
       id: cf.id,
       type: cf.type,
@@ -214,16 +220,13 @@ export async function findLastBondCouponDate(
   return row?.date ?? null;
 }
 
-// Cộng thẳng vào cache Holding.quantity khi ghi cổ tức cổ phiếu — KHÔNG gọi
-// lại derivePosition()/persistPosition (features/holdings/repository.ts) để
-// tính lại từ đầu: avgCost giữ nguyên, không sửa (docs/domain/01-assets-and-holdings.md).
-export async function updateHoldingQuantity(
-  holdingId: string,
-  quantity: string,
-  tx: Prisma.TransactionClient = db,
-): Promise<void> {
-  await tx.holding.update({ where: { id: holdingId }, data: { quantity } });
-}
+// Sửa lần 2 (bugfix, process/DECISION.md 2026-08-13): updateHoldingQuantity()
+// (chỉ ghi `quantity`, giữ nguyên `avgCost`) đã XOÁ — recordStockDividend()
+// (features/dividends/actions.ts) giờ dùng chung persistPosition()
+// (features/holdings/repository.ts, cùng hàm với 4 Server Action mua/bán) để
+// ghi CẢ `quantity` LẪN `avgCost` đã dilute theo công thức đóng — không còn
+// "cộng thẳng quantity, avgCost giữ nguyên" như trước (đó là bug, không phải
+// quy tắc domain).
 
 // --- Đọc (queries.ts) ---
 

@@ -28,9 +28,12 @@ export type RealizedGainCashflowInput = {
 };
 
 // Cổ tức cổ phiếu — quantity LUÔN dương (số CP nhận thêm), không tạo Cashflow
-// (cộng thẳng vào Holding.quantity, xem features/dividends/actions.ts). Chỉ
-// ảnh hưởng realQuantity bên dưới, KHÔNG đổi avgCost (đúng quy tắc domain,
-// docs/domain/03-dividends.md).
+// (cộng thẳng vào Holding.quantity, xem features/dividends/actions.ts). Ảnh
+// hưởng CẢ realQuantity LẪN avgCost — sửa lần 2 (process/DECISION.md
+// 2026-08-13): trước đó chỉ cộng realQuantity, "KHÔNG đổi avgCost" là BUG chứ
+// không phải quy tắc domain — avgCost phải bị PHA LOÃNG (dilute) theo công
+// thức đóng (docs/domain/03-dividends.md), xem giải thích ở
+// computeRealizedGainForHolding() bên dưới.
 export type RealizedGainStockDividendInput = {
   id: string;
   date: Date;
@@ -75,6 +78,16 @@ export type RealizedGainStockDividendInput = {
 // Ca lý thuyết "cổ tức cổ phiếu xen giữa lúc realQuantity=0 và BUY kế tiếp"
 // (holding không giữ cổ phần nào mà vẫn nhận cổ tức) là trạng thái dữ liệu
 // không hợp lệ theo domain — không xử lý, chỉ ghi chú ở đây.
+//
+// Sửa lần 2 (bugfix, process/DECISION.md 2026-08-13): nhánh STOCK_DIVIDEND
+// TRƯỚC đây chỉ `realQuantity = realQuantity.plus(...)` rồi `continue` — bỏ
+// qua avgCost hoàn toàn. SAI: nhận CP thưởng không tốn thêm tiền nên phải
+// PHA LOÃNG avgCost hiện có, không giữ nguyên — nếu không, một lệnh SELL sau
+// đó trừ avgCost CŨ (cao hơn thực) cho SL bán, làm realizedGain tính THẤP hơn
+// đúng. Công thức đóng — TRƯỚC khi cộng dồn realQuantity: avgCost_mới =
+// realQuantity_trước × avgCost_cũ / realQuantity_sau (realQuantity_sau=0 ->
+// avgCost=0, ca biên dữ liệu không hợp lệ nêu trên). Mirror đúng
+// derivePosition() (lib/cost-basis.ts, sửa lần 5 cùng đợt).
 export function computeRealizedGainForHolding(
   cashflows: RealizedGainCashflowInput[],
   stockDividends: RealizedGainStockDividendInput[] = [],
@@ -116,7 +129,11 @@ export function computeRealizedGainForHolding(
 
   for (const event of sorted) {
     if (event.kind === "STOCK_DIVIDEND") {
-      realQuantity = realQuantity.plus(event.dividend.quantity);
+      const newRealQuantity = realQuantity.plus(event.dividend.quantity);
+      avgCost = newRealQuantity.isZero()
+        ? new Decimal(0)
+        : realQuantity.mul(avgCost).div(newRealQuantity);
+      realQuantity = newRealQuantity;
       continue;
     }
 

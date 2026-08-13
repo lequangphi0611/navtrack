@@ -39,7 +39,11 @@
   - **Đóng băng thông số đã dùng:** ghi `parValueApplied`/`couponRatePercentApplied` vào chính dòng `Dividend`. Lý do: `BondTerms` **sửa được về sau** (nhập sai lúc tạo, hoặc trái phiếu lãi suất thả nổi) — nếu lịch sử đọc lại giá trị hiện tại thì mọi kỳ cũ sẽ hiển thị sai. Cùng nguyên tắc "thuế/phí đã tính không hồi tố" ở `07-tax.md`.
   - **Trái tức KHÔNG cập nhật gì trên `BondTerms`** — "kỳ trả lãi tới" suy runtime từ `firstCouponDate` + lịch sử `Dividend{type: BOND_COUPON}`, xem `10-cashflow-calendar.md`.
 - **"SL đang giữ tại ngày chia"** không phải `Holding.quantity` cache hiện tại (luôn phản ánh HÔM NAY) — phải phát lại lịch sử `Cashflow` (BUY/SELL) **và** `Dividend{type: STOCK}` đã ghi trước đó tính đến đúng ngày chia (`lib/position-trail.ts::buildQuantityTimeline`, chuyển từ `features/dividends/` ra dùng chung khi `features/holdings/` cũng cần — xem issue #59), vì ghi cổ tức có thể lùi ngày so với giao dịch gần nhất.
-- **`avgCost` giữ nguyên khi nhận cổ tức cổ phiếu** — chỉ `Holding.quantity` tăng thêm `stockQuantity` (cộng thẳng vào cache hiện có trong cùng transaction, không replay lại toàn bộ lịch sử); giá vốn/CP giảm tương ứng một cách tự nhiên vì cùng tổng vốn chia cho nhiều CP hơn (không cần công thức riêng).
+- **`avgCost` bị pha loãng (dilute) theo công thức đóng khi nhận cổ tức cổ phiếu** (sửa lần 2, `process/DECISION.md` 2026-08-13 — trước đó tài liệu này ghi "avgCost giữ nguyên", một câu **tự mâu thuẫn** với chính ý "giá vốn/CP giảm tự nhiên" bên dưới, và là **bug** trong code: không dilute khiến lãi/lỗ đã thực hiện khi bán sau đó bị tính THẤP hơn thực tế):
+  ```
+  avgCost mới = (Holding.quantity_hiện_tại × Holding.avgCost_hiện_tại) / (Holding.quantity_hiện_tại + stockQuantity)
+  ```
+  `Holding.quantity` **và** `avgCost` đều được ghi lại trong cùng transaction (`persistPosition()`, `features/holdings/repository.ts` — dùng chung với 4 Server Action mua/bán), áp CÔNG THỨC ĐÓNG lên cache hiện có, **không replay lại toàn bộ lịch sử** (giữ nguyên lý do hiệu năng của quyết định gốc — chỉ đổi công thức áp lên cache, không đổi cách tránh replay). SL_sau = 0 (ca biên dữ liệu không hợp lệ — nhận cổ tức khi không giữ CP nào) → `avgCost = 0`, không chia cho 0.
 - Số lượng nắm giữ (xem `01-assets-and-holdings.md`) cộng thêm Σ(dividend STOCK.stockQuantity).
 
 ## Bù pha loãng NAV khi ghi cổ tức

@@ -163,19 +163,27 @@ describe("computeRealizedGainForHolding", () => {
 
   // Issue #83 code review #1 — cổ tức cổ phiếu không tạo Cashflow (cộng thẳng
   // vào Holding.quantity, features/dividends/actions.ts) nên realQuantity phải
-  // gồm cả cổ tức để biết đúng lúc vị thế thực sự đóng hết. Số đã tính tay
-  // (oracle bắt đúng bug — vẫn đúng với thiết kế "1 bộ đếm realQuantity" sửa
-  // lần 2, process/DECISION.md sau 2026-07-24 (2)):
+  // gồm cả cổ tức để biết đúng lúc vị thế thực sự đóng hết.
+  //
+  // Sửa lần 2 (bugfix, process/DECISION.md 2026-08-13): bộ số ĐỔI so với bản
+  // gốc — cổ tức cổ phiếu giờ PHA LOÃNG avgCost (bước 2 dưới đây; trước đây
+  // "avgCost KHÔNG đổi" là bug, không phải quy tắc domain đúng). Đổi SL cổ
+  // tức=25 (thay 20) để SL ngay-sau-cổ-tức=125 chỉ có ước số nguyên tố 5
+  // (tránh thập phân vô hạn tuần hoàn khi đối chiếu số cụ thể), và đổi SELL
+  // theo sau (125, thay 120) để vẫn đóng hết vị thế đúng tinh thần ca biên
+  // gốc. Số đã tính tay (oracle bắt đúng bug — vẫn đúng với thiết kế "1 bộ
+  // đếm realQuantity" sửa lần 2, process/DECISION.md sau 2026-07-24 (2)):
   // 1. BUY 100, amount=-1.000.000 -> avgCost=10.000, realQuantity=100.
-  // 2. Cổ tức cổ phiếu +20 -> realQuantity=120, avgCost KHÔNG đổi.
-  // 3. SELL 120, amount=1.300.000 -> realizedGain = 1.300.000-120*10.000=100.000;
+  // 2. Cổ tức cổ phiếu +25 -> realQuantity=125; avgCost DILUTE =
+  //    100×10.000/125=8.000 (sửa lần 2 — trước đây "KHÔNG đổi" là bug).
+  // 3. SELL 125, amount=1.625.000 -> realizedGain = 1.625.000-125*8.000=625.000;
   //    realQuantity về 0.
   // 4. BUY 50, amount=-600.000 -> realQuantityTrước=0 nên avgCost lô mới =
-  //    (0*10.000+600.000)/50=12.000 (nếu không "quên" avgCost cũ đúng lúc sẽ
-  //    ra 13.333,33 — bắt đúng bug qua bước 5).
+  //    (0*8.000+600.000)/50=12.000 (nếu không "quên" avgCost cũ đúng lúc sẽ ra
+  //    số khác — bắt đúng bug qua bước 5).
   // 5. SELL 30, amount=390.000 -> += 390.000-30*12.000=30.000.
-  // Tổng kỳ vọng = 100.000 + 30.000 = 130.000.
-  test("cổ tức cổ phiếu: realQuantity quyết định avgCost, kể cả khi về 0 rồi mua lại", () => {
+  // Tổng kỳ vọng = 625.000 + 30.000 = 655.000.
+  test("cổ tức cổ phiếu: realQuantity quyết định avgCost (có pha loãng), kể cả khi về 0 rồi mua lại", () => {
     const cashflows: RealizedGainCashflowInput[] = [
       {
         id: "cf1",
@@ -190,8 +198,8 @@ describe("computeRealizedGainForHolding", () => {
         type: "SELL",
         date: d("2023-03-01"),
         createdAt: d("2023-03-01"),
-        quantity: new Decimal(120),
-        amount: new Decimal(1_300_000),
+        quantity: new Decimal(125),
+        amount: new Decimal(1_625_000),
       },
       {
         id: "cf3",
@@ -215,35 +223,41 @@ describe("computeRealizedGainForHolding", () => {
         id: "div1",
         date: d("2023-02-01"),
         createdAt: d("2023-02-01"),
-        quantity: new Decimal(20),
+        quantity: new Decimal(25),
       },
     ];
 
     expect(
       computeRealizedGainForHolding(cashflows, stockDividends).toString(),
-    ).toBe("130000");
+    ).toBe("655000");
   });
 
   // Sửa lần 2 (retrofit, process/DECISION.md sau 2026-07-24 (2)) — ca biên
   // thiết kế "2 bộ đếm song song" cũ (đã merge) KHÔNG xử lý đúng: BÁN MỘT
   // PHẦN (không đóng hết, kể cả tính CP từ cổ tức) rồi mua tiếp, khác test
-  // trên (đóng hết rồi mua lại). Bộ số khớp test cost-basis.test.ts
-  // "bán một phần (không đóng hết) rồi mua tiếp" để đối chiếu avgCost 171.500.
-  // Tính tay theo thiết kế MỚI (1 bộ đếm realQuantity, oracle đúng):
+  // trên (đóng hết rồi mua lại).
+  //
+  // Sửa lần 3 (bugfix, process/DECISION.md 2026-08-13): bộ số ĐỔI so với bản
+  // gốc — cổ tức cổ phiếu giờ PHA LOÃNG avgCost (bước 2 dưới; trước đây
+  // "KHÔNG đổi" là bug). Đổi SL cổ tức=25 (thay 20) để SL ngay-sau-cổ-tức=125
+  // chỉ có ước số nguyên tố 5, và đổi SELL/BUY theo sau (100/75, thay 105/85)
+  // để vẫn giữ đúng tinh thần ca biên gốc (bán một phần không đóng hết, rồi
+  // mua tiếp, rồi đóng hết) mà mọi phép chia ra số VND tròn. Bộ số khớp test
+  // cost-basis.test.ts "bán một phần (không đóng hết) rồi mua tiếp" để đối
+  // chiếu avgCost 152.000.
+  //
+  // Tính tay theo thiết kế "1 bộ đếm realQuantity" (oracle đúng):
   // 1. BUY 100, amount=-1.000.000 -> avgCost=10.000, realQuantity=100.
-  // 2. Cổ tức cổ phiếu +20 -> realQuantity=120, avgCost KHÔNG đổi.
-  // 3. SELL 105, amount=1.260.000 -> realizedGain += 1.260.000-105*10.000=210.000;
-  //    realQuantity=15 (KHÔNG về 0 — ca biên mà thiết kế cũ xử lý sai).
-  // 4. BUY 85, amount=-17.000.000 -> avgCost mới = (15*10.000+17.000.000)/100
-  //    = 171.500 (khớp test cost-basis). realQuantity=100.
-  // 5. SELL 100 (đóng hết), amount=25.000.000 -> realizedGain +=
-  //    25.000.000-100*171.500=7.850.000.
-  // Tổng kỳ vọng = 210.000 + 7.850.000 = 8.060.000 (chính xác tuyệt đối).
-  // Thiết kế "2 bộ đếm" CŨ (sai): avgCostQuantity chỉ-cashflow không bao giờ
-  // về 0 (100-105=-5) nên không reset -> avgCost lô 2 tính SAI, ra tổng
-  // realizedGain = 4.022.500 thay vì 8.060.000 — test này là oracle bắt đúng
-  // bug đó.
-  test("bán một phần (không đóng hết) rồi mua tiếp, sau đó đóng hết: realizedGain tính đúng theo avgCost mới", () => {
+  // 2. Cổ tức cổ phiếu +25 -> realQuantity=125; avgCost DILUTE =
+  //    100×10.000/125=8.000.
+  // 3. SELL 100, amount=1.200.000 -> realizedGain += 1.200.000-100*8.000=400.000;
+  //    realQuantity=25 (KHÔNG về 0 — ca biên mà thiết kế "2 bộ đếm" cũ xử lý sai).
+  // 4. BUY 75, amount=-15.000.000 -> avgCost mới = (25*8.000+15.000.000)/100
+  //    = 152.000 (khớp test cost-basis). realQuantity=100.
+  // 5. SELL 100 (đóng hết), amount=20.000.000 -> realizedGain +=
+  //    20.000.000-100*152.000=4.800.000.
+  // Tổng kỳ vọng = 400.000 + 4.800.000 = 5.200.000 (chính xác tuyệt đối).
+  test("bán một phần (không đóng hết) rồi mua tiếp, sau đó đóng hết: realizedGain tính đúng theo avgCost mới (có pha loãng)", () => {
     const cashflows: RealizedGainCashflowInput[] = [
       {
         id: "cf1",
@@ -258,16 +272,16 @@ describe("computeRealizedGainForHolding", () => {
         type: "SELL",
         date: d("2023-03-01"),
         createdAt: d("2023-03-01"),
-        quantity: new Decimal(105),
-        amount: new Decimal(1_260_000),
+        quantity: new Decimal(100),
+        amount: new Decimal(1_200_000),
       },
       {
         id: "cf3",
         type: "BUY",
         date: d("2023-04-01"),
         createdAt: d("2023-04-01"),
-        quantity: new Decimal(85),
-        amount: new Decimal(-17_000_000),
+        quantity: new Decimal(75),
+        amount: new Decimal(-15_000_000),
       },
       {
         id: "cf4",
@@ -275,7 +289,7 @@ describe("computeRealizedGainForHolding", () => {
         date: d("2023-05-01"),
         createdAt: d("2023-05-01"),
         quantity: new Decimal(100),
-        amount: new Decimal(25_000_000),
+        amount: new Decimal(20_000_000),
       },
     ];
     const stockDividends: RealizedGainStockDividendInput[] = [
@@ -283,13 +297,13 @@ describe("computeRealizedGainForHolding", () => {
         id: "div1",
         date: d("2023-02-01"),
         createdAt: d("2023-02-01"),
-        quantity: new Decimal(20),
+        quantity: new Decimal(25),
       },
     ];
 
     expect(
       computeRealizedGainForHolding(cashflows, stockDividends).toString(),
-    ).toBe("8060000");
+    ).toBe("5200000");
   });
 
   // Issue #83 code review #4 — tiebreak (date, createdAt, id) phải ổn định,
@@ -365,9 +379,12 @@ describe("computeUnrealizedGain", () => {
 
 // Issue #67 — bất biến toán học: realizedPnl + unrealizedPnl == absolutePnl
 // (cutoff = hôm nay, không thiếu giá). Portfolio giả lập: holding A đã đóng
-// hẳn (SL=0), holding B bán một phần đang còn mở, có cổ tức tiền mặt net.
+// hẳn (SL=0), holding B bán một phần đang còn mở, có cổ tức tiền mặt net,
+// holding C (thêm 2026-08-13, process/DECISION.md) bán một phần đang còn mở
+// VÀ có cổ tức cổ phiếu — trước đây bộ test này chỉ phủ cổ tức TIỀN MẶT, lỗ
+// hổng coverage khiến bug "avgCost không dilute qua cổ tức cổ phiếu" lọt qua.
 describe("bất biến realized + unrealized == absolutePnl (issue #67)", () => {
-  test("khớp tuyệt đối (sai lệch <= 1 VND) khi cộng dồn nhiều holding + cổ tức", () => {
+  test("khớp tuyệt đối (sai lệch <= 1 VND) khi cộng dồn nhiều holding + cổ tức (tiền mặt VÀ cổ phiếu)", () => {
     // Holding A (đã đóng, SL=0): mua 100 (gồm phí 10.000), bán hết 100.
     const holdingACashflows: RealizedGainCashflowInput[] = [
       {
@@ -408,13 +425,49 @@ describe("bất biến realized + unrealized == absolutePnl (issue #67)", () => 
       },
     ];
 
+    // Holding C (còn mở, CÓ cổ tức cổ phiếu): mua 100 (giá 10.000), nhận cổ
+    // tức cổ phiếu +25 (dilute avgCost), bán một phần 25, còn giữ 100. SL cổ
+    // tức=25 chọn để SL-ngay-sau-cổ-tức=125 chỉ có ước số nguyên tố 5 (tránh
+    // thập phân vô hạn tuần hoàn).
+    const holdingCCashflows: RealizedGainCashflowInput[] = [
+      {
+        id: "c1",
+        type: "BUY",
+        date: d("2023-01-05"),
+        createdAt: d("2023-01-05"),
+        quantity: new Decimal(100),
+        amount: new Decimal(-1_000_000),
+      },
+      {
+        id: "c2",
+        type: "SELL",
+        date: d("2023-08-01"),
+        createdAt: d("2023-08-01"),
+        quantity: new Decimal(25),
+        amount: new Decimal(225_000),
+      },
+    ];
+    const holdingCStockDividends: RealizedGainStockDividendInput[] = [
+      {
+        id: "cdiv1",
+        date: d("2023-03-01"),
+        createdAt: d("2023-03-01"),
+        quantity: new Decimal(25),
+      },
+    ];
+
     // Cổ tức tiền mặt net (đã trừ thuế).
     const dividendNetAmount = new Decimal(20_000);
 
     const realizedGainA = computeRealizedGainForHolding(holdingACashflows);
     const realizedGainB = computeRealizedGainForHolding(holdingBCashflows);
+    const realizedGainC = computeRealizedGainForHolding(
+      holdingCCashflows,
+      holdingCStockDividends,
+    );
     const realizedPnl = realizedGainA
       .plus(realizedGainB)
+      .plus(realizedGainC)
       .plus(dividendNetAmount);
 
     // Vị thế B còn mở: avgCost = 1.005.000/200 = 5.025, còn giữ 150 ->
@@ -425,16 +478,33 @@ describe("bất biến realized + unrealized == absolutePnl (issue #67)", () => 
     const costBasisB = remainingQuantityB.mul(avgCostB);
     const navValueB = remainingQuantityB.mul(7_000);
 
+    // Vị thế C còn mở: avgCost TRƯỚC cổ tức = 1.000.000/100 = 10.000; SAU cổ
+    // tức (dilute) = 100×10.000/125 = 8.000; còn giữ 125-25=100 -> costBasis =
+    // 100×8.000 = 800.000. Giá thị trường giả định 8.500/đv -> navValue =
+    // 100×8.500 = 850.000.
+    const avgCostCBeforeDividend = new Decimal(1_000_000).div(100);
+    const quantityCBeforeDividend = new Decimal(100);
+    const quantityCAfterDividend = quantityCBeforeDividend.plus(25);
+    const avgCostCAfterDividend = quantityCBeforeDividend
+      .mul(avgCostCBeforeDividend)
+      .div(quantityCAfterDividend);
+    const remainingQuantityC = quantityCAfterDividend.minus(25);
+    const costBasisC = remainingQuantityC.mul(avgCostCAfterDividend);
+    const navValueC = remainingQuantityC.mul(8_500);
+
     const unrealizedPnl = computeUnrealizedGain([
       { navValue: navValueB, costBasis: costBasisB },
+      { navValue: navValueC, costBasis: costBasisC },
     ]);
 
     // absolutePnl tính ĐỘC LẬP bằng công thức tay (KHÔNG gọi lại
-    // computeXirrAndPnlCore, hàm đó cần DB): NAV hiện tại (chỉ B còn mở, A đã
-    // đóng NAV=0) - Σ|BUY.amount| + ΣSELL.amount + Σ dividend.netAmount.
-    const navNow = navValueB;
-    const grossBuy = new Decimal(1_010_000).plus(1_005_000);
-    const grossSell = new Decimal(1_190_000).plus(295_000);
+    // computeXirrAndPnlCore, hàm đó cần DB): NAV hiện tại (B + C còn mở, A đã
+    // đóng NAV=0) - Σ|BUY.amount| + ΣSELL.amount + Σ dividend.netAmount (cổ
+    // tức cổ phiếu KHÔNG góp dòng tiền, chỉ đổi quantity/avgCost — đã phản
+    // ánh qua navValueC/costBasisC ở trên).
+    const navNow = navValueB.plus(navValueC);
+    const grossBuy = new Decimal(1_010_000).plus(1_005_000).plus(1_000_000);
+    const grossSell = new Decimal(1_190_000).plus(295_000).plus(225_000);
     const absolutePnl = navNow
       .minus(grossBuy)
       .plus(grossSell)
@@ -444,8 +514,8 @@ describe("bất biến realized + unrealized == absolutePnl (issue #67)", () => 
 
     expect(diff.lte(1)).toBe(true);
     // Số liệu cụ thể (VND) để đối chiếu khi có sai lệch trong tương lai.
-    expect(realizedPnl.toString()).toBe("243750");
-    expect(unrealizedPnl.toString()).toBe("296250");
-    expect(absolutePnl.toString()).toBe("540000");
+    expect(realizedPnl.toString()).toBe("268750");
+    expect(unrealizedPnl.toString()).toBe("346250");
+    expect(absolutePnl.toString()).toBe("615000");
   });
 });

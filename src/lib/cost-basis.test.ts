@@ -357,7 +357,13 @@ describe("derivePosition", () => {
   // -> SL sai VÀ wentNegative có thể báo "bán vượt" SAI cho lệnh bán thực ra
   // hợp lệ (SL bán nằm trong phần cổ tức cổ phiếu, không phải mua). Xem
   // cost-basis.ts.
-  test("cổ tức cổ phiếu cộng vào SL, KHÔNG đổi avgCost (docs/domain/03-dividends.md)", () => {
+  // Sửa lần 5 (bugfix, process/DECISION.md 2026-08-13): trước đây test này
+  // assert "avgCost KHÔNG đổi" — đó là oracle SAI, xác nhận đúng bug thay vì
+  // bắt bug. avgCost phải PHA LOÃNG (dilute) theo công thức đóng: avgCost_mới
+  // = SL_trước × avgCost_cũ / SL_sau. Chọn SL cổ tức=25 để SL_sau=125 chỉ có
+  // ước số nguyên tố 5 (tránh thập phân vô hạn tuần hoàn khi đối chiếu số cụ
+  // thể) — xem docs/domain/03-dividends.md mục "Cách tính".
+  test("cổ tức cổ phiếu cộng vào SL VÀ pha loãng avgCost theo công thức đóng (docs/domain/03-dividends.md)", () => {
     const position = derivePosition(
       [
         {
@@ -375,13 +381,14 @@ describe("derivePosition", () => {
           id: "div-1",
           date: new Date("2026-02-01"),
           createdAt: new Date("2026-02-01"),
-          quantity: new Decimal(10),
+          quantity: new Decimal(25),
         },
       ],
     );
 
-    expect(position.quantity.toString()).toBe("110");
-    expect(position.avgCost.toString()).toBe("100000");
+    // SL: 100 + 25 = 125. avgCost = 100×100.000/125 = 80.000.
+    expect(position.quantity.toString()).toBe("125");
+    expect(position.avgCost.toString()).toBe("80000");
     expect(position.wentNegative).toBe(false);
   });
 
@@ -500,10 +507,18 @@ describe("derivePosition", () => {
   // path: bán một phần (không đóng hết, kể cả tính CP từ cổ tức) rồi mua tiếp.
   // Code CŨ lấy avgCost thẳng từ derivePosition(cashflows) cũ (chỉ-Cashflow,
   // đã xoá) — chỉ phát lại BUY/SELL, không biết cổ tức cổ phiếu — nên quantity
-  // nội bộ chỉ-cashflow của nó là 100-105=-5 (không bao giờ về 0), điều kiện
-  // reset avgCost không kích hoạt -> avgCost SAI = 211.875 thay vì đúng
-  // 171.500 (đối chiếu tính tay bên dưới). Test này là oracle bắt đúng bug đó.
-  test("bán một phần (không đóng hết) rồi mua tiếp: avgCost tính đúng theo SL thực gồm cổ tức", () => {
+  // nội bộ chỉ-cashflow của nó không bao giờ về 0, điều kiện reset avgCost
+  // không kích hoạt. Test này là oracle bắt đúng bug đó — vẫn là oracle dùng
+  // để đối chiếu chéo với realized-pnl.test.ts.
+  //
+  // Sửa lần 5 (bugfix, process/DECISION.md 2026-08-13): bộ số ĐỔI so với bản
+  // gốc — cổ tức cổ phiếu giờ PHA LOÃNG avgCost (trước đây "KHÔNG đổi" là
+  // bug), nên số cũ (SL cổ tức=20, SELL=105, BUY=85, avgCost kỳ vọng=171.500)
+  // không còn đúng nữa. Đổi SL cổ tức=25 để SL ngay-sau-cổ-tức=125 chỉ có ước
+  // số nguyên tố 5 (tránh thập phân vô hạn tuần hoàn) — đổi ĐỒNG BỘ cả SELL/
+  // BUY theo sau để vẫn giữ đúng tinh thần ca biên gốc (bán một phần không
+  // đóng hết, rồi mua tiếp).
+  test("bán một phần (không đóng hết) rồi mua tiếp: avgCost tính đúng theo SL thực gồm cổ tức, có pha loãng", () => {
     const cashflows = [
       {
         id: "buy-1",
@@ -519,7 +534,7 @@ describe("derivePosition", () => {
         type: "SELL" as const,
         date: new Date("2026-03-01"),
         createdAt: new Date("2026-03-01"),
-        quantity: new Decimal(105),
+        quantity: new Decimal(100),
         pricePerUnit: new Decimal(12_000),
         feeAmount: new Decimal(0),
       },
@@ -528,7 +543,7 @@ describe("derivePosition", () => {
         type: "BUY" as const,
         date: new Date("2026-04-01"),
         createdAt: new Date("2026-04-01"),
-        quantity: new Decimal(85),
+        quantity: new Decimal(75),
         pricePerUnit: new Decimal(200_000),
         feeAmount: new Decimal(0),
       },
@@ -538,16 +553,17 @@ describe("derivePosition", () => {
         id: "div-1",
         date: new Date("2026-02-01"),
         createdAt: new Date("2026-02-01"),
-        quantity: new Decimal(20),
+        quantity: new Decimal(25),
       },
     ];
 
     const position = derivePosition(cashflows, stockDividends);
 
-    // SL thực: 100 (buy-1) +20 (div-1) =120 -105 (sell-1) =15 +85 (buy-2) =100.
-    // avgCost = (15*10.000 + 85*200.000) / 100 = 171.500.
+    // SL thực: 100 (buy-1) +25 (div-1) =125 -100 (sell-1) =25 +75 (buy-2) =100.
+    // avgCost sau div-1 (dilute) = 100×10.000/125 = 8.000 (SELL không đổi avgCost).
+    // avgCost sau buy-2 = (25×8.000 + 75×200.000) / 100 = 152.000.
     expect(position.quantity.toString()).toBe("100");
-    expect(position.avgCost.toString()).toBe("171500");
+    expect(position.avgCost.toString()).toBe("152000");
     expect(position.wentNegative).toBe(false);
   });
 

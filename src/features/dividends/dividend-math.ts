@@ -19,8 +19,10 @@ export function computeCashDividend(input: {
 
 // Công thức thuần cho cổ tức cổ phiếu (docs/domain/03-dividends.md "Cách
 // tính"): stockQuantity = SL đang giữ × %/100 — không phát sinh dòng tiền,
-// avgCost giữ nguyên (xem features/dividends/actions.ts::recordDividend).
-// Cổ phiếu không chia lẻ -> stockQuantity được LÀM TRÒN XUỐNG (floor) so với
+// nhưng CÓ pha loãng avgCost theo công thức đóng (sửa lần 2, process/DECISION.md
+// 2026-08-13 — trước đây ghi "avgCost giữ nguyên" ở đây là SAI, xem
+// features/dividends/actions.ts::recordStockDividend). Cổ phiếu không chia lẻ
+// -> stockQuantity được LÀM TRÒN XUỐNG (floor) so với
 // công thức tuyến tính. rawStockQuantity (trước làm tròn) giữ lại làm mốc so
 // sánh tolerance khi user tự chỉnh (isStockQuantityOverrideValid bên dưới) —
 // công ty phát hành có thể áp quy ước làm tròn khác (vd theo lô) lệch khỏi

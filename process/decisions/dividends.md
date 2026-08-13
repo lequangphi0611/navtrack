@@ -9,7 +9,7 @@ Spec tương ứng: [`docs/domain/03-dividends.md`](../../docs/domain/03-dividen
 
 ## 2026-07-16 — Issue #52: `DIVIDEND_PAR_VALUE`, `avgCost` giữ nguyên, SL-tại-ngày-ghi
 
-**Status:** Accepted
+**Status:** Superseded một phần bởi 2026-08-13 — điểm "avgCost giữ nguyên"; phần Setting mới + SL-tại-ngày-ghi vẫn Accepted
 
 **Issue #52: `DIVIDEND_PAR_VALUE` Setting mới; `avgCost` giữ nguyên khi STOCK dividend; SL-tại-ngày-ghi replay cả Cashflow + Dividend.**
 - **`DIVIDEND_PAR_VALUE` + `DIVIDEND_TAX_RATE` đều là Setting mới** (trước #52, chỉ có `MAX_MEMBERS`); seed `effectiveFrom = 2020-01-01`: `TAX_RATE = "5"`, `PAR_VALUE = "10000"`. Không hard-code mệnh giá (Setting = runtime config).
@@ -74,6 +74,24 @@ Spec tương ứng: [`docs/domain/03-dividends.md`](../../docs/domain/03-dividen
 - Quyết định: **xử lý giống `MISSING_PRICE`** — `computeCashDividendPriceAdjustment()` trả `null` khi kết quả `<= 0` (dùng `.gt(0)`, không dùng `.isPositive()` vì API đó có thể coi `0` dương tùy dấu nội bộ của decimal.js). Caller (`recordDividend`) không cần sửa gì thêm — `if (newPrice)` đã coi `null` = bỏ qua tạo `NavOverride`, dividend vẫn ghi thành công bình thường. Không clamp về một sàn tối thiểu (vd 1 VND) — giá trị đó không phản ánh đúng công thức bù trừ, không mang ý nghĩa tài chính thật, dễ gây hiểu nhầm hơn là hữu ích.
 - Không thêm log cảnh báo riêng cho ca này — giữ nhất quán với `MISSING_PRICE` (cũng không có log riêng, xem `docs/domain/03-dividends.md` "Không xử lý MISSING_PRICE khác gì bình thường").
 - Docs đã sync: `docs/domain/03-dividends.md` (mục "Bù pha loãng NAV khi ghi cổ tức", đổi "Ca biên chưa xử lý" thành đã chốt).
+
+---
+
+## 2026-08-13 — Bugfix: `avgCost` PHẢI dilute qua cổ tức cổ phiếu (đảo điểm "giữ nguyên" của 2026-07-16)
+
+**Status:** Accepted — supersedes 2026-07-16 (điểm "avgCost giữ nguyên khi STOCK dividend"); phần Setting mới + SL-tại-ngày-ghi của 2026-07-16 KHÔNG đổi, vẫn Accepted
+
+**`avgCost` bị PHA LOÃNG (dilute) khi nhận cổ tức cổ phiếu, theo công thức đóng — "avgCost giữ nguyên" (chốt ở 2026-07-16) là BUG, không phải quy tắc domain đúng.**
+- Bối cảnh: cả 3 nơi tính `avgCost` (`derivePosition()` ở `lib/cost-basis.ts`, `computeRealizedGainForHolding()` ở `lib/realized-pnl.ts`, và `recordStockDividend()` ở `features/dividends/actions.ts`) đều cố tình bỏ qua sự kiện `Dividend{STOCK}` khi tính `avgCost`, theo đúng quyết định gốc 2026-07-16. Nhưng nhận cổ tức cổ phiếu KHÔNG tốn thêm tiền — tổng vốn gốc đã bỏ ra giữ nguyên, chỉ chia đều cho nhiều CP hơn, nên giá vốn TRÊN MỖI CP phải giảm. Không dilute khiến `avgCost` bị giữ cao giả tạo, làm `realizedGain` (lãi/lỗ đã thực hiện) tính **THẤP hơn thực tế** khi bán sau khi đã nhận cổ tức cổ phiếu — báo lãi ít hơn hoặc lỗ nhiều hơn thực, sai theo hướng bi quan.
+  - Ví dụ minh hoạ: mua 100 CP giá 100.000 (avgCost=100.000, vốn gốc 10.000.000). Nhận cổ tức cổ phiếu 25% → +25 CP, giữ 125 CP, vẫn cùng 10.000.000 vốn gốc → avgCost ĐÚNG = 10.000.000/125 = 80.000/CP (không phải 100.000 như code cũ giữ). Bán 125 CP giá 90.000: `realizedGain` đúng = 125×(90.000−80.000) = 1.250.000 lãi; code cũ (avgCost=100.000 sai) sẽ tính ra 125×(90.000−100.000) = −1.250.000 lỗ — SAI DẤU hoàn toàn, không chỉ sai độ lớn.
+- Quyết định: công thức đóng — `avgCost_mới = SL_trước × avgCost_cũ / SL_sau` (SL_sau = SL_trước + SL cổ tức nhận thêm; SL_sau=0 → `avgCost=0`, ca biên dữ liệu không hợp lệ). Áp dụng đồng bộ ở cả 3 nơi:
+  - `derivePosition()`: đổi vòng lặp avgCost từ chỉ-duyệt-BUY sang duyệt CẢ BUY LẪN `Dividend{STOCK}` theo đúng thứ tự thời gian (`sortByPositionTrailOrder`), mirror cấu trúc union sự kiện đã có ở `computeRealizedGainForHolding`.
+  - `computeRealizedGainForHolding()`: nhánh `STOCK_DIVIDEND` (trước đây chỉ `realQuantity += quantity; continue`) giờ dilute `avgCost` TRƯỚC khi cộng dồn `realQuantity`.
+  - `recordStockDividend()` (write-path, **KHÔNG replay lại toàn bộ lịch sử** — giữ nguyên lý do hiệu năng của quyết định gốc 2026-07-16, chỉ đổi công thức áp lên cache hiện có): tính `avgCost_mới` từ `Holding.quantity`/`avgCost` hiện tại, ghi qua `persistPosition()` (`features/holdings/repository.ts`, dùng chung với 4 Server Action mua/bán) thay vì `updateHoldingQuantity()` (chỉ ghi `quantity`, đã xoá — dead code sau khi không còn call site).
+  - `findDividendPositionSource()` (`features/dividends/repository.ts`) thêm select `avgCost` của `Holding` — trước đây thiếu vì write-path cũ không cần đọc nó.
+- **Backfill production:** production đã có record cổ tức cổ phiếu thật (user xác nhận — khác giả định "chưa có" ở `transactions-and-cost-basis.md` mục 2026-07-24 (3), đã lỗi thời) → mọi `Holding` có `Dividend{type: STOCK}` cần recompute lại `avgCost` cache theo `derivePosition()` đã sửa. Viết `scripts/backfill-stock-dividend-avgcost.ts` (dry-run mặc định, chỉ ghi khi truyền `--apply`, mỗi holding một transaction riêng qua `persistPosition()`, KHÔNG đụng `Cashflow`/`Dividend` gốc) — **chưa chạy `--apply` lên production trong phiên sửa bug này**, cần chạy riêng sau khi review.
+- Ca biên: `SL_sau = 0` (nhận cổ tức khi không giữ CP nào) là trạng thái dữ liệu không hợp lệ theo domain, không xử lý gì thêm ngoài tránh chia-cho-0.
+- Docs đã sync: `docs/domain/01-assets-and-holdings.md`, `docs/domain/02-transactions-and-cost-basis.md`, `docs/domain/03-dividends.md`, `docs/domain/05-returns-xirr-and-pnl.md`.
 
 ---
 
