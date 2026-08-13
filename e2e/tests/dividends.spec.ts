@@ -313,7 +313,9 @@ test("Cổ tức cổ phiếu: SL hiện đúng ngay sau khi ghi, không bị gi
   const page = await context.newPage();
 
   try {
-    // 100 CP × 10% = 10 CP thưởng (số tròn, không lẫn chủ đề làm tròn của 2 test trên).
+    // 100 CP × 25% = 25 CP thưởng — 25% (không phải 10% như trước sửa lần 2,
+    // process/DECISION.md 2026-08-13) cố tình chọn để SL sau cổ tức (125) chỉ
+    // có ước số nguyên tố 5, tránh avgCost dilute ra số VND lẻ khi hiển thị.
     const newHoldingPage = new NewHoldingPage(page);
     await newHoldingPage.goto();
     const detail = await newHoldingPage.create({
@@ -325,32 +327,36 @@ test("Cổ tức cổ phiếu: SL hiện đúng ngay sau khi ghi, không bị gi
     const form = new DividendForm(page, detail.url);
     await form.goto();
     await form.selectStockType();
-    await form.setPercent("10");
+    await form.setPercent("25");
     await form.submit();
     await expect(form.successHeading("HPG")).toBeVisible();
 
-    // (1) Trang chi tiết vị thế phải hiện ĐÚNG 110 CP ngay sau khi ghi — hard
+    // (1) Trang chi tiết vị thế phải hiện ĐÚNG 125 CP ngay sau khi ghi — hard
     // navigation (page.goto, không phải click Link) để loại trừ mọi nghi ngờ
     // về cache client-side, chỉ còn lại đúng phép tính server-side.
     await detail.goto();
-    await expect(detail.quantityText).toHaveText("110 cổ phần");
+    await expect(detail.quantityText).toHaveText("125 cổ phần");
 
-    // (2) Bán 105 CP — CHỈ hợp lệ nếu tính cả 10 CP cổ tức (100 mua-only
+    // (2) Bán 105 CP — CHỈ hợp lệ nếu tính cả 25 CP cổ tức (100 mua-only
     // không đủ). Trước fix: derivePosition() cashflow-only sẽ SAI báo "bán
     // vượt quá số lượng đang giữ" cho lệnh bán hợp lệ này.
     const transactionForm = await detail.goToNewTransaction();
     await transactionForm.submitSell({ quantity: 105, pricePerUnit: 60_000 });
 
-    // Bán thành công (không bị chặn nhầm) VÀ cache không bị ghi đè mất 10 CP
-    // cổ tức: 100 + 10 − 105 = 5 CP — KHÔNG PHẢI 0 (nếu cache bị ghi đè mất
-    // phần cổ tức trước khi trừ) hay bị chặn hoàn toàn (nếu wentNegative sai).
-    await expect(detail.quantityText).toHaveText("5 cổ phần");
+    // Bán thành công (không bị chặn nhầm) VÀ cache không bị ghi đè mất 25 CP
+    // cổ tức: 100 + 25 − 105 = 20 CP — KHÔNG PHẢI 0/-5 (nếu cache bị ghi đè
+    // mất phần cổ tức trước khi trừ) hay bị chặn hoàn toàn (nếu wentNegative sai).
+    await expect(detail.quantityText).toHaveText("20 cổ phần");
 
-    // avgCost không đổi qua cả cổ tức (miễn phí, không có giá) lẫn SELL
-    // (phương pháp bình quân di động, chỉ BUY mới recompute) — vẫn đúng 50k
-    // (giá mua duy nhất, từ NewHoldingPage.create() ở trên).
+    // Sửa lần 2 (bugfix, process/DECISION.md 2026-08-13): avgCost BỊ PHA
+    // LOÃNG (dilute) qua cổ tức cổ phiếu — trước đây khẳng định "không đổi"
+    // ở đây là SAI, đã xác nhận lại bug đó thay vì bắt nó. SELL vẫn KHÔNG đổi
+    // avgCost (phương pháp bình quân di động, không có BUY nào sau cổ tức
+    // trong kịch bản này). avgCost_mới = SL_trước×avgCost_cũ/SL_sau =
+    // 100×50.000/125 = 40.000 -> formatMoney(..., {compact:true}) = "40k"
+    // (đối chiếu bằng lib/format.test.ts, không hardcode mù).
     const avgCostAfterSell = await detail.avgCost.innerText();
-    expect(avgCostAfterSell).toContain("50k");
+    expect(avgCostAfterSell).toContain("40k");
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);

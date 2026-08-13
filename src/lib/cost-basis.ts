@@ -107,6 +107,19 @@ export type StockDividendInput = {
 // bản công thức song song (dù bản kia chỉ còn sống trong test) chính là
 // pattern đã gây chuỗi bug ở trên — không lặp lại.
 //
+// Sửa lần 5 (bugfix, process/DECISION.md 2026-08-13): sửa lần 2/3 ở trên
+// khẳng định "avgCost CHỈ đổi bởi BUY, KHÔNG đổi bởi cổ tức cổ phiếu" — ĐÓ LÀ
+// BUG, không phải quy tắc domain đúng. Nhận cổ tức cổ phiếu (thêm CP miễn phí,
+// không tốn thêm tiền) phải PHA LOÃNG (dilute) avgCost theo công thức đóng:
+// avgCost_mới = SL_trước × avgCost_cũ / SL_sau (SL_sau = SL_trước +
+// stockQuantity). Không dilute khiến avgCost bị giữ cao giả tạo, làm
+// realizedGain (lib/realized-pnl.ts) tính THẤP hơn thực tế khi bán sau đó —
+// bug lọt qua vì bộ test cũ chỉ assert "avgCost giữ nguyên" thay vì đối chiếu
+// công thức domain. Đổi vòng lặp avgCost bên dưới sang duyệt CẢ BUY LẪN cổ
+// tức cổ phiếu theo đúng thứ tự thời gian (không còn `if (cf.type !== "BUY")
+// continue` cho toàn bộ cổ tức) — mirror đúng cách computeRealizedGainForHolding
+// (lib/realized-pnl.ts) đã sửa cùng đợt.
+//
 // buildQuantityTimeline() (lib/position-trail.ts, đã phát lại đúng thứ tự
 // thời gian CẢ Cashflow lẫn Dividend{STOCK}) dùng chung cho cả quantity/
 // wentNegative lẫn avgCost. Dùng ở 4 action ghi giao dịch
@@ -146,15 +159,57 @@ export function derivePosition(
     if (entry.after.isNegative()) wentNegative = true;
   }
 
-  // avgCost: chỉ BUY đổi, dùng SL thực (before/after từ timeline ở trên, gồm
-  // cả cổ tức cổ phiếu) làm cơ sở bình quân — xem giải thích ở comment đầu hàm.
+  // avgCost: đổi bởi BUY (bình quân gia quyền) LẪN cổ tức cổ phiếu (dilute
+  // theo công thức đóng) — duyệt CẢ HAI theo đúng thứ tự thời gian, dùng SL
+  // thực (before/after từ timeline ở trên, gồm cả cổ tức cổ phiếu) làm cơ sở.
+  // SELL/MATURITY bỏ qua (không đổi avgCost, chỉ trừ quantity). Sửa lần 5 —
+  // xem giải thích ở comment đầu hàm (process/DECISION.md 2026-08-13).
+  type AvgCostEvent =
+    | { kind: "CASHFLOW"; cf: CashflowInputWithEvent }
+    | { kind: "STOCK_DIVIDEND"; dividend: StockDividendInput };
+
+  const avgCostEvents: (AvgCostEvent & {
+    id: string;
+    date: Date;
+    createdAt: Date;
+    rank: number;
+  })[] = [
+    ...cashflows.map((cf) => ({
+      kind: "CASHFLOW" as const,
+      cf,
+      id: cf.id,
+      date: cf.date,
+      createdAt: cf.createdAt,
+      rank: cashflowEventRank(cf.type),
+    })),
+    ...stockDividends.map((dividend) => ({
+      kind: "STOCK_DIVIDEND" as const,
+      dividend,
+      id: dividend.id,
+      date: dividend.date,
+      createdAt: dividend.createdAt,
+      rank: DEFAULT_EVENT_RANK,
+    })),
+  ];
+
   let avgCost = new Decimal(0);
-  for (const cf of sortByPositionTrailOrder(cashflows)) {
-    // Loại trừ MỌI THỨ không phải BUY — chỉ mua mới đổi avgCost bình quân di
-    // động; xác nhận đúng cho MATURITY tương lai (đóng vị thế = trừ quantity,
+  for (const event of sortByPositionTrailOrder(avgCostEvents)) {
+    const entry = timeline.get(event.id)!;
+    if (event.kind === "STOCK_DIVIDEND") {
+      // Dilute: avgCost_mới = SL_trước × avgCost_cũ / SL_sau; SL_sau=0 (ca
+      // biên dữ liệu không hợp lệ theo domain — nhận cổ tức khi không giữ CP
+      // nào) -> avgCost = 0, không chia cho 0.
+      avgCost = entry.after.isZero()
+        ? new Decimal(0)
+        : entry.before.mul(avgCost).div(entry.after);
+      continue;
+    }
+
+    const cf = event.cf;
+    // Loại trừ MỌI THỨ không phải BUY — SELL/MATURITY không đổi avgCost bình
+    // quân di động; xác nhận đúng cho MATURITY (đóng vị thế = trừ quantity,
     // không đổi avgCost, giống SELL, process/phase-7.md mục 2).
     if (cf.type !== "BUY") continue;
-    const entry = timeline.get(cf.id)!;
     const realQuantityBefore = entry.before;
     const afterQty = entry.after;
     avgCost = afterQty.isZero()

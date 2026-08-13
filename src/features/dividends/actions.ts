@@ -20,8 +20,11 @@ import {
 import { getTotalCashDividendReceived } from "@/features/dividends/queries";
 import { recordDividendSchema } from "@/features/dividends/schemas";
 // BondTerms là đặc tả của chính vị thế nên truy vấn sống ở repository của
-// feature holdings — xem comment findBondTerms ở đó.
-import { findBondTerms } from "@/features/holdings/repository";
+// feature holdings — xem comment findBondTerms ở đó. persistPosition() cùng
+// lý do (process/DECISION.md 2026-08-13): recordStockDividend() giờ dùng
+// chung hàm ghi vị thế với 4 Server Action mua/bán, không tự cộng thẳng
+// quantity nữa.
+import { findBondTerms, persistPosition } from "@/features/holdings/repository";
 import type { BondTermsRow } from "@/features/holdings/repository";
 import type { DividendFormState } from "@/features/dividends/types";
 import { assertNever } from "@/lib/assert-never";
@@ -50,7 +53,6 @@ import {
   findLatestPriceQuote,
   insertDividend,
   runInTransaction,
-  updateHoldingQuantity,
   upsertPriceAdjustmentOverride,
 } from "./repository";
 
@@ -225,6 +227,9 @@ type RecordStockDividendCtx = {
   percentDecimal: Decimal;
   quantityAtDate: Decimal;
   holdingQuantity: Decimal;
+  // avgCost hiện có trên cache Holding — cần để dilute theo công thức đóng
+  // (process/DECISION.md 2026-08-13), xem comment ở cuối hàm bên dưới.
+  holdingAvgCost: Decimal;
   stockQuantityOverride: string | undefined;
   priceAlreadyReflectsMarket: boolean;
 };
@@ -315,11 +320,24 @@ async function recordStockDividend(
     tx,
   );
 
-  // Cộng THẲNG vào cache hiện có (Holding.quantity), KHÔNG gọi lại
-  // derivePosition()/buildQuantityTimeline để tính lại từ đầu — avgCost giữ
-  // nguyên, không sửa (docs/domain/01-assets-and-holdings.md).
+  // Sửa lần 2 (bugfix, process/DECISION.md 2026-08-13): TRƯỚC ĐÂY cộng thẳng
+  // quantity vào cache, giữ nguyên avgCost — SAI. Cổ tức cổ phiếu không tốn
+  // thêm tiền nên phải PHA LOÃNG avgCost theo công thức đóng:
+  // avgCost_mới = SL_trước × avgCost_cũ / SL_sau (SL_sau=0 -> avgCost=0, ca
+  // biên dữ liệu không hợp lệ). VẪN cố ý KHÔNG gọi lại derivePosition()/
+  // buildQuantityTimeline để replay toàn bộ lịch sử ở đây (lý do hiệu năng
+  // giữ nguyên như quyết định gốc — chỉ đổi công thức áp lên cache hiện có).
+  // Ghi qua persistPosition() (features/holdings/repository.ts) — dùng chung
+  // với 4 Server Action mua/bán, không tự viết lại `tx.holding.update`.
   const afterQuantity = ctx.holdingQuantity.plus(finalStockQuantity);
-  await updateHoldingQuantity(ctx.holdingId, afterQuantity.toString(), tx);
+  const avgCostAfter = afterQuantity.isZero()
+    ? new Decimal(0)
+    : ctx.holdingQuantity.mul(ctx.holdingAvgCost).div(afterQuantity);
+  await persistPosition(
+    ctx.holdingId,
+    { quantity: afterQuantity, avgCost: avgCostAfter },
+    tx,
+  );
 
   return {
     ok: true,
@@ -699,6 +717,7 @@ async function runRecordDividendTransaction(
         percentDecimal: ctx.percentDecimal,
         quantityAtDate,
         holdingQuantity: holding.quantity,
+        holdingAvgCost: holding.avgCost,
         stockQuantityOverride: ctx.stockQuantityOverride,
         priceAlreadyReflectsMarket: ctx.priceAlreadyReflectsMarket,
       });
