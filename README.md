@@ -129,6 +129,15 @@ tự `service postgresql start` nếu chưa chạy (không cần mạng, nhanh),
 DROP + CREATE lại DB `navtrack` sạch mỗi lần chạy trước khi migrate/seed/test — xem
 `process/decisions/agent-workflow-and-tooling.md` mục 2026-08-13.
 
+**`pnpm install` không nằm trong setup script trên.** Cố ý — setup script chỉ chạy 1 lần rồi
+cache theo **environment** (~7 ngày), trong khi repo được clone **mới hoàn toàn mỗi phiên**;
+nếu cache cả `node_modules`, các phiên sau (khác commit/lockfile) sẽ dùng dependency đóng băng
+theo lần đầu, lệch với code thật đang chạy. Thay vào đó, `.claude/hooks/cloud-install-deps.sh`
+(đăng ký qua `SessionStart` hook trong `.claude/settings.json`) tự chạy `pnpm install` mỗi
+phiên Claude Cloud, sau khi repo đã clone xong — luôn khớp đúng bản đang có, không chạy trên
+Claude Local (dev tự cài tay theo hướng dẫn ở trên). Đúng khuyến nghị của nền tảng: setup
+script cho toolchain/OS package, SessionStart hook cho việc cài dependency theo repo.
+
 ## Deploy lên production
 
 Xem [`docs/05-deploy.md`](./docs/05-deploy.md) — deploy lên Vercel + Neon: connection string
