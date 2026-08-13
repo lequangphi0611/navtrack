@@ -143,6 +143,12 @@ type CashDividendResult = {
   type: "CASH";
   symbol: string;
   unit: string;
+  // Trả lại nguyên `percent` user đã nhập (ctx.percentDecimal, luôn có mặt cho
+  // CASH/STOCK) — để recordDividend() ghép RecordedDividend chỉ bằng
+  // `{ ...result, ...shared }`, không cần đọc lại `ctx.data.percent` (một
+  // union KHÁC) và không cần non-null assertion (process/DECISION.md
+  // 2026-07-29 việc còn treo).
+  percent: string;
   grossAmount: Decimal;
   taxAmount: Decimal;
   netAmount: Decimal;
@@ -202,6 +208,7 @@ async function recordCashDividend(
     type: "CASH",
     symbol: ctx.symbol,
     unit: ctx.unit,
+    percent: ctx.percentDecimal.toString(),
     grossAmount,
     priceAdjustment,
     taxAmount,
@@ -233,6 +240,8 @@ type StockDividendResult =
       type: "STOCK";
       symbol: string;
       unit: string;
+      // Cùng lý do CashDividendResult.percent — xem comment ở đó.
+      percent: string;
       addedQuantity: Decimal;
       afterQuantity: Decimal;
       wasRounded: boolean;
@@ -317,6 +326,7 @@ async function recordStockDividend(
     type: "STOCK",
     symbol: ctx.symbol,
     unit: ctx.unit,
+    percent: ctx.percentDecimal.toString(),
     addedQuantity: finalStockQuantity,
     afterQuantity,
     // true CHỈ khi hệ thống tự làm tròn xuống — không phải khi user tự sửa
@@ -719,6 +729,25 @@ async function runRecordDividendTransaction(
   }
 }
 
+// recordDividendSchema là discriminatedUnion theo `type`, và mỗi variant
+// dùng z.strictObject (từ chối field lạ — xem comment schemas.ts). FormData
+// luôn có mặt 4 field optional (percent/stockQuantityOverride/taxAmount/
+// grossAmount) trong object build ở recordDividend() bất kể `type` đang gửi
+// gì (form chỉ render đúng field cần, field khác không có trong FormData) —
+// coerce `null` (field vắng mặt) thành `undefined` rồi LOẠI HẲN key đó trước
+// khi đưa vào zod, để một submit CASH hợp lệ (không có stockQuantityOverride/
+// taxAmount/grossAmount) không bị strictObject từ chối oan vì "key lạ" (dù
+// giá trị là `undefined`, key vẫn tồn tại trên object JS). Field lạ có GIÁ
+// TRỊ THẬT (client cố tình gửi taxAmount cho CASH) thì vẫn giữ nguyên key —
+// strictObject vẫn từ chối đúng ca đó ("không tin client").
+function omitUndefinedFields<T extends Record<string, unknown>>(
+  fields: T,
+): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+}
+
 // Chữ ký khớp useActionState ((prevState, formData) => Promise<State>) — cùng
 // pattern saveNavOverride (features/holdings/actions.ts), KHÔNG theo
 // ActionResult<T> (DividendForm.action yêu cầu đúng shape DividendFormState).
@@ -726,49 +755,44 @@ export async function recordDividend(
   _prevState: DividendFormState,
   formData: FormData,
 ): Promise<DividendFormState> {
-  const ctx = await parseAuthenticated(recordDividendSchema, {
-    holdingId: formData.get("holdingId"),
-    type: formData.get("type"),
-    date: formData.get("date"),
-    // formData.get() trả null khi field không có mặt trong form (BOND_COUPON
-    // không render input percent) -> coerce về undefined để khớp .optional()
-    // của zod (optional chỉ chấp nhận undefined, không chấp nhận null).
-    percent: formData.get("percent") || undefined,
-    // Cùng lý do percent — field không có mặt trong form (CASH, hoặc STOCK
-    // không override) -> coerce null về undefined để khớp .optional() của zod.
-    stockQuantityOverride: formData.get("stockQuantityOverride") || undefined,
-    // Cùng lý do stockQuantityOverride — coerce null (field không có mặt
-    // trong form, vd UI chưa nhập) về undefined để khớp .optional() của zod.
-    paymentDate: formData.get("paymentDate") || undefined,
-    priceAlreadyReflectsMarket:
-      formData.get("priceAlreadyReflectsMarket") || undefined,
-    // Chỉ BOND_COUPON gửi field này (AutoFilledAmountCard "Thuế lãi trái
-    // phiếu") — schema từ chối nếu loại khác gửi lên.
-    taxAmount: formData.get("taxAmount") || undefined,
-    // Chỉ BOND_COUPON gửi field này (AutoFilledAmountCard "Lãi gộp") — schema
-    // từ chối nếu loại khác gửi lên. Cùng lý do coerce null -> undefined ở
-    // các field trên.
-    grossAmount: formData.get("grossAmount") || undefined,
-  });
+  const ctx = await parseAuthenticated(
+    recordDividendSchema,
+    omitUndefinedFields({
+      holdingId: formData.get("holdingId"),
+      type: formData.get("type"),
+      date: formData.get("date"),
+      // Chỉ CASH/STOCK gửi field này (BOND_COUPON không có ô %).
+      percent: formData.get("percent") || undefined,
+      // Chỉ STOCK gửi field này (user tự sửa số lượng cổ tức cổ phiếu).
+      stockQuantityOverride: formData.get("stockQuantityOverride") || undefined,
+      paymentDate: formData.get("paymentDate") || undefined,
+      priceAlreadyReflectsMarket:
+        formData.get("priceAlreadyReflectsMarket") || undefined,
+      // Chỉ BOND_COUPON gửi field này (AutoFilledAmountCard "Thuế lãi trái
+      // phiếu").
+      taxAmount: formData.get("taxAmount") || undefined,
+      // Chỉ BOND_COUPON gửi field này (AutoFilledAmountCard "Lãi gộp").
+      grossAmount: formData.get("grossAmount") || undefined,
+    }),
+  );
   if (!ctx.ok) return ctx;
   const { userId } = ctx;
 
-  const { holdingId, type, date, percent } = ctx.data;
+  const { holdingId, type, date } = ctx.data;
 
-  // `percent` là `string | undefined` ở tầng field (BOND_COUPON không có ô %)
-  // và chỉ bắt buộc lại qua `.refine()` theo `type` — mà refine của zod KHÔNG
-  // thu hẹp kiểu suy ra được. Guard thật ở đây để `percent!` phía dưới dựa vào
-  // một kiểm tra runtime đã chạy, thay vì chỉ dựa vào một refine ở file khác.
-  // Đưa hẳn về union theo `type` như RecordDividendTxCtx là cách duy nhất bỏ
-  // được `!` — nhưng phải đổi recordDividendSchema sang discriminatedUnion,
-  // ngoài phạm vi lần sửa này (ghi lại ở process/DECISION.md).
-  if (type !== "BOND_COUPON" && percent === undefined) {
-    return { ok: false, error: "Nhập tỷ lệ cổ tức" };
-  }
-
+  // `recordDividendSchema` (discriminatedUnion theo `type`) đã bắt buộc
+  // `percent` ở tầng schema cho CASH/STOCK và cấm hẳn ở BOND_COUPON — không
+  // còn guard runtime nào cần lặp lại ở đây (process/DECISION.md 2026-07-29
+  // việc còn treo: bỏ `percent!`). Nhánh theo `ctx.data.type` (KHÔNG phải biến
+  // `type` vừa destructure ở trên) để compiler giữ được liên hệ giữa `type` và
+  // `percent` — cùng lý do RecordDividendTxCtx dùng switch thay vì if/ternary
+  // trên biến `let` (xem comment buildRecordDividendTxCtx bên dưới).
+  //
   // BOND_COUPON không có % — Decimal(0) chỉ để giữ kiểu, nhánh đó không đọc tới
   // giá trị này (mệnh giá/lãi suất đọc từ BondTerms).
-  const percentDecimal = new Decimal(percent ?? 0);
+  const percentDecimal = new Decimal(
+    ctx.data.type === "BOND_COUPON" ? 0 : ctx.data.percent,
+  );
   const { parValue, taxRatePercent } = await resolveCashDividendSettings(
     type,
     date,
@@ -779,8 +803,10 @@ export async function recordDividend(
   const txCtxResult = await buildRecordDividendTxCtx({
     type,
     userId,
-    taxAmountOverride: ctx.data.taxAmount,
-    grossAmountOverride: ctx.data.grossAmount,
+    taxAmountOverride:
+      ctx.data.type === "BOND_COUPON" ? ctx.data.taxAmount : undefined,
+    grossAmountOverride:
+      ctx.data.type === "BOND_COUPON" ? ctx.data.grossAmount : undefined,
     base: {
       holdingId,
       userId,
@@ -789,7 +815,8 @@ export async function recordDividend(
       percentDecimal,
       parValue,
       taxRatePercent,
-      stockQuantityOverride: ctx.data.stockQuantityOverride,
+      stockQuantityOverride:
+        ctx.data.type === "STOCK" ? ctx.data.stockQuantityOverride : undefined,
       priceAlreadyReflectsMarket: ctx.data.priceAlreadyReflectsMarket,
     },
   });
@@ -822,9 +849,11 @@ export async function recordDividend(
       getTotalCashDividendReceived(holdingId, userId),
     ]);
 
-    // Phần chung của mọi loại; phần riêng (`percent` cho CASH/STOCK) ghép ở
-    // từng nhánh — RecordedDividend là union, spread một `percent` không tồn
-    // tại vào nhánh BOND_COUPON là lỗi kiểu, không phải chi tiết vô hại.
+    // Phần chung của mọi loại — `percent` (CASH/STOCK) đã nằm sẵn trong
+    // `result` (CashDividendResult/StockDividendResult trả lại nguyên
+    // ctx.percentDecimal), không cần ghép lại từ `ctx.data` sau khi transaction
+    // xong nữa — bỏ hẳn được non-null assertion cũ (process/DECISION.md
+    // 2026-07-29 việc còn treo).
     const shared = {
       date,
       paymentDate: ctx.data.paymentDate ?? null,
@@ -834,13 +863,7 @@ export async function recordDividend(
       holdingId,
     };
 
-    return buildDividendFormState(
-      result.type === "BOND_COUPON"
-        ? { ...result, ...shared }
-        : // Guard ở đầu hàm đã loại ca `undefined` cho CASH/STOCK bằng một
-          // kiểm tra runtime thật — `!` ở đây chỉ nói lại điều đó cho compiler.
-          { ...result, ...shared, percent: percent! },
-    );
+    return buildDividendFormState({ ...result, ...shared });
   } catch (err) {
     return handleWriteError(err, { action: "recordDividend", holdingId });
   }

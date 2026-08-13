@@ -153,8 +153,7 @@ Quyết định về `Setting` không có file riêng — nằm cùng chủ đ�
 
 ## Việc còn treo (rút từ các entry)
 
-- Gộp `getAllCashDividendsForXirr()` về `findCashDividendsForHoldings()` (cần `userId` trong chữ ký `computeXirrCore()`) — [bonds, 2026-07-29].
-- `recordDividendSchema` → `z.discriminatedUnion("type", ...)`, xoá `percent!` — [bonds, 2026-07-29].
-- e2e cho luồng trái tức: ghi bù kỳ cũ sau khi mua thêm; trái tức kỳ cuối trùng ngày đáo hạn; override gross — [bonds, 2026-07-29 và 2026-08-08].
 - `NavOverrideForm` chưa có route thật; cutoff "Tuỳ chỉnh" (CUSTOM) chưa mockup — [architecture, 2026-07-11].
 - B2 benchmark lãi suất tiết kiệm vẫn ở Backlog — [roadmap, 2026-07-17 (7)].
+
+> Đã đóng 2026-08-13: gộp `getAllCashDividendsForXirr()`/`recordDividendSchema` discriminatedUnion/3 e2e trái tức — xem [`bonds-and-cashflow-calendar.md`](./decisions/bonds-and-cashflow-calendar.md).

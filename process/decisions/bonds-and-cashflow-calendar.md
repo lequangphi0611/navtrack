@@ -104,10 +104,7 @@ Bối cảnh: mục (2) hôm nay chốt suy ngược kỳ trả lãi từ dữ l
 
 - Docs đã sync: `docs/domain/05-returns-xirr-and-pnl.md` (tập Dividend trong chuỗi XIRR + cái bẫy sót call site), `docs/domain/03-dividends.md` (nghĩa của "sửa tay" + chặn `tax > gross`), `docs/domain/07-tax.md` (phí đáo hạn mặc định 0, `MATURITY` không đi ngược vào form giao dịch thường), `src/lib/enums.ts` (comment đếm lại cho đúng), `src/lib/bond-terms.ts` (comment khớp thực tế).
 
-- **Việc còn treo (không chặn phase):**
-  - Gộp `getAllCashDividendsForXirr()` về `findCashDividendsForHoldings()` để bỏ hẳn truy vấn song song — cần thêm `userId` vào chữ ký `computeXirrCore()` (bản trong `portfolio-valuation.ts` cũng đang thiếu filter `holding: { userId }` mà bản repository đã có).
-  - `recordDividendSchema` → `z.discriminatedUnion("type", ...)`, xoá `percent!`.
-  - **e2e bắt buộc trước khi merge** (chỉ chạy được trên Claude Local): (a) ghi bù một kỳ trái tức cũ **sau khi đã mua thêm** — kiểm `gross`/`tax`/`net` cùng một cơ sở SL; (b) trái tức kỳ cuối trả đúng ngày đáo hạn, ghi tất toán **trước** rồi mới ghi trái tức — bất biến `SETTLEMENT_RANK`.
+- **Việc còn treo — ĐÃ ĐÓNG 2026-08-13** (xem nhật ký `PROCESS.md`): gộp `getAllCashDividendsForXirr()` về `findCashDividendsForHoldings()` (`computeXirrCore()` nhận thêm `userId`); `recordDividendSchema` đổi sang `z.discriminatedUnion("type", ...)` (xoá `percent!`, mỗi variant `z.strictObject` — field lạ vẫn bị từ chối như trước); 2 kịch bản e2e bắt buộc (ghi bù kỳ cũ sau khi mua thêm, trái tức kỳ cuối trùng ngày đáo hạn) chạy PASS trên Claude Cloud (Postgres native, quyết định 2026-08-13 ở `agent-workflow-and-tooling.md`).
 
 ---
 
@@ -123,7 +120,7 @@ Bối cảnh: mục (2) hôm nay chốt suy ngược kỳ trả lãi từ dữ l
 - **(c) Đổi guard `taxAmount > grossAmount` sang so với `grossAmount` CUỐI CÙNG (đã qua override), không phải `computed.grossAmount` (số tự tính) — coi là bug fix ẩn trong tính năng mới, không phải hành vi mới độc lập.** Guard cũ vô tình đúng khi gross không override được (computed = final), nhưng giờ có override thì so với số tự tính sẽ để lọt ca user hạ gross xuống thấp hơn thuế đã prefill mà không bị chặn — `netAmount` âm trôi vào XIRR y hệt lỗ hổng gốc mà guard này sinh ra để chặn (docs/domain/03-dividends.md). `netAmount = grossAmount.minus(taxAmount)` và giá trị ghi DB đều đổi theo số cuối cùng tương ứng; `computed.grossAmount` gốc vẫn giữ nguyên biến riêng, không xoá (không dùng cho tính toán tài chính nữa, nhưng còn có thể cần cho UI so sánh "số tự tính vs số đã sửa").
 - **`parValueApplied`/`couponRatePercentApplied`/`couponFrequencyMonthsApplied` giữ nguyên hành vi cũ** — luôn đóng băng theo `BondTerms` gốc tại thời điểm ghi, độc lập hoàn toàn với việc `grossAmount` có bị sửa tay hay không (đây là 3 field mô tả ĐIỀU KHOẢN áp dụng, không phải SỐ TIỀN cuối cùng).
 - Docs đã sync: `docs/domain/03-dividends.md` (mục "Cách tính" nhánh `BOND_COUPON`), `prisma/schema.prisma` (comment field mới).
-- **Việc còn treo:** UI badge "đã chỉnh tay" ở lịch sử (`DividendRowsFilter.tsx`) và card `AutoFilledAmountCard` thứ hai cho gộp ở `BondCouponFields.tsx` đã hoàn thành trong cùng lượt này. Chỉ còn treo: soi UI qua Playwright + `pnpm e2e` cho luồng ghi trái tức có override gross — tạm hoãn (hết usage AI lượt này), làm ở lượt sau.
+- **Việc còn treo — ĐÃ ĐÓNG 2026-08-13:** UI badge "đã chỉnh tay" ở lịch sử (`DividendRowsFilter.tsx`) và card `AutoFilledAmountCard` thứ hai cho gộp ở `BondCouponFields.tsx` đã hoàn thành trong cùng lượt này. `pnpm e2e` cho luồng ghi trái tức có override gross (cả ca override hợp lệ lẫn ca bị guard chặn) chạy PASS trên Claude Cloud.
 
 ---
 

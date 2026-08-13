@@ -86,7 +86,10 @@ describe("recordDividendSchema — trái tức (BOND_COUPON)", () => {
     const result = recordDividendSchema.safeParse(bondFields);
 
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.percent).toBeUndefined();
+    // Discriminated union — variant BOND_COUPON không có field `percent` (khác
+    // thiết kế cũ: field `.optional()` dùng chung, `percent` là `undefined`
+    // NHƯNG vẫn tồn tại như một key).
+    if (result.success) expect("percent" in result.data).toBe(false);
   });
 
   test("nới lỏng percent KHÔNG lan sang CASH/STOCK", () => {
@@ -107,7 +110,9 @@ describe("recordDividendSchema — trái tức (BOND_COUPON)", () => {
     });
 
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.taxAmount).toBe("430000");
+    if (result.success && result.data.type === "BOND_COUPON") {
+      expect(result.data.taxAmount).toBe("430000");
+    }
   });
 
   // "Không tin client": CASH tự tính thuế từ Setting, một request tay gửi kèm
@@ -134,7 +139,9 @@ describe("recordDividendSchema — trái tức (BOND_COUPON)", () => {
     });
 
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.grossAmount).toBe("5000000");
+    if (result.success && result.data.type === "BOND_COUPON") {
+      expect(result.data.grossAmount).toBe("5000000");
+    }
   });
 
   // "Không tin client": CASH/STOCK tính gộp từ % nên một request tay gửi kèm
