@@ -32,7 +32,16 @@ const manualCashflowTypeEnum = z.enum(["BUY", "SELL"]);
 function decimalString(message: string) {
   return (
     z
-      .string()
+      // `error: message` (không chỉ `z.string()` trơn) — field THIẾU hẳn (key
+      // vắng mặt trong FormData, vd required field bị bỏ trống) trước đây rơi
+      // vào message mặc định của zod ("Invalid input: expected string,
+      // received undefined", tiếng Anh) thay vì message tiếng Việt đã truyền
+      // vào, vì `.refine()` bên dưới chỉ chạy SAU khi z.string() qua được —
+      // undefined bị chặn ngay ở bước type check, không tới refine. Dùng
+      // chung 1 message cho cả "thiếu" lẫn "sai định dạng/không hợp lệ" —
+      // phát hiện khi đổi recordDividendSchema sang discriminatedUnion (field
+      // bắt buộc thật sự, không còn .optional() + refine ở object cha nữa).
+      .string({ error: message })
       .trim()
       // decimal.js chỉ chấp nhận dấu chấm làm phân cách thập phân — bàn phím số
       // "inputMode=decimal" trên nhiều máy (locale VN) gõ ra dấu phẩy.

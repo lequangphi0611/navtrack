@@ -37,11 +37,14 @@ export const dividendTypesCovered: _AllDividendTypesCovered = true;
 // nào fail (process/phase-7.md mục 3 nêu đích danh rủi ro này).
 //
 // Đếm cho đủ: lần rà đầu của #58 chỉ thấy 2 hàm trong `features/holdings/
-// repository.ts` và bỏ sót `getAllCashDividendsForXirr()` ở
-// `lib/portfolio-valuation.ts` (truy vấn `db.dividend` thẳng, ngoài tầng
-// repository) — trái tức vào XIRR của TỪNG vị thế nhưng biến mất khỏi XIRR/PnL
-// cấp DANH MỤC. Thêm call site mới thì grep CẢ `src/lib/`, không chỉ
-// `features/*/repository.ts`.
+// repository.ts` và bỏ sót một bản `db.dividend.findMany()` viết thẳng ở
+// `lib/portfolio-valuation.ts` (ngoài tầng repository, không filter userId
+// trực tiếp) — trái tức vào XIRR của TỪNG vị thế nhưng biến mất khỏi XIRR/PnL
+// cấp DANH MỤC (process/DECISION.md 2026-07-29). Bản đó đã gộp lại về
+// `findCashDividendsForHoldings()` (process/DECISION.md 2026-07-29, việc còn
+// treo) — chỉ còn 3 call site, đều trong `features/*/repository.ts` hoặc
+// `features/*/queries.ts`. Thêm call site mới thì vẫn nên grep CẢ `src/lib/`,
+// không chỉ `features/*/repository.ts` — bài học không đổi.
 export const CASH_FLOW_DIVIDEND_TYPES = [
   "CASH",
   "BOND_COUPON",

@@ -9,6 +9,7 @@ import {
   getClosedHoldings,
   getOpenHoldings,
 } from "@/features/holdings/queries";
+import { findCashDividendsForHoldings } from "@/features/holdings/repository";
 import type { HoldingSummary } from "@/features/holdings/types";
 import { getSession } from "@/lib/auth";
 import {
@@ -26,7 +27,6 @@ import {
 } from "@/lib/cutoff";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { db } from "@/lib/db";
-import { CASH_FLOW_DIVIDEND_TYPES } from "@/lib/enums";
 import {
   formatDate,
   formatDayMonth,
@@ -228,52 +228,6 @@ async function getAllStockDividendsForXirr(
   }));
 }
 
-// Cổ tức tiền mặt + TRÁI TỨC <= cutoffDate cho toàn danh mục — cùng pattern
-// getCashDividends trong holdings/queries.ts nhưng gộp nhiều holdingId một
-// lượt thay vì 1, tránh N+1 khi lặp qua từng vị thế. taxAmount thêm cho "chi
-// phí ăn mòn" (docs/domain/07-tax.md).
-//
-// Lọc theo CASH_FLOW_DIVIDEND_TYPES (lib/enums.ts) như 2 hàm tương ứng ở
-// features/holdings/repository.ts — hàm này nằm ở lib/ nên KHÔNG lọt vào lượt
-// rà "mọi nơi hardcode `type: CASH`" của #58, và hệ quả là trái tức vào XIRR
-// của TỪNG vị thế nhưng biến mất khỏi XIRR/PnL/chi phí ăn mòn cấp DANH MỤC —
-// hai con số lệch nhau âm thầm (review PR #102).
-async function getAllCashDividendsForXirr(
-  holdingIds: string[],
-  cutoffDate: Date,
-): Promise<
-  {
-    date: Date;
-    paymentDate: Date | null;
-    netAmount: Decimal;
-    taxAmount: Decimal | null;
-  }[]
-> {
-  if (holdingIds.length === 0) return [];
-
-  const rows = await db.dividend.findMany({
-    where: {
-      holdingId: { in: holdingIds },
-      type: { in: [...CASH_FLOW_DIVIDEND_TYPES] },
-      netAmount: { not: null },
-      date: { lte: cutoffDate },
-    },
-    select: { date: true, paymentDate: true, netAmount: true, taxAmount: true },
-  });
-
-  return rows.map((row) => ({
-    date: row.date,
-    paymentDate: row.paymentDate,
-    // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
-    netAmount: new Decimal(row.netAmount!.toString()),
-    // taxAmount CÓ THỂ null (dividend CASH ghi trước khi thuế cổ tức có mặt,
-    // hoặc chưa resolve được) — coi như 0 khi cộng dồn costDragAmount, KHÔNG
-    // ép non-null assertion như netAmount ở trên.
-    taxAmount:
-      row.taxAmount !== null ? new Decimal(row.taxAmount.toString()) : null,
-  }));
-}
-
 // Exported thêm cho getAllocationDetail() bên dưới (mục 6 phase-6.md — tái
 // dùng đúng công thức, không viết lại lần 2).
 export function buildAllocation(
@@ -411,12 +365,18 @@ export type HoldingForXirr = { id: string; symbol: string; quantity: Decimal };
 // thứ tự các bước này (process/DECISION.md mục dedupe XIRR core). KHÔNG tự gọi
 // getSession()/getOpenHoldings()/getClosedHoldings() bên trong — nhận holdings
 // + cutoffDate trực tiếp để caller tự quyết định nguồn đọc (cache() theo
-// request hay DB tươi).
+// request hay DB tươi). Nhận thêm `userId` (thay vì tin holdingIds truyền vào
+// đã lọc sẵn) để findCashDividendsForHoldings() tự filter userId trực tiếp —
+// gộp lại nguồn cổ tức/trái tức với features/holdings/repository.ts, đóng
+// việc còn treo ở process/DECISION.md 2026-07-29 (2 cài đặt song song, bản ở
+// đây thiếu filter userId trực tiếp).
 export async function computeXirrCore({
   holdings,
+  userId,
   cutoffDate,
 }: {
   holdings: HoldingForXirr[];
+  userId: string;
   cutoffDate: Date;
 }): Promise<{
   valuations: Map<string, HoldingValuation>;
@@ -425,13 +385,13 @@ export async function computeXirrCore({
   points: ReturnType<typeof buildXirrCashflows>;
   xirr: ReturnType<typeof computeXirr>;
   cashflows: Awaited<ReturnType<typeof getAllCashflowsForXirr>>;
-  dividends: Awaited<ReturnType<typeof getAllCashDividendsForXirr>>;
+  dividends: Awaited<ReturnType<typeof findCashDividendsForHoldings>>;
 }> {
   const holdingIds = holdings.map((h) => h.id);
   const [valuations, cashflows, dividends] = await Promise.all([
     valuateHoldings(holdings, cutoffDate),
     getAllCashflowsForXirr(holdingIds, cutoffDate),
-    getAllCashDividendsForXirr(holdingIds, cutoffDate),
+    findCashDividendsForHoldings(holdingIds, userId, cutoffDate),
   ]);
 
   const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
@@ -493,6 +453,7 @@ async function computeXirrAndPnlCore(
         symbol: h.symbol,
         quantity: new Decimal(h.quantity),
       })),
+      userId: session.user.id,
       cutoffDate,
     }),
     getAllStockDividendsForXirr(allHoldingIds, cutoffDate),
@@ -763,7 +724,11 @@ export async function getCurrentPortfolioXirrPercent(
 
   const allHoldings = await getAllHoldingIdsAndQuantities(userId);
 
-  const { xirr } = await computeXirrCore({ holdings: allHoldings, cutoffDate });
+  const { xirr } = await computeXirrCore({
+    holdings: allHoldings,
+    userId,
+    cutoffDate,
+  });
 
   if (!xirr.ok) return null;
 

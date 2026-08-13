@@ -632,13 +632,22 @@ export type CashDividendForXirrRow = {
   date: Date;
   paymentDate: Date | null;
   netAmount: Decimal;
+  // taxAmount CÓ THỂ null (dividend CASH ghi trước khi thuế cổ tức có mặt,
+  // hoặc chưa resolve được) — cho "chi phí ăn mòn" (lib/cost-drag.ts), coi
+  // như 0 khi cộng dồn, KHÔNG ép non-null như netAmount.
+  taxAmount: Decimal | null;
 };
 
 // Batch cổ tức tiền mặt + trái tức theo tập holdingId — `id` thêm cho
 // ClosedHoldingRow.cashDividends (React key + timeline row id, cần liệt kê từng
 // dòng cổ tức riêng, không chỉ tổng). Lọc thêm `holding: { userId }` — cùng lý
 // do findCashflowsForHoldings; lọc type qua CASH_FLOW_DIVIDEND_TYPES — cùng lý
-// do findCashDividendsForHolding ở trên.
+// do findCashDividendsForHolding ở trên. Nguồn DUY NHẤT cho computeXirrCore()
+// (lib/portfolio-valuation.ts) — trước đây hàm đó tự viết một bản
+// db.dividend.findMany() song song KHÔNG có filter userId trực tiếp (chỉ an
+// toàn nhờ holdingIds truyền vào đã được caller lọc sẵn), khác nguyên tắc "mọi
+// query tự filter userId, không dựa vào caller" đã áp cho mọi hàm khác ở đây
+// (process/DECISION.md 2026-07-29, bonds-and-cashflow-calendar.md).
 export async function findCashDividendsForHoldings(
   holdingIds: string[],
   userId: string,
@@ -661,6 +670,7 @@ export async function findCashDividendsForHoldings(
       date: true,
       paymentDate: true,
       netAmount: true,
+      taxAmount: true,
     },
   });
 
@@ -671,6 +681,8 @@ export async function findCashDividendsForHoldings(
     paymentDate: row.paymentDate,
     // netAmount đã lọc { not: null } ở where — non-null assertion an toàn ở đây.
     netAmount: new Decimal(row.netAmount!.toString()),
+    taxAmount:
+      row.taxAmount !== null ? new Decimal(row.taxAmount.toString()) : null,
   }));
 }
 
