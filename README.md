@@ -76,6 +76,47 @@ pnpm exec playwright install chromium
 
 Test đặt trong [`e2e/`](./e2e/). Xem báo cáo HTML sau khi chạy: `pnpm exec playwright show-report`.
 
+### Chạy e2e trên Claude Cloud (không có Docker)
+
+Claude Cloud không có Docker daemon (xem `TOOLS.md`), nên `pnpm e2e` dùng Postgres cài trực
+tiếp trong sandbox thay cho `docker-compose.test.yml`. Việc **cài đặt** (apt install Postgres,
+start service, tạo role) **không nằm trong repo** — đây là cấu hình ở cấp **environment**, dán
+vào ô "setup script" khi tạo/sửa environment Claude Cloud trong
+[Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web) (chạy một lần
+lúc provision container, trước khi session bắt đầu). Copy nội dung dưới đây vào đó:
+
+```bash
+#!/bin/bash
+# Cài + khởi động Postgres native cho e2e trên environment Claude Cloud của navtrack.
+# Idempotent — chạy lại nhiều lần (environment khởi động lại) không lỗi, không mất role/db.
+set -euo pipefail
+
+DB_USER="navtrack"
+DB_PASSWORD="navtrack"
+DB_PORT="5432"
+
+if ! dpkg -s postgresql >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y postgresql
+fi
+
+if ! pg_isready -h localhost -p "$DB_PORT" >/dev/null 2>&1; then
+  service postgresql start
+fi
+
+if [ "$(su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'\"")" != "1" ]; then
+  su postgres -c "psql -c \"CREATE ROLE ${DB_USER} WITH LOGIN SUPERUSER PASSWORD '${DB_PASSWORD}'\""
+fi
+
+echo "Postgres native sẵn sàng tại localhost:${DB_PORT} (role=${DB_USER})."
+```
+
+Sau khi cấu hình, `pnpm e2e` (`scripts/e2e.mjs`) trên Cloud chỉ **check** Postgres đã sẵn sàng
+chưa (`pg_isready`; báo lỗi rõ, không tự cài, nếu environment chưa cấu hình script trên) rồi tự
+DROP + CREATE lại DB `navtrack` sạch mỗi lần chạy trước khi migrate/seed/test — xem
+`process/decisions/agent-workflow-and-tooling.md` mục 2026-08-13.
+
 ## Deploy lên production
 
 Xem [`docs/05-deploy.md`](./docs/05-deploy.md) — deploy lên Vercel + Neon: connection string

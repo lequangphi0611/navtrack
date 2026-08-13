@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const isCloud = process.env.CLAUDE_CODE_REMOTE === "true";
+
 export default defineConfig({
   testDir: "./e2e/tests",
   fullyParallel: true,
@@ -23,6 +25,16 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
+    // Cloud: Chromium cài sẵn ở /opt/pw-browsers, KHÔNG được tải browser mới
+    // (PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1) — và có thể lệch revision so với bản
+    // @playwright/test đang pin trong package.json (driver đòi
+    // chromium_headless_shell-<rev khác> không có sẵn trên máy). Ép thẳng executable
+    // path vào binary chromium đầy đủ (không phải headless-shell) có sẵn — cùng
+    // pattern scripts/playwright-mcp.mjs. Xem
+    // process/decisions/agent-workflow-and-tooling.md, mục 2026-08-13.
+    ...(isCloud
+      ? { launchOptions: { executablePath: "/opt/pw-browsers/chromium" } }
+      : {}),
   },
   webServer: {
     command: "pnpm dev",

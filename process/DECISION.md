@@ -133,6 +133,7 @@ Quyết định về `Setting` không có file riêng — nằm cùng chủ đ�
 | 2026-07-24 (5) | Page Object Model cho e2e; selector role/label-first, cấm bám class CSS | A |
 | 2026-07-25 | Spec e2e chuyển vào `e2e/tests/` | A |
 | 2026-08-12 | Từ chối Neon cho e2e trên Cloud; `issuer` bắt buộc biết trạng thái e2e, PR Draft khi chưa `ĐẠT` | A |
+| 2026-08-13 | `pnpm e2e` chạy được trên Cloud qua Postgres native; cài đặt là setup script của environment, không nằm trong repo | A |
 
 ### Roadmap & phạm vi → [`roadmap-and-scope.md`](./decisions/roadmap-and-scope.md)
 
