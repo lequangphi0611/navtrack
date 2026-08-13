@@ -9,14 +9,18 @@
 // - Claude Local: `docker-compose.test.yml` — Postgres ephemeral, tmpfs, tự sạch khi
 //   container down.
 // - Claude Cloud (`CLAUDE_CODE_REMOTE=true`): không có Docker daemon, nên dùng Postgres cài
-//   trực tiếp trong sandbox thay cho container. VIỆC CÀI ĐẶT (apt install + start service +
-//   tạo role) KHÔNG nằm trong repo — đó là "setup script" của environment, cấu hình ở Claude
-//   Code on the web (chạy MỘT LẦN lúc provision container, TRƯỚC khi session bắt đầu), nội
-//   dung script do user tự lưu/dán vào phần cấu hình environment (xem README.md mục "Chạy
-//   e2e trên Claude Cloud" để lấy nội dung). File này chỉ **check** Postgres đã sẵn sàng chưa
-//   (báo lỗi rõ nếu chưa, không tự cài) rồi **reset DB sạch + chạy** — "sạch từ đầu mỗi lần
-//   chạy" ở đây phải tự DROP + CREATE lại DB (không có container để huỷ thay như tmpfs). Xem
-//   process/decisions/agent-workflow-and-tooling.md,
+//   trực tiếp trong sandbox thay cho container. VIỆC CÀI ĐẶT (apt install + tạo role) KHÔNG
+//   nằm trong repo — đó là "setup script" của environment, cấu hình ở Claude Code on the web
+//   (nội dung do user tự lưu/dán vào phần cấu hình environment — xem README.md mục "Chạy e2e
+//   trên Claude Cloud"). Nền tảng tự **cache** kết quả setup script: chạy đúng 1 lần rồi
+//   snapshot filesystem, các phiên sau tái dùng snapshot đó (gói + role đã cài vẫn còn) mà
+//   KHÔNG chạy lại setup script — trừ khi đổi setup script/network hoặc cache hết hạn (~7
+//   ngày). Snapshot chỉ giữ THỨ GHI RA ĐĨA, không giữ tiến trình đang chạy — nên service
+//   Postgres luôn tắt ở đầu một phiên MỚI dù gói đã cài từ trước; file này tự `service
+//   postgresql start` mỗi lần cần (nhanh, không cần mạng), chỉ báo lỗi thật khi Postgres CHƯA
+//   TỪNG được cài (dpkg check fail — lúc đó mới là setup script chưa cấu hình). Sau khi chắc
+//   Postgres đã chạy, **reset DB sạch** (DROP + CREATE, không có container để huỷ thay như
+//   tmpfs) rồi mới migrate/seed/test. Xem process/decisions/agent-workflow-and-tooling.md
 //   mục 2026-08-13 — quyết định này KHÔNG mâu thuẫn với việc từ chối Neon ở 2026-08-12: Neon
 //   bị từ chối vì là 1 DB dùng CHUNG giữa nhiều phiên Cloud chạy song song (race), còn
 //   Postgres native ở đây nằm gọn trong 1 sandbox, không chia sẻ với phiên nào khác — cùng
@@ -86,6 +90,10 @@ function runAsPostgres(sql) {
   return result.status ?? 1;
 }
 
+function isPostgresInstalled() {
+  return spawnSync("dpkg", ["-s", "postgresql"], { env }).status === 0;
+}
+
 function isPostgresReady() {
   return (
     spawnSync("pg_isready", ["-h", "localhost", "-p", CLOUD_DB_PORT], { env })
@@ -94,16 +102,24 @@ function isPostgresReady() {
 }
 
 // CHỈ check + reset — không cài đặt gì ở đây (đó là setup script của environment, cấu hình
-// ngoài repo, chạy lúc provision). Postgres chưa sẵn sàng ở đây nghĩa là environment đang
-// chạy chưa cấu hình setup script đó — báo lỗi rõ thay vì tự âm thầm cài.
+// ngoài repo). Nhưng "chưa sẵn sàng" và "chưa cài" là 2 tín hiệu KHÁC NHAU trên Cloud:
+// Anthropic snapshot filesystem sau lần setup script đầu tiên và tái dùng cho các phiên sau
+// (không chạy lại setup script) — nhờ vậy package/role đã cài vẫn còn, nhưng service Postgres
+// (tiến trình đang chạy) KHÔNG nằm trong snapshot đó, nên luôn tắt ở đầu một phiên mới. Tự
+// start service (nhanh, không cần mạng) là việc bình thường mỗi phiên — chỉ báo lỗi thật khi
+// Postgres chưa từng được CÀI (dpkg check fail), lúc đó mới là setup script chưa cấu hình.
 function checkAndResetCloudDb() {
-  if (!isPostgresReady()) {
+  if (!isPostgresInstalled()) {
     console.error(
-      `Postgres chưa sẵn sàng ở localhost:${CLOUD_DB_PORT}. Environment Claude Cloud này chưa ` +
-        'cấu hình setup script cài Postgres (xem README.md mục "Chạy e2e trên Claude Cloud") ' +
-        "— cấu hình rồi khởi động lại environment trước khi `pnpm e2e`.",
+      "Postgres chưa được cài trên environment Claude Cloud này. Cấu hình setup script cài " +
+        'Postgres (xem README.md mục "Chạy e2e trên Claude Cloud") rồi khởi động lại ' +
+        "environment trước khi `pnpm e2e`.",
     );
     return 1;
+  }
+  if (!isPostgresReady()) {
+    const startStatus = run("service", ["postgresql", "start"]);
+    if (startStatus !== 0) return startStatus;
   }
   // Sạch từ đầu mỗi lần chạy — tương đương tmpfs của docker-compose.test.yml. Không có
   // container để huỷ trên Cloud nên phải tự DROP + CREATE lại DB ở đây.

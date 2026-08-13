@@ -80,42 +80,63 @@ Test đặt trong [`e2e/`](./e2e/). Xem báo cáo HTML sau khi chạy: `pnpm exe
 
 Claude Cloud không có Docker daemon (xem `TOOLS.md`), nên `pnpm e2e` dùng Postgres cài trực
 tiếp trong sandbox thay cho `docker-compose.test.yml`. Việc **cài đặt** (apt install Postgres,
-start service, tạo role) **không nằm trong repo** — đây là cấu hình ở cấp **environment**, dán
-vào ô "setup script" khi tạo/sửa environment Claude Cloud trong
-[Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web) (chạy một lần
-lúc provision container, trước khi session bắt đầu). Copy nội dung dưới đây vào đó:
+tạo role) **không nằm trong repo** — đây là cấu hình ở cấp **environment**, dán vào ô "setup
+script" khi tạo/sửa environment Claude Cloud trong
+[Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web). Copy nội
+dung dưới đây vào đó:
+
+Nền tảng tự **cache** kết quả setup script (snapshot filesystem sau lần chạy đầu tiên, tái
+dùng cho mọi phiên sau — không chạy lại setup script, không cần cài lại mỗi phiên) trừ khi bạn
+đổi setup script/network access hoặc cache hết hạn (~7 ngày). Không cần tự thêm gì để "cache
+việc cài" — nền tảng đã lo phần đó. Điều **không** được cache là tiến trình đang chạy: service
+Postgres luôn tắt ở đầu một phiên mới dù gói đã cài từ trước — `scripts/e2e.mjs` tự
+`service postgresql start` mỗi lần cần, không phải việc của setup script.
 
 ```bash
 #!/bin/bash
-# Cài + khởi động Postgres native cho e2e trên environment Claude Cloud của navtrack.
-# Idempotent — chạy lại nhiều lần (environment khởi động lại) không lỗi, không mất role/db.
+# Cài Postgres native cho e2e trên environment Claude Cloud của navtrack — chỉ cài đặt, KHÔNG
+# start service (service không sống sót qua snapshot cache nên scripts/e2e.mjs tự start lại
+# mỗi phiên, xem file đó). Idempotent — chạy lại (setup script đổi/cache hết hạn) không lỗi,
+# không mất role đã tạo.
 set -euo pipefail
 
 DB_USER="navtrack"
 DB_PASSWORD="navtrack"
-DB_PORT="5432"
 
 if ! dpkg -s postgresql >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
+  # `|| true`: environment Cloud có sẵn vài PPA bên thứ 3 (deadsnakes, ondrej/php) không liên
+  # quan tới Postgres — nếu chúng trả lỗi (403/hết ký) `apt-get update` thoát exit khác 0 dù
+  # archive Ubuntu chính vẫn fetch được bình thường. Không để lỗi không liên quan này chặn cả
+  # script (set -e sẽ dừng ngay nếu thiếu `|| true`).
+  apt-get update -qq || true
   apt-get install -y postgresql
 fi
 
-if ! pg_isready -h localhost -p "$DB_PORT" >/dev/null 2>&1; then
-  service postgresql start
-fi
-
+# Cần service chạy tạm để tạo role — CREATE ROLE ghi vào data dir nên vẫn còn sau khi service
+# tắt lại (chỉ tiến trình không được cache, dữ liệu trên đĩa thì có).
+service postgresql start
 if [ "$(su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'\"")" != "1" ]; then
   su postgres -c "psql -c \"CREATE ROLE ${DB_USER} WITH LOGIN SUPERUSER PASSWORD '${DB_PASSWORD}'\""
 fi
 
-echo "Postgres native sẵn sàng tại localhost:${DB_PORT} (role=${DB_USER})."
+echo "Postgres native đã cài, role=${DB_USER} sẵn sàng (đã ghi vào đĩa, được cache)."
 ```
 
-Sau khi cấu hình, `pnpm e2e` (`scripts/e2e.mjs`) trên Cloud chỉ **check** Postgres đã sẵn sàng
-chưa (`pg_isready`; báo lỗi rõ, không tự cài, nếu environment chưa cấu hình script trên) rồi tự
+Sau khi cấu hình, `pnpm e2e` (`scripts/e2e.mjs`) trên Cloud chỉ **check** Postgres đã cài chưa
+(`dpkg -s postgresql`; báo lỗi rõ, không tự cài, nếu environment chưa cấu hình script trên),
+tự `service postgresql start` nếu chưa chạy (không cần mạng, nhanh), rồi tự
 DROP + CREATE lại DB `navtrack` sạch mỗi lần chạy trước khi migrate/seed/test — xem
 `process/decisions/agent-workflow-and-tooling.md` mục 2026-08-13.
+
+**`pnpm install` không nằm trong setup script trên.** Cố ý — setup script chỉ chạy 1 lần rồi
+cache theo **environment** (~7 ngày), trong khi repo được clone **mới hoàn toàn mỗi phiên**;
+nếu cache cả `node_modules`, các phiên sau (khác commit/lockfile) sẽ dùng dependency đóng băng
+theo lần đầu, lệch với code thật đang chạy. Thay vào đó, `.claude/hooks/cloud-install-deps.sh`
+(đăng ký qua `SessionStart` hook trong `.claude/settings.json`) tự chạy `pnpm install` mỗi
+phiên Claude Cloud, sau khi repo đã clone xong — luôn khớp đúng bản đang có, không chạy trên
+Claude Local (dev tự cài tay theo hướng dẫn ở trên). Đúng khuyến nghị của nền tảng: setup
+script cho toolchain/OS package, SessionStart hook cho việc cài dependency theo repo.
 
 ## Deploy lên production
 
