@@ -36,7 +36,7 @@ test("Không tính được khi thiếu dòng tiền dương", () => {
 
 ## Tách core thuần ra khỏi vỏ bẩn để test được
 
-Hiện trạng cần giữ và cần sửa: **17/26 file `lib/` có unit test**, nhưng `features/*/actions.ts` và `features/*/queries.ts` có **0 test** — toàn bộ ~3.000 dòng đó chỉ được phủ bởi `pnpm e2e`, mà e2e cần Docker nên **không chạy được trên Claude Cloud** (xem `TOOLS.md`). Nghĩa là ở nửa số phiên làm việc, tầng này không có lưới an toàn nào.
+Hiện trạng cần giữ và cần sửa: **17/26 file `lib/` có unit test**, nhưng `features/*/actions.ts` và `features/*/queries.ts` có **0 test** — toàn bộ ~3.000 dòng đó chỉ được phủ bởi `pnpm e2e`. `pnpm e2e` chạy được trên cả Claude Local (Docker) lẫn Claude Cloud (Postgres native — cần environment đã cấu hình setup script cài Postgres, xem `TOOLS.md`); phiên Cloud nào chưa cấu hình vẫn là phiên không có lưới an toàn ở tầng này, không phải mọi phiên Cloud như trước.
 
 Cách xử **không phải** viết unit test cho action bằng cách mock Prisma — mock DB bắt được lỗi gõ sai nhưng bỏ lọt đúng thứ hay hỏng (vi phạm constraint, quan hệ sai, query sai), và mock lệch còn tạo test xanh giả.
 
@@ -73,7 +73,7 @@ expect(screen.getByText("...")).toBeInTheDocument();
 - Dùng **Playwright** cho các luồng chính: đăng nhập Google, nhập vị thế ban đầu, ghi giao dịch, xem dashboard, bật/tắt ẩn số tiền.
 - Đặt trong thư mục `e2e/` riêng, spec (`*.spec.ts`) nằm ở `e2e/tests/`.
 - **Cách viết: theo Page Object Model** — quy ước đầy đủ (ba tầng page object/fixture/spec, chiến lược selector, URL & redirect, anti-pattern) ở [`e2e-page-object.md`](./e2e-page-object.md); instruction lúc thao tác + bẫy đã gặp ở [`../../e2e/CLAUDE.md`](../../e2e/CLAUDE.md) và [`../../e2e/GOTCHAS.md`](../../e2e/GOTCHAS.md).
-- **DB riêng, ephemeral, tách khỏi DB dev:** `pnpm e2e` tự `docker compose -f docker-compose.test.yml up` một Postgres riêng (service `db-test`, cổng 5434, `.env.test`), áp migration, chạy test, rồi `down` khi xong — kể cả lúc fail. Không bao giờ chạy e2e nhắm vào DB dev (`.env`, cổng 5433): tránh sinh data test lẫn vào data thật đang dùng để dev tay.
+- **DB riêng, ephemeral, tách khỏi DB dev:** trên Claude Local, `pnpm e2e` tự `docker compose -f docker-compose.test.yml up` một Postgres riêng (service `db-test`, cổng 5434, `.env.test`), áp migration, chạy test, rồi `down` khi xong — kể cả lúc fail. Trên Claude Cloud (không Docker), `pnpm e2e` dùng Postgres native đã cài sẵn qua setup script của environment (cấu hình ngoài repo, không chạy trong `pnpm e2e`), tự DROP + CREATE lại DB `navtrack` sạch mỗi lần chạy — xem README.md mục "Chạy e2e trên Claude Cloud". Không bao giờ chạy e2e nhắm vào DB dev (`.env`, cổng 5433 trên Local): tránh sinh data test lẫn vào data thật đang dùng để dev tay.
 
 ```ts
 // ✅ Good — e2e/tests/dashboard.spec.ts (luồng thật, không mock logic)

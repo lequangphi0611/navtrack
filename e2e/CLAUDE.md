@@ -20,8 +20,14 @@ dưới, đọc **trước khi viết/sửa/chạy** bất kỳ e2e nào — đ�
   Postgres ephemeral (`docker-compose.test.yml`, cổng 5434, `.env.test`), `prisma migrate
   deploy` + `prisma db seed` (seed toàn bộ `Setting` toàn cục — xem GOTCHAS #15), chạy test,
   rồi `down` — kể cả khi fail. **Không bao giờ** nhắm e2e vào DB dev.
-- **Claude Cloud:** **skip** — cần Docker, không có ở Cloud. Báo rõ "chưa verify e2e được
-  trong Claude Cloud", **không báo pass giả** (xem [`../TOOLS.md`](../TOOLS.md)).
+- **Claude Cloud:** `pnpm e2e` — **chạy được**, không cần Docker: DB dùng Postgres native cài
+  sẵn qua **setup script của environment** (cấu hình ngoài repo — ở phần cấu hình environment
+  của Claude Code on the web, nội dung script ở [`../README.md`](../README.md) mục "Chạy e2e
+  trên Claude Cloud", chạy 1 lần lúc provision, KHÔNG chạy trong `pnpm e2e`). `scripts/e2e.mjs`
+  chỉ check Postgres đã sẵn sàng chưa rồi tự DROP + CREATE lại DB `navtrack` sạch mỗi lần
+  chạy. Nếu output báo "Postgres chưa sẵn sàng..." → environment chưa cấu hình setup script;
+  báo rõ "chưa verify e2e được ở đây, environment chưa cấu hình setup script Postgres", **không**
+  tự cài thay và **không báo pass giả** (xem [`../TOOLS.md`](../TOOLS.md)).
 - **Log server khi fail:** mỗi lần `pnpm e2e` chạy, server (app log qua pino + SQL query
   qua Prisma) được ghi ra `.e2e-logs/server.log` (reset về 1 dòng marker `# e2e run started
   <timestamp>` mỗi lần, không cần dọn tay). Khi 1 test fail và error-context (screenshot/DOM
