@@ -97,7 +97,11 @@ DB_PORT="5432"
 
 if ! dpkg -s postgresql >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
+  # `|| true`: environment Cloud có sẵn vài PPA bên thứ 3 (deadsnakes, ondrej/php) không liên
+  # quan tới Postgres — nếu chúng trả lỗi (403/hết ký) `apt-get update` thoát exit khác 0 dù
+  # archive Ubuntu chính vẫn fetch được bình thường. Không để lỗi không liên quan này chặn cả
+  # script (set -e sẽ dừng ngay nếu thiếu `|| true`).
+  apt-get update -qq || true
   apt-get install -y postgresql
 fi
 
