@@ -86,6 +86,8 @@ Quy tắc giao diện cho Navtrack: theme màu, typography, icon, và kho atoms/
 | `add_shopping_cart` | `ShoppingCart` (Phase 6 — nút "Mở lại vị thế" `ClosedPositionSheet`) |
 | `touch_app` | `Pointer` (Phase 6 — ghi chú tương tác chạm/giữ `NavTrendChart`) |
 | `help` | `HelpCircle` (Phase 6 — ghi chú "NAV thiếu một phần" `ConcentrationBadge`) |
+| `price_change` | `CircleDollarSign` (banner/badge "Thiếu giá" — `MissingPriceList`, `StockAllocationDetail` issue #131) |
+| `block` | `Ban` (issue #131 — label "Không tính vào tỉ trọng" `StockAllocationDetail`) |
 
 ## Primitives
 

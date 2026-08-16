@@ -76,6 +76,7 @@ Quyết định về `Setting` không có file riêng — nằm cùng chủ đ�
 | 2026-07-14 | Ưu tiên giá so **ngày** giữa `NavOverride`/`PriceQuote`, không "nhập tay luôn thắng" (#40) | A |
 | 2026-07-21 | Materiality 5% cho `MISSING_PRICE`; ghi chú "ít mã"; hysteresis 3 điểm %; chú thích liên kết | A |
 | 2026-07-21 (2) | Mockup Phase 6: `hideAmountsByDefault` ghi ngay; XIRR bình quân weighted | A |
+| 2026-08-16 | Stock allocation drill-down (#131): route riêng `/allocation/stock`, không accordion | A |
 
 ### XIRR & lãi/lỗ → [`returns-xirr-and-pnl.md`](./decisions/returns-xirr-and-pnl.md)
 
@@ -156,5 +157,6 @@ Quyết định về `Setting` không có file riêng — nằm cùng chủ đ�
 
 - `NavOverrideForm` chưa có route thật; cutoff "Tuỳ chỉnh" (CUSTOM) chưa mockup — [architecture, 2026-07-11].
 - B2 benchmark lãi suất tiết kiệm vẫn ở Backlog — [roadmap, 2026-07-17 (7)].
+- #132: route `/allocation/stock` + `page.tsx`/`loading.tsx` thật cho `StockAllocationDetail`, đổi legend "Cổ phiếu" trong `AllocationScreen.tsx` thành `<Link>` — [pricing-and-valuation, 2026-08-16].
 
 > Đã đóng 2026-08-13: gộp `getAllCashDividendsForXirr()`/`recordDividendSchema` discriminatedUnion/3 e2e trái tức — xem [`bonds-and-cashflow-calendar.md`](./decisions/bonds-and-cashflow-calendar.md).

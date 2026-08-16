@@ -55,6 +55,18 @@ Spec tương ứng: [`docs/domain/04-pricing-and-valuation.md`](../../docs/domai
 
 ---
 
+## 2026-08-16 — Stock allocation drill-down (#131): route riêng, không accordion
+
+**Status:** Accepted
+
+**Drill-down "% theo mã trong nhóm cổ phiếu" từ `/allocation` dùng route riêng full-screen, không phải accordion mở tại chỗ trong `AllocationScreen`.**
+- Bối cảnh: digest `process/UI_stock-allocation-detail.md` (mockup 131a-d) để ngỏ 2 hướng — Props phác thảo (`backHref: string`) đã theo hình dạng route.
+- Quyết định: chọn route riêng, nối tiếp tiền lệ chính `/allocation` (2026-07-21: mockup vẽ full-screen với back button, không phải Sheet) — mockup 131a-d cũng vẽ `PageHeader variant="back"` full-screen, không phải khối mở rộng trong card.
+- Việc còn treo cho #132: thêm route (vd `ROUTES.allocationStock` → `/allocation/stock`), `page.tsx`/`loading.tsx` thật, và đổi dòng legend "Cổ phiếu" trong `AllocationScreen.tsx` (hiện là `<div>` tĩnh) thành `<Link>` — ngoài phạm vi #131 (thuần Presentational, không đụng route/query thật).
+- Docs đã sync: không đổi domain docs (quyết định kiến trúc/route, không phải công thức nghiệp vụ mới).
+
+---
+
 ## Quyết định liên quan ở file khác
 
 - Đưa "Cảnh báo tập trung" vào Phase 6 + ngưỡng 30% qua `Setting{CONCENTRATION_WARNING_THRESHOLD}` — [`roadmap-and-scope.md`](./roadmap-and-scope.md), mục 2026-07-17 (5).
