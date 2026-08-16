@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
+import { AllocationStockPage } from "./allocation-stock-page";
 import { HoldingsPage } from "./holdings-page";
 
 // "/allocation" — màn chi tiết phân bổ tài sản, route riêng full-screen (mục
@@ -41,5 +42,20 @@ export class AllocationPage {
     await this.concentrationWarningLink.click();
     await this.page.waitForURL(holdingsPage.url);
     return holdingsPage;
+  }
+
+  // Drill-down "% theo mã trong nhóm cổ phiếu" (issue #131/#132,
+  // process/DECISION.md 2026-08-16: route riêng, không accordion) — CHỈ dòng
+  // legend "Cổ phiếu" là <Link> thật, các nhóm khác vẫn <div> tĩnh (chưa có
+  // view chi tiết theo mã tương ứng).
+  get stockGroupLink(): Locator {
+    return this.page.getByRole("link", { name: /Cổ phiếu/ });
+  }
+
+  async goToStockDetail(): Promise<AllocationStockPage> {
+    const stockPage = new AllocationStockPage(this.page);
+    await this.stockGroupLink.click();
+    await this.page.waitForURL(stockPage.url);
+    return stockPage;
   }
 }

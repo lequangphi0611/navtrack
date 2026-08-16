@@ -4,4 +4,6 @@ export type {
   StockAllocationRowData,
   MissingPricedStockRow,
 } from "./StockAllocationDetail";
+export { StockAllocationDetailClient } from "./StockAllocationDetailClient";
+export type { StockAllocationDetailClientProps } from "./StockAllocationDetailClient";
 export { StockAllocationDetailSkeleton } from "./StockAllocationDetailSkeleton";

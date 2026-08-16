@@ -39,6 +39,7 @@ import {
 } from "@/lib/realized-pnl";
 import { ROUTES } from "@/lib/routes";
 import { resolveDecimalSetting, SETTING_KEYS } from "@/lib/settings";
+import { computeStockGroupAllocation } from "@/lib/stock-group-allocation";
 import type { HoldingValuation } from "@/lib/valuation";
 import { AUTO_PRICED_ASSET_TYPES, valuateHoldings } from "@/lib/valuation";
 import { computeXirr } from "@/lib/xirr";
@@ -938,5 +939,102 @@ export async function getAllocationDetail(): Promise<AllocationDetail> {
   return {
     slices,
     concentrationWarningCount: concentration.warningCount,
+  };
+}
+
+// --- Drill-down "% theo mã trong nhóm cổ phiếu" (route /allocation/stock,
+// issue #132, phụ thuộc #131 cho Props contract thật — process/DECISION.md
+// 2026-08-16 chốt route riêng, không accordion) ---
+
+export type StockAllocationEntry = {
+  holdingId: string;
+  symbol: string;
+  name: string;
+  // Decimal đã serialize — client wrapper (StockAllocationDetailClient) tự
+  // formatMoney() theo cờ hidden, không format sẵn ở đây (khác AllocationDetail
+  // vì màn này CÓ hiện VND tuyệt đối, /allocation thì không).
+  nav: string;
+  // 0-100, mẫu số = NAV nhóm cổ phiếu (KHÔNG bị ẩn bởi cờ hidden).
+  percent: number;
+  // Badge amber CŨ (lib/concentration.ts) — mẫu số KHÁC (NAV toàn danh mục),
+  // undefined = dưới ngưỡng, không hiện badge.
+  concentrationBadge?: ConcentrationBadgeState;
+};
+
+export type StockAllocationMissingPriceEntry = {
+  holdingId: string;
+  symbol: string;
+  name: string;
+  quantity: string; // Decimal đã serialize
+  unit: string;
+  updatePriceHref: string; // ROUTES.navOverrideNew(holdingId)
+};
+
+export type StockAllocationDetailData = {
+  // Decimal đã serialize, "0" khi không mã nào có giá (entries rỗng — client
+  // wrapper tự đổi thành nhãn "chưa tính được" thay vì "0 ₫", xem 131d).
+  groupNav: string;
+  // ĐÃ sort giảm dần theo percent (computeStockGroupAllocation) — mặc định
+  // "% giảm dần"; client wrapper tự re-sort khi user đổi sortLabel, không
+  // round-trip DB lần 2 (sort thuần theo dữ liệu đã có, không cần query mới).
+  entries: StockAllocationEntry[];
+  missingPriced: StockAllocationMissingPriceEntry[];
+};
+
+// Tái dùng computeStockGroupAllocation() (lib/stock-group-allocation.ts, pure
+// — tách riêng khỏi file này vì import chain next-auth khiến vitest không
+// resolve được, xem comment ở đó) + getConcentrationBadges() (đã có, không
+// viết lại) cho badge amber cũ đặt cạnh tên mã (mockup 131a). valuateHoldings()
+// gọi 1 LẦN DUY NHẤT, truyền qua getConcentrationBadges() qua
+// `precomputedValuations` — cùng pattern getAllocationDetail() ở trên (code
+// review #8, tránh 2 round-trip DB giống hệt nhau).
+export async function getStockAllocationDetail(): Promise<StockAllocationDetailData> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const cutoffDate = resolveCutoffDate(await getCutoffSelection());
+  const open = await getOpenHoldings();
+
+  const valuations = await valuateHoldings(
+    open.map((h) => ({
+      id: h.id,
+      symbol: h.symbol,
+      quantity: new Decimal(h.quantity),
+    })),
+    cutoffDate,
+  );
+  const concentration = await getConcentrationBadges(cutoffDate, valuations);
+
+  const { groupNav, entries, missingPrice } = computeStockGroupAllocation(
+    open,
+    valuations,
+  );
+
+  // missingPrice (computeStockGroupAllocation) không mang quantity/unit —
+  // hàm đó pure, không biết định dạng hiển thị (xem type StockGroupMissingPriceEntry).
+  // Tra lại từ `open` (đã có sẵn trong closure, không round-trip DB thêm).
+  const openById = new Map(open.map((h) => [h.id, h]));
+
+  return {
+    groupNav: groupNav.toString(),
+    entries: entries.map((entry) => ({
+      holdingId: entry.holdingId,
+      symbol: entry.symbol,
+      name: entry.name ?? entry.symbol,
+      nav: entry.nav.toString(),
+      percent: entry.percentInGroup,
+      concentrationBadge: concentration.badges.get(entry.holdingId),
+    })),
+    missingPriced: missingPrice.map((entry) => {
+      const holding = openById.get(entry.holdingId);
+      return {
+        holdingId: entry.holdingId,
+        symbol: entry.symbol,
+        name: entry.name ?? entry.symbol,
+        quantity: holding?.quantity ?? "0",
+        unit: holding?.unit ?? "",
+        updatePriceHref: ROUTES.navOverrideNew(entry.holdingId),
+      };
+    }),
   };
 }
