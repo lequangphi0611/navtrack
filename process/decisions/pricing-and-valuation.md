@@ -62,7 +62,7 @@ Spec tương ứng: [`docs/domain/04-pricing-and-valuation.md`](../../docs/domai
 **Drill-down "% theo mã trong nhóm cổ phiếu" từ `/allocation` dùng route riêng full-screen, không phải accordion mở tại chỗ trong `AllocationScreen`.**
 - Bối cảnh: digest `process/UI_stock-allocation-detail.md` (mockup 131a-d) để ngỏ 2 hướng — Props phác thảo (`backHref: string`) đã theo hình dạng route.
 - Quyết định: chọn route riêng, nối tiếp tiền lệ chính `/allocation` (2026-07-21: mockup vẽ full-screen với back button, không phải Sheet) — mockup 131a-d cũng vẽ `PageHeader variant="back"` full-screen, không phải khối mở rộng trong card.
-- Việc còn treo cho #132: thêm route (vd `ROUTES.allocationStock` → `/allocation/stock`), `page.tsx`/`loading.tsx` thật, và đổi dòng legend "Cổ phiếu" trong `AllocationScreen.tsx` (hiện là `<div>` tĩnh) thành `<Link>` — ngoài phạm vi #131 (thuần Presentational, không đụng route/query thật).
+- **Đã đóng 2026-08-16 (#132):** `ROUTES.allocationStock` (`/allocation/stock`), `getStockAllocationDetail()` (`lib/portfolio-valuation.ts`, tái dùng `computeStockGroupAllocation()` thuần ở `lib/stock-group-allocation.ts` + `getConcentrationBadges()` có sẵn), `page.tsx`/`loading.tsx` thật, `StockAllocationDetailClient` (client wrapper giữ state `hidden`/sort cục bộ, mirror `DashboardScreenClient`), và đổi dòng legend "Cổ phiếu" trong `AllocationScreen.tsx` thành `<Link>` (các nhóm tài sản khác vẫn `<div>` tĩnh, chưa có view chi tiết tương ứng).
 - Docs đã sync: không đổi domain docs (quyết định kiến trúc/route, không phải công thức nghiệp vụ mới).
 
 ---

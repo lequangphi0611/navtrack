@@ -157,6 +157,6 @@ Quyết định về `Setting` không có file riêng — nằm cùng chủ đ�
 
 - `NavOverrideForm` chưa có route thật; cutoff "Tuỳ chỉnh" (CUSTOM) chưa mockup — [architecture, 2026-07-11].
 - B2 benchmark lãi suất tiết kiệm vẫn ở Backlog — [roadmap, 2026-07-17 (7)].
-- #132: route `/allocation/stock` + `page.tsx`/`loading.tsx` thật cho `StockAllocationDetail`, đổi legend "Cổ phiếu" trong `AllocationScreen.tsx` thành `<Link>` — [pricing-and-valuation, 2026-08-16].
 
 > Đã đóng 2026-08-13: gộp `getAllCashDividendsForXirr()`/`recordDividendSchema` discriminatedUnion/3 e2e trái tức — xem [`bonds-and-cashflow-calendar.md`](./decisions/bonds-and-cashflow-calendar.md).
+> Đã đóng 2026-08-16: #132 — `getStockAllocationDetail()` (`lib/portfolio-valuation.ts`) + route `/allocation/stock` + `<Link>` legend "Cổ phiếu" — xem `PROCESS.md`.
