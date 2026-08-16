@@ -14,26 +14,28 @@ kèm trỏ file/spec gốc. Nếu bẫy mới làm một mục cũ hết đúng 
 
 ## Tra theo triệu chứng
 
-| Bạn đang gặp | Mục |
-|---|---|
-| `waitForURL()` không bao giờ khớp sau khi tạo vị thế / ghi giao dịch | [#1](#1-redirect-sau-giao-dịch-gắn-cashflowid--so-url-tuyệt-đối-bị-treo) |
-| `Input of type "hidden" cannot be filled` | [#2](#2-datepicker-là-input-typehidden--fill-bị-playwright-cấm) |
-| Set ngày xong nhưng form **không tính lại** thuế/phí, hoặc card so sánh không hiện | [#2](#2-datepicker-là-input-typehidden--fill-bị-playwright-cấm) |
-| Ngày lưu xuống DB **rỗng** dù đã set qua helper (form trái phiếu) | [#17](#17-bondtermsform-đọc-thẳng-react-state-khi-submit-không-qua-formdata) |
-| Ô lịch `[data-day="<iso>"]` không tìm thấy / bấm nhầm ngày | [#3](#3-isodate-utc-lệch-1-ngày-so-với-ô-lịch-ở-timezone-dương) |
-| Không chuyển được tháng/năm trên lịch | [#18](#18-datepicker-đổi-sang-captionlayoutdropdown--hidenavigation) |
-| Data test (User, PriceQuote) **leak** sang lần chạy sau | [#5](#5-contextclose-trong-finally-nuốt-luôn-bước-cleanup-sau-nó), [#6](#6-pricequote-không-scoped-theo-user--không-cascade-khi-xoá-user) |
-| Dashboard hiện "thiếu giá" dù đã seed `PriceQuote` | [#7](#7-seed-pricequote-phải-trước-khi-tạo-holding) |
-| `P2002` unique constraint đỏ ngẫu nhiên | [#8](#8-nhiều-worker-seed-cùng-setting--p2002-unique-thoáng-qua), [#14](#14-workers--1--lỗi-serializable--p2002-khi-nhiều-test-cùng-cập-nhật-1-bản-ghi-dùng-chung) |
-| `could not serialize access` / write conflict | [#14](#14-workers--1--lỗi-serializable--p2002-khi-nhiều-test-cùng-cập-nhật-1-bản-ghi-dùng-chung) |
-| `SETTING_NOT_FOUND: "<KEY>"`, fail ở spec không liên quan feature đang làm | [#15](#15-thiếu-setting-toàn-cục-mới-thêm--lỗi-render-thoáng-qua-ở-nhiều-spec-không-liên-quan) |
-| Segmented nav kẹt tab cũ sau khi đổi cutoff | [#9](#9-đổi-cookie-cutoff-cần-hard-navigation--đừng-reload-thủ-công-che-bug) |
-| Test vỡ khi đổi style dù hành vi không đổi | [#10](#10-chọn-1-dòng-trong-danh-sách-bằng-class-tailwind--giòn) |
-| `.check()` không tick được checkbox | [#11](#11-checkbox-peer-sr-only--check-thường-thất-bại) |
-| Bấm nút "Xóa" bị treo, không có gì xảy ra | [#12](#12-dialog-confirm-windowconfirm-chặn-action--phải-bắt-trước-khi-bấm) |
-| 404 / timeout thoáng qua ở lần chạy đầu, retry thì qua | [#13](#13-lần-chạy-đầu-flaky-do-turbopack-cold-compile--không-phải-regression) |
-| `getByRole("link")` không thấy dòng danh sách đang hiện rõ trên UI | [#16](#16-ui-redesign-đổi-dòng-danh-sách-từ-link-sang-button-mở-sheet) |
-| `.e2e-logs/server.log` trống / chỉ còn vài dòng cuối | [#19](#19-log-ra-file-bằng-flags-w-trong-app--nhiều-process-ghi-đè-nhau) |
+| Bạn đang gặp                                                                                                                                                               | Mục                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `waitForURL()` không bao giờ khớp sau khi tạo vị thế / ghi giao dịch                                                                                                       | [#1](#1-redirect-sau-giao-dịch-gắn-cashflowid--so-url-tuyệt-đối-bị-treo)                                                                                           |
+| `Input of type "hidden" cannot be filled`                                                                                                                                  | [#2](#2-datepicker-là-input-typehidden--fill-bị-playwright-cấm)                                                                                                    |
+| Set ngày xong nhưng form **không tính lại** thuế/phí, hoặc card so sánh không hiện                                                                                         | [#2](#2-datepicker-là-input-typehidden--fill-bị-playwright-cấm)                                                                                                    |
+| Ngày lưu xuống DB **rỗng** dù đã set qua helper (form trái phiếu)                                                                                                          | [#17](#17-bondtermsform-đọc-thẳng-react-state-khi-submit-không-qua-formdata)                                                                                       |
+| Ô lịch `[data-day="<iso>"]` không tìm thấy / bấm nhầm ngày                                                                                                                 | [#3](#3-isodate-utc-lệch-1-ngày-so-với-ô-lịch-ở-timezone-dương)                                                                                                    |
+| Không chuyển được tháng/năm trên lịch                                                                                                                                      | [#18](#18-datepicker-đổi-sang-captionlayoutdropdown--hidenavigation)                                                                                               |
+| Data test (User, PriceQuote) **leak** sang lần chạy sau                                                                                                                    | [#5](#5-contextclose-trong-finally-nuốt-luôn-bước-cleanup-sau-nó), [#6](#6-pricequote-không-scoped-theo-user--không-cascade-khi-xoá-user)                          |
+| Dashboard hiện "thiếu giá" dù đã seed `PriceQuote`                                                                                                                         | [#7](#7-seed-pricequote-phải-trước-khi-tạo-holding)                                                                                                                |
+| `P2002` unique constraint đỏ ngẫu nhiên                                                                                                                                    | [#8](#8-nhiều-worker-seed-cùng-setting--p2002-unique-thoáng-qua), [#14](#14-workers--1--lỗi-serializable--p2002-khi-nhiều-test-cùng-cập-nhật-1-bản-ghi-dùng-chung) |
+| `could not serialize access` / write conflict                                                                                                                              | [#14](#14-workers--1--lỗi-serializable--p2002-khi-nhiều-test-cùng-cập-nhật-1-bản-ghi-dùng-chung)                                                                   |
+| `SETTING_NOT_FOUND: "<KEY>"`, fail ở spec không liên quan feature đang làm                                                                                                 | [#15](#15-thiếu-setting-toàn-cục-mới-thêm--lỗi-render-thoáng-qua-ở-nhiều-spec-không-liên-quan)                                                                     |
+| Segmented nav kẹt tab cũ sau khi đổi cutoff                                                                                                                                | [#9](#9-đổi-cookie-cutoff-cần-hard-navigation--đừng-reload-thủ-công-che-bug)                                                                                       |
+| Test vỡ khi đổi style dù hành vi không đổi                                                                                                                                 | [#10](#10-chọn-1-dòng-trong-danh-sách-bằng-class-tailwind--giòn)                                                                                                   |
+| `.check()` không tick được checkbox                                                                                                                                        | [#11](#11-checkbox-peer-sr-only--check-thường-thất-bại)                                                                                                            |
+| Bấm nút "Xóa" bị treo, không có gì xảy ra                                                                                                                                  | [#12](#12-dialog-confirm-windowconfirm-chặn-action--phải-bắt-trước-khi-bấm)                                                                                        |
+| 404 / timeout thoáng qua ở lần chạy đầu, retry thì qua                                                                                                                     | [#13](#13-lần-chạy-đầu-flaky-do-turbopack-cold-compile--không-phải-regression)                                                                                     |
+| `getByRole("link")` không thấy dòng danh sách đang hiện rõ trên UI                                                                                                         | [#16](#16-ui-redesign-đổi-dòng-danh-sách-từ-link-sang-button-mở-sheet)                                                                                             |
+| `.e2e-logs/server.log` trống / chỉ còn vài dòng cuối                                                                                                                       | [#19](#19-log-ra-file-bằng-flags-w-trong-app--nhiều-process-ghi-đè-nhau)                                                                                           |
+| Mọi test cần đăng nhập timeout, page snapshot cho thấy màn "Đăng nhập với Google" thay vì app; webServer log lặp `[auth][error] MissingSecret`                             | [#20](#20-git-worktree-mới-không-có-envlocal--authjs-missingsecret--mọi-test-cần-login-fail)                                                                       |
+| `strict mode violation: getByText(...) resolved to 2 elements` khi tìm một số `%` cụ thể trên màn có cả `ConcentrationBadge` (mẫu số toàn danh mục) lẫn số `%` khác mẫu số | [#21](#21-2-số--khác-mẫu-số-trùng-giá-trị-khi-danh-mục-test-chỉ-có-1-loại-tài-sản)                                                                                 |
 
 **Bài học lặp lại nhiều lần** (đọc khi sắp đổi component dùng chung hoặc UI của màn đã có
 spec): [#16](#16-ui-redesign-đổi-dòng-danh-sách-từ-link-sang-button-mở-sheet) và
@@ -284,3 +286,59 @@ tính năng đang sửa.
 - **Bài học chung:** side-effect "reset một resource dùng chung về rỗng" **không tin cậy được
   nếu đặt trong chính app** (app không biết mình có phải "lần đầu" thật hay không) — phải đặt
   ở tầng orchestrator bên ngoài.
+
+## 20. Git worktree mới không có `.env.local` → Auth.js `MissingSecret` → mọi test cần login fail
+
+- **Triệu chứng:** trên một **git worktree mới** (`.claude/worktrees/<tên>`), `pnpm e2e` chạy
+  hết migrate/seed bình thường, webServer boot được, nhưng NGAY test đầu tiên cần đăng nhập đã
+  timeout 60s ở bước chờ điều hướng sau khi tương tác UI; `page snapshot` trong
+  `error-context.md` cho thấy màn hình "Đăng nhập với Google" thay vì app đã login, dù
+  `createTestSession()`/`signInAs()` (`support/test-session.ts`) đã set cookie
+  `authjs.session-token` hợp lệ trỏ đúng `Session` row trong DB. webServer log
+  (`.e2e-logs/server.log` hoặc `[WebServer]` trong output Playwright) lặp lại
+  `[auth][error] MissingSecret: Please define a secret` liên tục. Xảy ra với **toàn bộ** test
+  cần session (gần hết suite), không phải 1-2 case lẻ tẻ.
+- **Nguyên nhân:** `.env`/`.env.local` (chứa `AUTH_SECRET`, `AUTH_GOOGLE_ID/SECRET`,
+  `SEED_ADMIN_EMAIL`) bị `.gitignore` (`*.env`) nên **không tự có** khi tạo worktree mới bằng
+  `git worktree add` — worktree chỉ có working tree từ git, không copy file gitignored của
+  worktree gốc. `.env.test` (được git track) chỉ chứa `DATABASE_URL`/`SEED_ADMIN_EMAIL` cho
+  riêng DB test, không có `AUTH_SECRET`. Thiếu `AUTH_SECRET` → Auth.js `assertConfig()` throw
+  `MissingSecret` ở MỌI lời gọi `auth()`, kể cả khi cookie session hợp lệ đã có sẵn trong
+  request → server luôn coi request là chưa đăng nhập → middleware redirect về màn login.
+- **Cách né:** trước khi chạy `pnpm e2e` lần đầu trên một worktree mới, kiểm tra
+  `Test-Path .env.local` (hoặc `.env`) ở root worktree; nếu thiếu, copy từ worktree gốc/repo
+  chính (`.env.local` là file dev cục bộ, cùng giá trị dùng chung cho mọi worktree trên cùng
+  máy, KHÔNG phải secret theo-worktree) — xem README.md mục "Chạy app local" bước 2. File này
+  gitignored nên copy không tạo ra thay đổi git nào (`git status`/`git check-ignore -v
+.env.local` xác nhận).
+- **Bài học chung:** một lượt e2e đỏ hàng loạt ngay từ test đầu tiên, cùng một kiểu lỗi
+  (timeout chờ điều hướng sau tương tác, không phải lỗi assertion domain cụ thể) trên một
+  worktree **mới tạo** nên nghi ngờ thiếu file env cục bộ trước khi nghi ngờ code — kiểm tra
+  `.env.local` tồn tại là bước rẻ, làm trước khi đọc sâu `.e2e-logs/server.log`.
+
+## 21. 2 số % khác mẫu số trùng giá trị khi danh mục test chỉ có 1 loại tài sản
+
+- **Triệu chứng:** viết e2e cho `StockAllocationDetail`
+  (`e2e/tests/concentration-and-allocation.spec.ts`, issue #131/#132) —
+  `expect(page.getByText("60,0%")).toBeVisible()` báo `strict mode violation:
+resolved to 2 elements`: một là số `%` lớn cột phải (mẫu số NAV nhóm cổ
+  phiếu, `StockAllocationRow`), một là `ConcentrationBadge` cũ cạnh tên mã
+  (`"~60,0% danh mục"`, mẫu số NAV toàn danh mục) — `getByText` mặc định match
+  theo substring nên khớp cả hai.
+- **Nguyên nhân:** KHÔNG phải bug UI — danh mục test dựng chỉ toàn mã STOCK
+  (không có FUND/BOND/GOLD nào khác), nên NAV nhóm cổ phiếu **trùng đúng bằng**
+  NAV toàn danh mục với mã đó → 2 con số khác mẫu số (cố ý khác nhau về nghĩa,
+  xem `process/UI_stock-allocation-detail.md` mục "Hai con số % khác mẫu số
+  cùng tồn tại trên một dòng") tình cờ **trùng giá trị số**, cả 2 cùng chứa
+  chuỗi `"60,0%"`.
+- **Cách né:** thêm `{ exact: true }` vào `getByText()` khi tìm số `%` lớn cột
+  phải — text node đó CHỈ chứa đúng `"60,0%"` (không có `"danh mục"` theo sau)
+  nên exact match tự loại badge ra, không cần đổi cấu trúc DOM hay đổi dữ liệu
+  test (thêm mã loại tài sản khác chỉ để né trùng số là phức tạp hoá test không
+  cần thiết).
+- **Bài học chung:** khi 2 con số nghiệp vụ cố ý khác mẫu số (percentInGroup
+  vs concentrationPercent) cùng hiện trên một màn, đừng giả định giá trị của
+  chúng luôn khác nhau trong data test — dựng data tối giản (ít loại tài sản)
+  dễ vô tình làm 2 mẫu số trùng nhau, lộ ra bằng `strict mode violation` thay
+  vì assertion sai — đọc kỹ error Playwright liệt kê đủ cả 2 phần tử khớp
+  trước khi nghi ngờ sai selector.

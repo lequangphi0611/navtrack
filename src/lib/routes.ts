@@ -51,6 +51,10 @@ export const ROUTES = {
   // riêng full-screen (process/DECISION.md 2026-07-21: mockup vẽ full-screen
   // với back button, không phải Sheet).
   allocation: "/allocation",
+  // Drill-down "% theo mã trong nhóm cổ phiếu" (issue #131/#132) — route con
+  // riêng của /allocation, KHÔNG phải accordion mở tại chỗ (process/DECISION.md
+  // 2026-08-16: nối tiếp tiền lệ /allocation đã là route riêng full-screen).
+  allocationStock: "/allocation/stock",
 } as const;
 
 // Khai NGOÀI object ROUTES (tham chiếu ROUTES.holdingDetail — object literal không tự

@@ -52,23 +52,46 @@ function AllocationScreen({
           <AllocationDonutChart slices={slices} />
 
           <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4">
-            {slices.map((slice) => (
-              <div key={slice.type} className="flex items-center gap-2">
-                <span
-                  className={`size-2.5 shrink-0 rounded-sm ${ASSET_TYPE_DOT_CLASS[slice.type]}`}
-                />
-                <span className="text-[13px] text-foreground">
-                  {ASSET_TYPE_LABEL[slice.type]}
-                  {slice.note ? (
-                    <span className="text-muted-faint"> {slice.note}</span>
+            {slices.map((slice) => {
+              // Chỉ nhóm cổ phiếu có drill-down "% theo mã" (issue #131/#132,
+              // process/DECISION.md 2026-08-16) — dòng legend nhóm khác vẫn
+              // tĩnh, chưa có view chi tiết theo mã tương ứng.
+              const isDrillable = slice.type === "STOCK";
+              const rowContent = (
+                <>
+                  <span
+                    className={`size-2.5 shrink-0 rounded-sm ${ASSET_TYPE_DOT_CLASS[slice.type]}`}
+                  />
+                  <span className="text-[13px] text-foreground">
+                    {ASSET_TYPE_LABEL[slice.type]}
+                    {slice.note ? (
+                      <span className="text-muted-faint"> {slice.note}</span>
+                    ) : null}
+                  </span>
+                  <span className="flex-1" />
+                  <span className="font-mono text-[13px] font-semibold text-foreground tabular-nums">
+                    {formatPercent(slice.percent)}
+                  </span>
+                  {isDrillable ? (
+                    <ChevronRight className="size-3.5 shrink-0 text-muted-faint" />
                   ) : null}
-                </span>
-                <span className="flex-1" />
-                <span className="font-mono text-[13px] font-semibold text-foreground tabular-nums">
-                  {formatPercent(slice.percent)}
-                </span>
-              </div>
-            ))}
+                </>
+              );
+
+              return isDrillable ? (
+                <Link
+                  key={slice.type}
+                  href={ROUTES.allocationStock}
+                  className="flex items-center gap-2 rounded-lg transition-colors hover:bg-white/5"
+                >
+                  {rowContent}
+                </Link>
+              ) : (
+                <div key={slice.type} className="flex items-center gap-2">
+                  {rowContent}
+                </div>
+              );
+            })}
           </div>
 
           {concentrationWarningCount > 0 ? (
