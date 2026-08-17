@@ -22,9 +22,53 @@ export class AllocationPage {
 
   // Dòng chú giải theo nhóm AssetType ("Cổ phiếu", "Quỹ"...) — filter theo nhãn
   // nhóm (substring, khớp cả khi có note "· gồm CCQ"), nội dung ổn định (không
-  // bám vị trí/class).
+  // bám vị trí/class). CHỈ bao dòng nhãn+percent (div "flex items-center
+  // gap-2" đầu tiên) — dùng cho assertion % phân bổ như trước.
   legendRow(assetTypeLabel: string): Locator {
     return this.page.getByText(assetTypeLabel).locator("..");
+  }
+
+  // Toàn bộ 1 dòng/thẻ nhóm — bao rộng hơn legendRow (thêm dòng NAV ròng +
+  // lãi/lỗ theo vốn + ghi chú amber nếu có, issue #130) để scope assertion
+  // đúng nhóm khi nhiều nhóm cùng hiện trên màn. Từ span nhãn đi lên 2 cấp:
+  // span -> div "flex items-center gap-2" (dòng nhãn/percent) -> container
+  // dòng nhóm (Link cho STOCK, div cho nhóm khác) — cùng pattern
+  // HoldingDetailPage.navBox (`.locator("../..")`).
+  //
+  // RegExp (KHÔNG dùng string) — `getByText(string)` không phân biệt
+  // hoa/thường: khi nhóm `navIsPartial`, ghi chú amber lặp lại tên nhóm ở
+  // dạng THƯỜNG ("... NAV nhóm cổ phiếu chưa đầy đủ...", `.toLowerCase()` ở
+  // AllocationScreen.tsx), khớp case-insensitive luôn cả div ghi chú đó ->
+  // `.locator("../..")` từ 2 điểm xuất phát khác nhau ra 2 phần tử khác nhau
+  // (amber wrapper + Link nhóm) -> strict mode violation (xem GOTCHAS.md #22).
+  // RegExp không có flag "i" giữ case-sensitive, chỉ khớp đúng span nhãn viết
+  // hoa đầu câu.
+  groupCard(assetTypeLabel: string): Locator {
+    return this.page.getByText(new RegExp(assetTypeLabel)).locator("../..");
+  }
+
+  // Thẻ tổng NAV ròng/tổng lãi-lỗ đầu trang (issue #130) — từ span "Tổng NAV
+  // ròng" đi lên 2 cấp (span -> div header "flex items-center justify-between"
+  // -> card rounded-2xl chứa cả NAV/pnl amount).
+  get totalCard(): Locator {
+    return this.page.getByText("Tổng NAV ròng").locator("../..");
+  }
+
+  // MoneyValueToggleButton ở header — cùng pattern DashboardPage
+  // (hideAmountsToggle), aria-label đổi theo trạng thái hiện tại.
+  get hideAmountsToggle(): Locator {
+    return this.page.getByRole("button", { name: /^(Ẩn|Hiện) số tiền$/ });
+  }
+
+  async toggleHideAmounts() {
+    await this.hideAmountsToggle.click();
+  }
+
+  // "••••••" thay VND khi chế độ ẩn bật (formatMoney({hidden: true})) — có thể
+  // khớp nhiều phần tử cùng lúc (NAV/pnl từng nhóm + thẻ tổng), spec tự scope
+  // theo groupCard/totalCard khi cần phân biệt.
+  get maskedAmounts(): Locator {
+    return this.page.getByText("••••••");
   }
 
   // Chú thích liên kết khi có Holding đang cảnh báo tập trung (mục 6

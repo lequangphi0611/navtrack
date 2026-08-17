@@ -11,6 +11,7 @@ import {
 } from "@/features/holdings/queries";
 import { findCashDividendsForHoldings } from "@/features/holdings/repository";
 import type { HoldingSummary } from "@/features/holdings/types";
+import { computeAllocationGroupDetails } from "@/lib/allocation-group-pnl";
 import { getSession } from "@/lib/auth";
 import {
   type ConcentrationBadgeState,
@@ -108,11 +109,6 @@ export type PortfolioValuation = {
   costDragPercent: number;
   costDragBreakdown: CostDragBreakdownEntry[];
 };
-
-// Thứ tự hiển thị cố định cho allocation — khớp thứ tự dùng ở
-// AssetTypeBadge/AllocationBar mockup (STOCK, FUND, BOND, GOLD), không phụ
-// thuộc thứ tự Map insertion (vốn theo thứ tự holding đầu tiên gặp mỗi loại).
-const ASSET_TYPE_ORDER: AssetType[] = ["STOCK", "FUND", "BOND", "GOLD"];
 
 function isValued(
   valuation: HoldingValuation,
@@ -230,7 +226,10 @@ async function getAllStockDividendsForXirr(
 }
 
 // Exported thêm cho getAllocationDetail() bên dưới (mục 6 phase-6.md — tái
-// dùng đúng công thức, không viết lại lần 2).
+// dùng đúng công thức, không viết lại lần 2). Refactor NỘI BỘ (issue #130) để
+// gọi computeAllocationGroupDetails() (lib/allocation-group-pnl.ts, pure) rồi
+// chỉ giữ lại {type, percent} — GIỮ NGUYÊN 100% chữ ký/hành vi output cho mọi
+// caller hiện có (Dashboard getPortfolioValuation() không đổi kết quả).
 export function buildAllocation(
   holdings: HoldingSummary[],
   valuations: Map<string, HoldingValuation>,
@@ -240,19 +239,9 @@ export function buildAllocation(
   // chưa có gì để phân bổ (mockup 2f: allocation rỗng khi NAV không xác định).
   if (navSum.isZero()) return [];
 
-  const navByType = new Map<AssetType, Decimal>();
-  for (const holding of holdings) {
-    const valuation = valuations.get(holding.id);
-    if (!valuation || !isValued(valuation)) continue;
-    const prev = navByType.get(holding.type) ?? new Decimal(0);
-    navByType.set(holding.type, prev.plus(valuation.nav));
-  }
-
-  return ASSET_TYPE_ORDER.filter((type) => navByType.has(type)).map((type) => ({
-    type,
-    // navByType.get(type) chắc chắn tồn tại nhờ filter ngay trên.
-    percent: (navByType.get(type) as Decimal).div(navSum).mul(100).toNumber(),
-  }));
+  return computeAllocationGroupDetails(holdings, valuations, navSum).map(
+    (detail) => ({ type: detail.type, percent: detail.percent }),
+  );
 }
 
 // Ghi chú độ tươi của giá (mockup 2a): mốc PriceQuote tự động mới nhất <=
@@ -889,6 +878,20 @@ export type AllocationDetailSlice = {
   type: AssetType;
   percent: number; // 0-100, KHÔNG bị ẩn bởi `hidden` (chỉ ẩn VND tuyệt đối)
   note?: string; // "· gồm CCQ" cho FUND
+
+  // MỚI (issue #130, process/UI_allocation-group-pnl.md) — NAV ròng + lãi/lỗ
+  // theo vốn CỦA RIÊNG NHÓM, Decimal đã serialize (biên server). Công thức
+  // khớp groupValuations.changePercent (features/holdings/queries/holdings-valuation.ts)
+  // — mẫu số CHỈ tính trên mã ĐÃ định giá trong nhóm.
+  navAmount: string;
+  pnlAmount: string;
+  pnlPercent: number; // KHÔNG bị ẩn bởi `hidden` (chỉ navAmount/pnlAmount là VND tuyệt đối)
+  navIsPartial: boolean; // true khi nhóm có >= 1 mã MISSING_PRICE
+  // pricedCount/totalCount/missingSymbolsLabel CHỈ set khi navIsPartial (mockup
+  // 130b: "NAV ròng · 2/3 mã có giá" + ghi chú amber "1 mã thiếu giá (MWG)").
+  pricedCount?: number;
+  totalCount?: number;
+  missingSymbolsLabel?: string;
 };
 
 export type AllocationDetail = {
@@ -897,6 +900,16 @@ export type AllocationDetail = {
   // dùng câu chung "N mã đang vượt ngưỡng tập trung", process/DECISION.md
   // 2026-07-21 mục (4)).
   concentrationWarningCount: number;
+
+  // MỚI (issue #130) — thẻ tổng NAV/tổng lãi-lỗ đầu trang, Decimal đã
+  // serialize. totalPnlPercent = Σ pnlAmount / Σ costBasisPriced các nhóm ×
+  // 100 (0 nếu mẫu số = 0) — KHÔNG tái dùng PortfolioValuation.navDeltaPercent
+  // (mẫu số đó là tổng vốn ròng TẤT CẢ holding kể cả mã thiếu giá, khác hẳn
+  // — process/UI_allocation-group-pnl.md "Điểm cần xác nhận" #2).
+  totalNavAmount: string;
+  totalNavIsPartial: boolean; // true khi BẤT KỲ nhóm nào navIsPartial
+  totalPnlAmount: string;
+  totalPnlPercent: number;
 };
 
 // Tái dùng buildAllocation() (đã có, không viết lại) + getConcentrationBadges()
@@ -909,6 +922,11 @@ export type AllocationDetail = {
 // giờ đợi valuateHoldings() xong trước khi chạy 2 query còn lại (stateRows/threshold)
 // thay vì cả 3 chạy song song như trước — chấp nhận được, tổng round-trip DB giảm
 // nhiều hơn phần latency tuần tự thêm vào.
+//
+// computeAllocationGroupDetails() (lib/allocation-group-pnl.ts) gọi MỘT LẦN
+// DUY NHẤT (issue #130) — dùng kết quả để build cả `slices` (đủ field NAV/
+// lãi-lỗ theo nhóm mới) lẫn 4 field tổng đầu trang, tránh lặp lại vòng lặp
+// group-by-type lần thứ hai.
 export async function getAllocationDetail(): Promise<AllocationDetail> {
   const session = await getSession();
   if (!session?.user?.id) throw new Error("Unauthorized");
@@ -929,16 +947,46 @@ export async function getAllocationDetail(): Promise<AllocationDetail> {
   const validNavs = [...valuations.values()].filter(isValued).map((v) => v.nav);
   const navSum = validNavs.reduce((sum, nav) => sum.plus(nav), new Decimal(0));
 
-  const allocation = buildAllocation(open, valuations, navSum);
-  const slices: AllocationDetailSlice[] = allocation.map((slice) => ({
-    type: slice.type,
-    percent: slice.percent,
-    note: slice.type === "FUND" ? "· gồm CCQ" : undefined,
+  const groupDetails = computeAllocationGroupDetails(open, valuations, navSum);
+  const slices: AllocationDetailSlice[] = groupDetails.map((detail) => ({
+    type: detail.type,
+    percent: detail.percent,
+    note: detail.type === "FUND" ? "· gồm CCQ" : undefined,
+    navAmount: detail.navAmount.toString(),
+    pnlAmount: detail.pnlAmount.toString(),
+    pnlPercent: detail.pnlPercent,
+    navIsPartial: detail.navIsPartial,
+    pricedCount: detail.navIsPartial ? detail.pricedCount : undefined,
+    totalCount: detail.navIsPartial ? detail.totalCount : undefined,
+    missingSymbolsLabel: detail.navIsPartial
+      ? detail.missingSymbols.join(", ")
+      : undefined,
   }));
+
+  const totalNavAmount = groupDetails.reduce(
+    (sum, detail) => sum.plus(detail.navAmount),
+    new Decimal(0),
+  );
+  const totalPnlAmount = groupDetails.reduce(
+    (sum, detail) => sum.plus(detail.pnlAmount),
+    new Decimal(0),
+  );
+  const totalCostBasisPriced = groupDetails.reduce(
+    (sum, detail) => sum.plus(detail.costBasisPriced),
+    new Decimal(0),
+  );
+  const totalNavIsPartial = groupDetails.some((detail) => detail.navIsPartial);
+  const totalPnlPercent = totalCostBasisPriced.isZero()
+    ? 0
+    : totalPnlAmount.div(totalCostBasisPriced).mul(100).toNumber();
 
   return {
     slices,
     concentrationWarningCount: concentration.warningCount,
+    totalNavAmount: totalNavAmount.toString(),
+    totalNavIsPartial,
+    totalPnlAmount: totalPnlAmount.toString(),
+    totalPnlPercent,
   };
 }
 

@@ -19,6 +19,11 @@
     "section": "7a-7f (điều khoản trái phiếu, ghi trái tức doanh nghiệp/Chính phủ, lịch sử 3 loại, tất toán đáo hạn đúng mệnh giá/chiết khấu) — bản fetch đầu tiên 2026-07-28. Digest: process/UI_phase_7.md",
     "cachedAt": "2026-07-28"
   },
+  "issue-130": {
+    "designFile": "Phase 9 Screens.dc.html",
+    "section": "130a Phân bổ tài sản đầy đủ dữ liệu (donut + 4 dòng nhóm giữ nguyên bố cục cũ, mỗi dòng bổ sung NAV ròng VND trái + lãi/lỗ theo vốn VND+% phải, thẻ tổng NAV/tổng lãi-lỗ trên đầu) · 130b NAV nhóm chưa đầy đủ do mã thiếu giá (nhóm Cổ phiếu ghi rõ \"NAV ròng · 2/3 mã có giá\", ghi chú amber \"1 mã thiếu giá (MWG) — NAV nhóm cổ phiếu chưa đầy đủ\", viền thẻ amber, tổng NAV cũng mang badge \"Chưa đầy đủ\") · 130c Anatomy 1 dòng nhóm (thứ tự đọc: nhóm → %phân bổ → NAV trái/lãi-lỗ phải ở hàng dưới, 3 biến thể chip lãi/lỗ gain/destructive/trung-tính-khi-đúng-0 — khớp NGUYÊN VĂN atom PercentChange đã có, bảng ẩn-tiền: NAV & lãi/lỗ VND bị ẩn nhưng %phân bổ và %lãi/lỗ LUÔN hiện). Công thức ghi rõ trong mockup: lãi/lỗ THEO VỐN (NAV nhóm − vốn đã bỏ vào nhóm), phải khớp groupValuations.changePercent ở getOpenHoldingsWithValuation() (features/holdings/queries/holdings-valuation.ts). Project id fe49dcd9-ecf0-40d0-8a62-10ca28ff572f — nhận từ export zip user gửi (không qua DesignSync), fetch 2026-08-17. Digest: process/UI_allocation-group-pnl.md (chưng cất 2026-08-17).",
+    "cachedAt": "2026-08-17"
+  },
   "issue-131": {
     "designFile": "Phase 8 Screens.dc.html",
     "section": "131a Danh sách bình thường (4 mã, sort % giảm dần mặc định, có nút đổi sort) · 131b Mã thiếu giá bị loại khỏi mẫu số (VIC tách khu vực riêng dưới đường kẻ, không có ô %, badge \"Thiếu giá\") · 131c Chỉ 1 mã cổ phiếu = 100% (kèm chú thích không phải lỗi hiển thị) · 131d Rỗng — không mã nào có giá (mọi mã thiếu giá hoặc chưa giữ mã nào, CTA cập nhật giá) · 131e Tham khảo — biến thể gộp dòng \"Khác\" (không phải mặc định) · 131f Đối chiếu 2 mẫu số cạnh nhau (FPT: 44,6% trong nhóm cổ phiếu vs 27,3% toàn danh mục). Quy ước màu: % trong nhóm CP = indigo (asset-stock) + thanh tỉ lệ; badge % toàn danh mục = amber pill cạnh tên mã, giữ nguyên như ConcentrationBadge hiện có. Project id fe49dcd9-ecf0-40d0-8a62-10ca28ff572f — bản fetch đầu tiên 2026-08-16. Digest: process/UI_stock-allocation-detail.md",
