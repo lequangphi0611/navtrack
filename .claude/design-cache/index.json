@@ -28,5 +28,10 @@
     "designFile": "Phase 8 Screens.dc.html",
     "section": "131a Danh sách bình thường (4 mã, sort % giảm dần mặc định, có nút đổi sort) · 131b Mã thiếu giá bị loại khỏi mẫu số (VIC tách khu vực riêng dưới đường kẻ, không có ô %, badge \"Thiếu giá\") · 131c Chỉ 1 mã cổ phiếu = 100% (kèm chú thích không phải lỗi hiển thị) · 131d Rỗng — không mã nào có giá (mọi mã thiếu giá hoặc chưa giữ mã nào, CTA cập nhật giá) · 131e Tham khảo — biến thể gộp dòng \"Khác\" (không phải mặc định) · 131f Đối chiếu 2 mẫu số cạnh nhau (FPT: 44,6% trong nhóm cổ phiếu vs 27,3% toàn danh mục). Quy ước màu: % trong nhóm CP = indigo (asset-stock) + thanh tỉ lệ; badge % toàn danh mục = amber pill cạnh tên mã, giữ nguyên như ConcentrationBadge hiện có. Project id fe49dcd9-ecf0-40d0-8a62-10ca28ff572f — bản fetch đầu tiên 2026-08-16. Digest: process/UI_stock-allocation-detail.md",
     "cachedAt": "2026-08-16"
+  },
+  "issue-139": {
+    "designFile": "Phase 10 Screens.dc.html",
+    "section": "139a Xem \"Tất cả\" mặc định (đường primary, gộp toàn danh mục, giữ nguyên 3 kỳ Tháng/Năm/Tất cả) · 139b Lọc theo Cổ phiếu (đường đổi màu asset-stock, trục Y riêng theo scale nhóm) · 139c Lọc theo Vàng (đường asset-gold, minh hoạ trục Y tự co giãn với quy mô nhỏ, đối lập chủ đích với 139b) · 139d Ẩn số tiền (áp trên nền 139b — số VND ẩn, % và hình dạng đường giữ nguyên) · 139e Rỗng — loại chưa từng có vị thế (Trái phiếu, tách bạch với \"có dữ liệu nhưng phẳng\") · 139f Skeleton loading · 139x KHÔNG phải màn thật — artboard tham khảo so sánh 2 kiểu chú thích \"gồm cả tiền nạp/rút\" (kiểu 1: dòng chữ nhỏ dấu *; kiểu 2: khối icon+viền info) và CHỐT khuyến nghị dùng Kiểu 2, đặt dưới bộ chọn kỳ, ngoài vùng vẽ 160px. Mockup CHƯA có màn cho điểm vào (entry point) từ Dashboard (quyết định 2026-08-18 trong issue: chỉ header card NavTrendChart có chevron, không mockup riêng) — dựng theo mô tả issue + đối chiếu pattern chevron legend AllocationScreen, không tự bịa từ file raw. Project id fe49dcd9-ecf0-40d0-8a62-10ca28ff572f — nhận từ export zip user gửi (không qua DesignSync), fetch 2026-08-18. Digest: process/UI_nav-trend-by-asset-type.md",
+    "cachedAt": "2026-08-18"
   }
 }
