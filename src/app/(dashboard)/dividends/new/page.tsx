@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 
 import { recordDividend } from "@/features/dividends/actions";
 import { DividendForm } from "@/features/dividends/components/DividendForm";
-import { getOpenHoldingsForDividendSwitcher } from "@/features/dividends/queries";
-import { getBondCouponFormData } from "@/features/holdings/queries";
+import {
+  getBondCouponFormData,
+  getOpenHoldingsForSwitcher,
+} from "@/features/holdings/queries";
 import { ROUTES } from "@/lib/routes";
 import {
   requireDecimalSetting,
@@ -16,7 +18,7 @@ import {
 // Chưa có vị thế nào đang mở -> không còn gì để ghi cổ tức, điều hướng sang
 // khai báo vị thế mới.
 export default async function NewDividendStandalonePage() {
-  const holdings = await getOpenHoldingsForDividendSwitcher();
+  const holdings = await getOpenHoldingsForSwitcher();
   if (holdings.length === 0) redirect(ROUTES.newHolding);
 
   const current = holdings[0]!;

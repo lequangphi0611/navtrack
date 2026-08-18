@@ -6,19 +6,14 @@ import type {
   DividendHistoryRow,
   DividendHistorySummary,
 } from "@/features/dividends/components/DividendHistoryList";
-import type { DividendHolding } from "@/features/dividends/types";
-import { getOpenHoldings } from "@/features/holdings/queries";
 import { assertNever } from "@/lib/assert-never";
 import { getSession } from "@/lib/auth";
-import { resolveCutoffDate } from "@/lib/cutoff";
-import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { CASH_FLOW_DIVIDEND_TYPES } from "@/lib/enums";
 import { formatDate } from "@/lib/format";
 import {
   buildPositionEvents,
   buildQuantityTimeline,
 } from "@/lib/position-trail";
-import { valuateHoldings } from "@/lib/valuation";
 
 import { resolveParValueAt, roundPercentLabel } from "./dividend-percent-label";
 import {
@@ -26,47 +21,6 @@ import {
   findDividendHistorySource,
   findParValueSettingRows,
 } from "./repository";
-
-// Danh sách Holding đang mở dùng cho HoldingSwitcher (DividendForm) — tái dùng
-// getOpenHoldings() (features/holdings/queries.ts, đã filter userId + quantity
-// > 0), chỉ thêm marketValue tại cutoff hiện tại. marketValue fallback về
-// totalCostBasis khi MISSING_PRICE (docs/domain/04 "Thiếu giá": không mặc định
-// 0, dùng vốn gốc làm ước lượng gần đúng cho màn chọn mã, không phải số chính
-// thức hiển thị NAV).
-export async function getOpenHoldingsForDividendSwitcher(): Promise<
-  DividendHolding[]
-> {
-  const open = await getOpenHoldings();
-  const cutoffDate = resolveCutoffDate(await getCutoffSelection());
-
-  const valuations = await valuateHoldings(
-    open.map((h) => ({
-      id: h.id,
-      symbol: h.symbol,
-      quantity: new Decimal(h.quantity),
-    })),
-    cutoffDate,
-  );
-
-  return open.map((holding) => {
-    const valuation = valuations.get(holding.id);
-    const marketValue =
-      valuation?.status === "VALUED"
-        ? valuation.nav.toString()
-        : holding.totalCostBasis;
-
-    return {
-      id: holding.id,
-      symbol: holding.symbol,
-      name: holding.name,
-      type: holding.type,
-      quantity: holding.quantity,
-      unit: holding.unit,
-      avgCost: holding.avgCost,
-      marketValue,
-    };
-  });
-}
 
 // Tổng cổ tức tiền mặt (net) ĐÃ nhận từ trước tới nay của MỘT Holding — dùng
 // cho DividendRecordedResult.totalDividendReceived (mockup Phase 4, 4d).
