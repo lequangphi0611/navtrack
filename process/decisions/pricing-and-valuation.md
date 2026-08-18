@@ -67,6 +67,19 @@ Spec tương ứng: [`docs/domain/04-pricing-and-valuation.md`](../../docs/domai
 
 ---
 
+## 2026-08-18 — Issue #139: route `/nav-chart` độc lập cho NAV theo loại tài sản (không nối `/allocation`)
+
+**Status:** Accepted
+
+**Màn "Biến động NAV theo loại tài sản" (issue #139) dùng route đứng riêng `/nav-chart`, KHÔNG lồng dưới `/allocation` như đề xuất ban đầu trong issue.**
+- Bối cảnh: issue #139 lúc mở đề xuất nối tiếp tiền lệ drill-down `/allocation/stock` (entry 2026-08-16 trên) thành route con (`/allocation/nav-trend`). Mockup Claude Design (`Phase 10 Screens.dc.html`) lại tự ghi `/nav-chart` trong text mô tả lúc vẽ. Hỏi lại trực tiếp user (không tự chọn thay) — chọn `/nav-chart` đứng riêng, ngang hàng `/allocation`.
+- Quyết định: `ROUTES.navChart` (tên field đề xuất) trỏ `/nav-chart` khi issue wiring thêm route thật. **Phá vỡ tiền lệ 2026-08-16** một cách có chủ đích — không phải mọi drill-down từ Dashboard/Allocation đều lồng route con; xác nhận riêng với user cho từng trường hợp thay vì mặc định nối `/allocation`.
+- CTA "+ Thêm vị thế {Loại}" ở trạng thái rỗng (mockup 139e, digest `UI_nav-trend-by-asset-type.md`) dùng query param `?type=BOND` trên `/holdings/new` (form tự pre-select loại) — cũng đã hỏi user, không mặc định giữ route chung không tham số.
+- **Việc còn treo cho issue "Query + route biến động NAV theo loại tài sản":** Dashboard (`NavTrendChart`) và `/nav-chart` cùng cần dữ liệu NAV theo `Holding.type` từ `Snapshot` — user tự nêu lo ngại double round-trip DB khi bấm từ Dashboard sang `/nav-chart` (2 lần fetch liên tiếp cho cùng nhu cầu xem NAV). Cơ chế dùng chung (cache Next.js theo `userId`+ngày, hay tính sẵn cả 5 tổ hợp loại dùng chung cho cả 2 màn) **chưa chốt** — `business-implementer` quyết khi wiring, không tự chốt ở đây vì đụng kiến trúc data-fetching ngoài phạm vi Presentational.
+- Docs đã sync: `process/UI_nav-trend-by-asset-type.md` (mục "Điểm lệch/cần xác nhận" cập nhật thành đã chốt), issue #139 trên GitHub (comment ghi quyết định cuối).
+
+---
+
 ## Quyết định liên quan ở file khác
 
 - Đưa "Cảnh báo tập trung" vào Phase 6 + ngưỡng 30% qua `Setting{CONCENTRATION_WARNING_THRESHOLD}` — [`roadmap-and-scope.md`](./roadmap-and-scope.md), mục 2026-07-17 (5).

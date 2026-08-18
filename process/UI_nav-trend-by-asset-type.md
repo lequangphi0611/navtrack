@@ -253,54 +253,42 @@ T6/26, T8/26 — khớp định dạng `formatDayMonth` hiện có ở `NavTrend
 | Trục Y (`<YAxis>` Recharts) | ❌ `NavTrendChart` hiện tại KHÔNG có `<YAxis>` | Thêm mới, xem chi tiết ở mục "Từng màn hình" |
 | Icon mới cần map Material Symbols → lucide | — | `filter_list` → `ListFilter`, `unfold_more` → `ChevronsUpDown` (đã có, Phase 4), `account_balance` (icon empty state Trái phiếu) → `Landmark`, `do_not_disturb_on` (banner cảnh báo đường phẳng) → `CircleSlash`, `rule` (chỉ trong khối "Quy ước áp dụng", không phải UI thật) — bổ sung bảng mapping ở `ui-ux-design.md` khi hiện thực |
 
-## Điểm lệch/cần xác nhận (KHÔNG tự chốt)
+## Điểm lệch/cần xác nhận — ĐÃ CHỐT 2026-08-18 (interview trực tiếp với user)
 
-1. **Card insight dưới note box — quy tắc chọn "XIRR + nạp thêm" (139b) hay
-   "Cao nhất/Thấp nhất kỳ" (139c) chưa rõ.** Mockup chỉ minh hoạ Cổ phiếu dùng
-   card đầu, Vàng dùng card sau — không có chú thích nào giải thích đây là 2
-   lựa chọn thiết kế cần chọn 1 dùng chung cho mọi loại, hay mỗi loại tài sản
-   có card đặc thù riêng (vd Cổ phiếu/Quỹ có dòng tiền phức tạp hơn nên ưu
-   tiên XIRR+nạp thêm, Vàng/Trái phiếu ít giao dịch hơn nên ưu tiên cao/thấp
-   nhất). Ảnh hưởng trực tiếp field nào bắt buộc có trong
-   `NavTrendByAssetTypePeriodData` — `business-implementer`/`design-implementer`
-   cần chốt trước khi viết query thật.
-2. **Preload 5 loại × 3 kỳ = 15 bộ dữ liệu có hợp lý không?** Issue yêu cầu
-   "giữ pattern tải sẵn cả 3 kỳ" (đã áp dụng cho `NavTrendChart` gốc, chỉ 1
-   chiều biến thiên) — mở rộng thêm chiều loại tài sản nhân lên 15 tổ hợp mỗi
-   lần vào màn. Cần `business-implementer` xác nhận đây vẫn chấp nhận được
-   (payload nhỏ vì mỗi kỳ chỉ vài chục điểm) hay nên đổi cách tải (vd chỉ
-   preload kỳ đang chọn cho mọi loại, đổi kỳ mới fetch lại) — digest không tự
-   chốt vì đụng tới kiến trúc data-fetching, ngoài phạm vi Presentational.
-3. **Tham số hoá màu `stroke`/`fill` gradient theo `assetType` trong logic
-   chart.** `NavTrendChart.tsx` hiện hardcode `var(--color-primary)` cho cả
-   `<linearGradient>` và `<Area stroke>`. Cần đổi thành lookup theo
-   `assetType` (`var(--color-asset-stock)` v.v.) — có khả thi tái dùng thẳng
-   `NavTrendChart` với prop `assetType` mới, hay nên tách hẳn thành component
-   riêng `NavTrendByAssetTypeChart` không phụ thuộc `NavTrendChart` (chấp nhận
-   trùng lặp logic Area/Tooltip)? Ảnh hưởng tới Dashboard (`NavTrendChart` gốc
-   không được đổi hành vi mặc định) nếu chọn hướng mở rộng chung — cần
-   `design-implementer` chốt, ưu tiên không phá vỡ `NavTrendChart` hiện tại
-   trên Dashboard.
-4. **CTA "+ Thêm vị thế {Loại}" cần route nhận trước loại tài sản.**
-   `ROUTES.newHolding` hiện là `"/holdings/new"`, không nhận tham số loại. Cần
-   xác nhận: thêm query param (`?type=BOND`) hay giữ route chung và để user tự
-   chọn loại trong form — không tự chốt, đây là quyết định route/UX của
-   `business-implementer`/`design-implementer`.
-5. **Route path của màn mới chưa thống nhất.** Text mô tả trong raw mockup ghi
-   `/nav-chart` (route độc lập, ngang hàng `/allocation`), nhưng mô tả issue
-   #139 lại nói "nối tiếp convention `/allocation/stock`" (gợi ý route con
-   `/allocation/nav-trend` hoặc tương tự, lồng dưới `/allocation`). Hai gợi ý
-   này khác cấu trúc URL — cần `business-implementer`/`planner` chốt 1
-   phương án trước khi thêm entry `ROUTES` mới (đề xuất tên field tạm:
-   `ROUTES.navTrendByAssetType`).
-6. **"3 loại còn lại đã có dữ liệu" ở trạng thái rỗng (139e) — có luôn đúng 3
-   loại không?** Mockup minh hoạ đúng lúc 1/4 loại rỗng (Trái phiếu) nên còn
-   lại vừa đúng 3. Danh mục thực tế có thể có 2+ loại cùng rỗng — cần xác nhận
-   layout danh sách này co giãn đúng khi chỉ còn 1-2 loại có dữ liệu (không
-   hardcode "3 loại còn lại" trong copy, phải theo `filters.filter(hasData).length`).
-7. **Icon empty state Trái phiếu (`account_balance` → đề xuất `Landmark`)
-   có phù hợp cho MỌI loại rỗng không, hay mỗi loại cần icon riêng?** Mockup
-   chỉ minh hoạ 1 loại (Trái phiếu). Cổ phiếu/Quỹ/Vàng rỗng dùng chung icon
-   này hay đổi theo loại (vd `Landmark` cho Trái phiếu, `Coins` cho Vàng) —
-   chưa có mockup cho các biến thể còn lại, `design-implementer` tự quyết
-   theo tinh thần nhất quán, không bắt buộc đúng tuyệt đối vì mockup không có.
+Digest ban đầu để ngỏ 7 điểm, không tự chốt. Đã hỏi lại user từng điểm (không
+suy đoán thay) trước khi bàn giao cho issue wiring — kết quả:
+
+1. **Card insight dưới note box — GIỮ data-driven, không hardcode theo loại.**
+   Component chỉ render "XIRR + nạp thêm" khi `groupXirrPercent`/
+   `depositedInPeriod` có giá trị, render "Cao nhất/Thấp nhất kỳ" khi
+   `periodHigh`/`periodLow` có giá trị — quyết định "loại nào dùng card nào"
+   thuộc về `business-implementer` khi điền props thật, không phải quy tắc
+   cứng trong UI. Đã hiện thực đúng hướng này.
+2. **Preload 5 loại × 3 kỳ = 15 bộ — GIỮ preload hết**, nhưng thêm ràng buộc
+   mới: **tránh double-fetch với Dashboard.** User tự nêu lo ngại hiệu năng —
+   Dashboard (`NavTrendChart`) đã fetch NAV trend cho toàn danh mục, `/nav-chart`
+   fetch thêm 15 tổ hợp khi bấm sang là 2 round-trip DB liên tiếp cho cùng nhu
+   cầu xem NAV. Cơ chế dùng chung (cache theo `userId`+ngày, hay tính sẵn cả 5
+   loại dùng chung nguồn cho cả 2 màn) **chưa chốt cụ thể** — xem
+   `process/decisions/pricing-and-valuation.md` 2026-08-18, việc của
+   `business-implementer` ở issue "Query + route biến động NAV theo loại tài
+   sản" khi wiring.
+3. **Tách component riêng — GIỮ, không gộp vào `NavTrendChart` gốc.** Đã dựng
+   `NavTrendByAssetTypeChart` độc lập (chấp nhận trùng lặp logic Area/
+   gradient/Tooltip), `NavTrendChart.tsx` chỉ thêm đúng 1 prop
+   `navTrendHref?: string` — không đổi hành vi mặc định, không rủi ro
+   Dashboard đang chạy thật.
+4. **CTA "+ Thêm vị thế {Loại}" — dùng query param `?type=BOND` trên
+   `/holdings/new`**, không giữ route chung không tham số. Form đích tự
+   pre-select loại — issue wiring cần đảm bảo `/holdings/new` đọc được param
+   này.
+5. **Route path — CHỐT `/nav-chart` độc lập, KHÔNG nối `/allocation`.** Đảo
+   ngược đề xuất ban đầu trong issue #139 ("nối tiếp convention
+   `/allocation/stock`") — xem lý do đầy đủ + cảnh báo phá vỡ tiền lệ
+   2026-08-16 ở `process/decisions/pricing-and-valuation.md` 2026-08-18. Tên
+   field đề xuất: `ROUTES.navChart`.
+6. **Danh sách "loại còn lại đã có dữ liệu" ở trạng thái rỗng — GIỮ render
+   động** theo `filters.filter(f => f.hasData && f.type !== assetType).length`,
+   không hardcode số lượng cố định. Đã hiện thực đúng hướng này.
+7. **Icon empty state — GIỮ dùng chung 1 icon (`Wallet`) cho mọi loại tài
+   sản**, không dựng bộ icon riêng từng loại. Đã hiện thực đúng hướng này.
