@@ -1,14 +1,16 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Khớp hình dạng TransactionForm: toggle Mua/Bán, card vị thế, các field, nút submit.
+// Khớp hình dạng TransactionForm: toggle Mua/Bán, pill HoldingSwitcher (route
+// "new" — issue #138), các field, nút submit. Route "edit" thực ra dùng khối
+// card vị thế tĩnh (thấp + không bo tròn bằng pill switcher) thay vì pill này
+// — 2 route dùng chung 1 skeleton, chấp nhận lệch nhẹ ở route edit vì không
+// rõ rệt khi soi mắt (xem docs/rules/component-architecture.md mục "Quy ước
+// skeleton").
 function TransactionFormSkeleton() {
   return (
     <div className="flex flex-col gap-4.5">
       <Skeleton className="h-11 rounded-xl" />
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-3.5 w-16" />
-        <Skeleton className="h-14 rounded-xl" />
-      </div>
+      <Skeleton className="h-17.5 rounded-2xl" />
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-2">
           <Skeleton className="h-3.5 w-20" />
