@@ -1,6 +1,12 @@
 "use client";
 
-import { EyeOff, LineChart as LineChartIcon, Pointer } from "lucide-react";
+import {
+  ChevronRight,
+  EyeOff,
+  LineChart as LineChartIcon,
+  Pointer,
+} from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import {
   Area,
@@ -46,9 +52,17 @@ type NavTrendChartProps = {
   // tới đó thay vì dựng nút hành động trùng lặp (mockup 6b, digest mục 1).
   snapshotCardId?: string;
   className?: string;
+  // MỚI (issue #139) — href dẫn tới màn "Biến động NAV theo loại tài sản"
+  // (process/UI_nav-trend-by-asset-type.md). Vắng mặt = ẨN HẲN link, header
+  // giữ dạng text tĩnh như cũ (backward-compatible — Dashboard thật CHƯA
+  // truyền prop này vì route đích chưa tồn tại, xem digest mục "Dashboard —
+  // card NavTrendChart").
+  navTrendHref?: string;
 };
 
-const PERIOD_OPTIONS = [
+// Exported để NavTrendByAssetTypeChart (issue #139) tái dùng thay vì khai lại
+// (digest process/UI_nav-trend-by-asset-type.md mục "Atom/molecule dùng lại").
+export const PERIOD_OPTIONS = [
   { value: "MONTH" as const, label: "Tháng" },
   { value: "YEAR" as const, label: "Năm" },
   { value: "ALL" as const, label: "Tất cả" },
@@ -87,6 +101,7 @@ function NavTrendChart({
   hidden = false,
   snapshotCardId = "snapshot-today-card",
   className,
+  navTrendHref,
 }: NavTrendChartProps) {
   const [period, setPeriod] = useState<NavTrendPeriod>("YEAR");
   const { points, changePercent } = data[period];
@@ -105,9 +120,19 @@ function NavTrendChart({
       className={cn("rounded-2xl border border-border bg-card p-4", className)}
     >
       <div className="mb-2.5 flex items-center justify-between gap-2">
-        <div className="text-[12.5px] font-semibold text-muted-foreground">
-          Giá trị tài sản
-        </div>
+        {navTrendHref ? (
+          <Link
+            href={navTrendHref}
+            className="flex items-center gap-0.5 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Giá trị tài sản
+            <ChevronRight className="size-3.5 text-muted-faint" />
+          </Link>
+        ) : (
+          <div className="text-[12.5px] font-semibold text-muted-foreground">
+            Giá trị tài sản
+          </div>
+        )}
         <span
           className={cn(
             "rounded-full px-2.25 py-0.75 font-mono text-[11px] font-semibold tabular-nums",
