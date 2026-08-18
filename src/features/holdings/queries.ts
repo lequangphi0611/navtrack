@@ -8,6 +8,7 @@
 // - queries/holdings-valuation.ts      — danh sách vị thế mở có định giá
 // - queries/closed-holdings.ts         — chi tiết vị thế đã đóng (realized PnL/XIRR)
 // - queries/holding-detail-strings.ts  — chuỗi hiển thị thuần rút từ 2 file trên
+// - queries/holding-switcher.ts        — danh sách switcher đổi mã (TransactionForm/DividendForm)
 // - queries/shared.ts                  — helper thuần dùng chung (groupByHoldingId)
 // Code NGOÀI feature holdings đi qua barrel này. Trong nội bộ feature (giữa
 // các file con của queries/), import trực tiếp sibling file, không qua đây.
@@ -26,6 +27,8 @@ export {
 } from "./queries/holding-transaction-form";
 
 export { getOpenHoldingsWithValuation } from "./queries/holdings-valuation";
+
+export { getOpenHoldingsForSwitcher } from "./queries/holding-switcher";
 
 // Phase 7 — điều khoản trái phiếu, ngữ cảnh trái tức, prefill tất toán đáo hạn.
 export {

@@ -37,6 +37,7 @@ kèm trỏ file/spec gốc. Nếu bẫy mới làm một mục cũ hết đúng 
 | Mọi test cần đăng nhập timeout, page snapshot cho thấy màn "Đăng nhập với Google" thay vì app; webServer log lặp `[auth][error] MissingSecret`                                  | [#20](#20-git-worktree-mới-không-có-envlocal--authjs-missingsecret--mọi-test-cần-login-fail)                                                                       |
 | `strict mode violation: getByText(...) resolved to 2 elements` khi tìm một số `%` cụ thể trên màn có cả `ConcentrationBadge` (mẫu số toàn danh mục) lẫn số `%` khác mẫu số      | [#21](#21-2-số--khác-mẫu-số-trùng-giá-trị-khi-danh-mục-test-chỉ-có-1-loại-tài-sản)                                                                                 |
 | `strict mode violation: getByText(...) resolved to 2 elements` khi lọc dòng/card theo tên nhóm tài sản ("Cổ phiếu"...) trên màn có ghi chú/mô tả nhắc lại tên nhóm ở chữ thường | [#22](#22-getbytextstring-không-phân-biệt-hoachữ-thường--khớp-nhầm-tên-nhóm-lặp-lại-trong-ghi-chú-amber)                                                           |
+| `page.waitForURL(...)` sau `submitBuy()`/`submitSell()` (chờ mãi không resolve) dù page snapshot lúc timeout cho thấy app ĐÃ điều hướng và render đúng kết quả cuối             | [#23](#23-waitforurl-không-resolve-sau-chuỗi-3-soft-nav-router-push-liên-tiếp-trong-cùng-test)                                                                     |
 
 **Bài học lặp lại nhiều lần** (đọc khi sắp đổi component dùng chung hoặc UI của màn đã có
 spec): [#16](#16-ui-redesign-đổi-dòng-danh-sách-từ-link-sang-button-mở-sheet) và
@@ -379,3 +380,40 @@ href="/allocation/stock">` (Link bọc NGOÀI của chính dòng đó, sai — 2
   copy/ghi chú tự do (đặc biệt câu văn có nhắc lại tên field/nhãn ở dạng
   thường), rà lại các locator gom-theo-nhãn đã có trước khi tin chúng vẫn
   unique.
+
+## 23. `waitForURL` không resolve sau chuỗi ≥3 soft-nav (`router.push`) liên tiếp trong cùng test
+
+- **Triệu chứng:** viết e2e cho HoldingSwitcher trong `TransactionForm` (issue
+  #138, `holdings.spec.ts` — đổi mã giữa 2 vị thế rồi submit BUY) —
+  `formB.submitBuy()` (dùng `page.waitForURL(afterTransactionUrl(...))` mặc
+  định, `waitUntil: "load"`) treo tới hết `Test timeout` (60s, rồi 180s với
+  `test.slow()` — nới timeout KHÔNG sửa được gì). `error-context.md`/page
+  snapshot lúc timeout cho thấy trang ĐÃ ở đúng URL/nội dung cuối cùng (đúng
+  SL, đúng 2 giao dịch, không ghi nhầm) — app hoạt động đúng, chỉ riêng lời
+  gọi `waitForURL` không bao giờ resolve. Lặp lại y hệt ở 2 lần chạy độc lập,
+  luôn dừng ở đúng soft-nav thứ 3 trong test (create B → đổi mã qua switcher →
+  submit) dù 2 `waitForURL` trước đó trong CÙNG test (tạo vị thế, chọn mã
+  trong switcher) đều resolve bình thường.
+- **Nguyên nhân (chưa xác định chắc chắn, chỉ quan sát được điều kiện lặp
+  lại):** cả `submitBuy`/`submitSell`/switcher đều điều hướng qua
+  `router.push()` (Next.js App Router, soft-nav — không phải reload trang
+  thật). Nghi vấn: `page.waitForURL` mặc định chờ thêm lifecycle `"load"` SAU
+  khi URL khớp; với soft-nav dồn dập (≥3 lần liên tiếp không xen hard
+  navigation nào) trong 1 trang, CDP có thể không phát lại sự kiện `"load"`
+  cho lần thứ 3 trở đi ở môi trường/phiên bản Playwright-Chromium đang chạy —
+  khác hẳn behavior "slow nhưng cuối cùng cũng xong" (không phải do máy chậm,
+  vì tăng timeout lên 180s vẫn treo y hệt).
+- **Cách né:** ở bước soft-nav **thứ 3 trở lên** trong cùng 1 test, KHÔNG
+  dùng action đã có sẵn `waitForURL` bên trong (`submitBuy()`/`submitSell()`)
+  — tự fill field + `.click()` nút submit tay, rồi verify bằng **assertion
+  nội dung tự auto-retry** (`expect(locator).toHaveText(...)`, có thể nới
+  `timeout` riêng cho assertion đó) thay vì đợi URL đổi. Assertion nội dung
+  không phụ thuộc lifecycle `"load"` nên né được hẳn lớp bug này, đồng thời
+  vẫn verify đúng thứ cần verify (dữ liệu hiển thị đúng). Xem
+  `e2e/tests/holdings.spec.ts` (test "đổi mã qua HoldingSwitcher...").
+- **Bài học chung:** một test đi qua **nhiều vòng soft-nav liên tiếp** (tạo
+  data + đổi mã + submit, tất cả cùng dùng `router.push`) rủi ro cao hơn hẳn
+  so với test chỉ có 1-2 soft-nav — gặp `waitForURL` treo bất thường (page đã
+  đúng nhưng promise không resolve) ở bước thứ 3+ thì nghi ngay lớp bug này
+  trước khi nghi máy chậm/logic sai; **tăng timeout không sửa được** (đã thử
+  60s → 180s, treo y hệt) — chỉ đổi cơ chế wait mới né được.

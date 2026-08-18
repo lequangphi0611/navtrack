@@ -4,35 +4,54 @@ import { CheckCircle2, ChevronsUpDown, Search } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { AssetTypeBadge } from "@/components/AssetTypeBadge";
+import { AssetTypeBadge, type AssetType } from "@/components/AssetTypeBadge";
 import { SymbolAvatar } from "@/components/SymbolAvatar";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetPopup, SheetTrigger } from "@/components/ui/sheet";
-import type { DividendHolding } from "@/features/dividends/types";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type HoldingSwitcherOption = DividendHolding & {
-  // Đổi mã = điều hướng route mới (ROUTES.newDividend), không giữ state client
-  // (xem docs/rules/component-architecture.md — tab/lựa chọn đổi cả tập dữ liệu
-  // phải là Link thật).
+// View model dùng chung cho `current` + từng option của switcher — Decimal đã
+// serialize thành string ở biên server. Dùng lại được ở bất kỳ form nào cần
+// đổi mã đang thao tác (DividendForm, TransactionForm...), không riêng
+// dividends — xem process/DECISION.md liên quan issue #138.
+type HoldingSwitcherHolding = {
+  id: string;
+  symbol: string;
+  name: string | null;
+  type: AssetType;
+  quantity: string;
+  unit: string;
+  avgCost: string; // hiển thị ở switcher trigger — "giá vốn {avgCost}"
+  marketValue: string; // hiển thị ở dòng trong sheet switcher — "{quantity} · {marketValue}"
+};
+
+type HoldingSwitcherOption = HoldingSwitcherHolding & {
+  // Đổi mã = điều hướng route mới (ROUTES.newDividend/newTransaction), không
+  // giữ state client (xem docs/rules/component-architecture.md — tab/lựa
+  // chọn đổi cả tập dữ liệu phải là Link thật).
   href: string;
   isCurrent: boolean;
 };
 
 type HoldingSwitcherProps = {
-  current: DividendHolding;
+  current: HoldingSwitcherHolding;
   // CHỈ Holding đang mở (quantity > 0), luôn gồm `current` (isCurrent true).
   options: HoldingSwitcherOption[];
+  // Tiêu đề + mô tả bottom sheet — tham số hoá để dùng chung được nhiều form
+  // (vd "Chọn mã ghi cổ tức" ở DividendForm, "Chọn mã ghi giao dịch" ở
+  // TransactionForm) thay vì hardcode một câu cố định.
+  sheetTitle: string;
+  sheetSubtitlePrefix: string;
   hidden?: boolean;
 };
 
-// Switcher pill (mockup Phase 4 Screens 4a) + bottom sheet chọn mã (4b) — LUÔN
-// hiện trong DividendForm bất kể lối vào (HoldingDetailScreen hay Dashboard),
-// khớp mockup (không có biến thể ẩn switcher — xem process/UI_phase_4.md).
+// Switcher pill (mockup Phase 4 Screens 4a) + bottom sheet chọn mã (4b).
 function HoldingSwitcher({
   current,
   options,
+  sheetTitle,
+  sheetSubtitlePrefix,
   hidden = false,
 }: HoldingSwitcherProps) {
   const [query, setQuery] = useState("");
@@ -78,10 +97,10 @@ function HoldingSwitcher({
       <SheetPopup>
         <div className="mb-3.5">
           <div className="text-[16.5px] font-bold text-foreground">
-            Chọn mã ghi cổ tức
+            {sheetTitle}
           </div>
           <div className="mt-0.5 text-[11.5px] text-muted-faint">
-            Chỉ cổ phiếu đang nắm giữ · {options.length} mã
+            {sheetSubtitlePrefix} · {options.length} mã
           </div>
         </div>
 
@@ -143,4 +162,8 @@ function HoldingSwitcher({
 }
 
 export { HoldingSwitcher };
-export type { HoldingSwitcherOption, HoldingSwitcherProps };
+export type {
+  HoldingSwitcherHolding,
+  HoldingSwitcherOption,
+  HoldingSwitcherProps,
+};

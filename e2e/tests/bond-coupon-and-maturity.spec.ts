@@ -157,7 +157,7 @@ test("Ghi bù một kỳ trái tức cũ sau khi đã mua thêm: gross/tax/net d
 // xem GOTCHAS.md): tất toán TOÀN BỘ số lượng cùng ngày rồi mới ghi trái tức kỳ
 // cuối sẽ đóng vị thế (Holding.quantity = 0), và route ghi trái tức
 // (`/holdings/[id]/dividends/new`) chỉ liệt kê Holding đang MỞ
-// (getOpenHoldingsForDividendSwitcher -> getOpenHoldings, quantity > 0) nên
+// (getOpenHoldingsForSwitcher -> getOpenHoldings, quantity > 0) nên
 // sẽ 404 — không thể verify qua UI thật với tất toán TOÀN BỘ. Bất biến
 // SETTLEMENT_RANK áp dụng giống hệt nhau dù tất toán một phần hay toàn bộ
 // (chính hàm buildQuantityTimeline không phân biệt), nên tất toán MỘT PHẦN vẫn

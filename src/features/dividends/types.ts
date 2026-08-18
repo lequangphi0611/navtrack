@@ -1,6 +1,6 @@
 import type { BondIssuerType, DividendType } from "@prisma/client";
 
-import type { AssetType } from "@/components/AssetTypeBadge";
+import type { HoldingSwitcherHolding } from "@/components/HoldingSwitcher";
 
 // Điều khoản trái phiếu đã lưu (BondTerms, issue #56) ở dạng chỉ-đọc cho
 // DividendForm loại BOND_COUPON — mockup Phase 7 Screens 7b/7c hiện thẻ tóm
@@ -91,14 +91,9 @@ export type DividendRecordedResult = {
 };
 
 // View model dùng chung giữa DividendForm.holding và HoldingSwitcher (current +
-// từng option) — Decimal đã serialize thành string ở biên server.
-export type DividendHolding = {
-  id: string;
-  symbol: string;
-  name: string | null;
-  type: AssetType;
-  quantity: string;
-  unit: string;
-  avgCost: string; // hiển thị ở switcher trigger — "giá vốn {avgCost}"
-  marketValue: string; // hiển thị ở dòng trong sheet switcher — "{quantity} · {marketValue}"
-};
+// từng option) — Decimal đã serialize thành string ở biên server. Alias sang
+// HoldingSwitcherHolding (issue #138, tổng quát hoá HoldingSwitcher khỏi
+// dividends) để giữ nguyên các import `DividendHolding` hiện có trong feature
+// này (DividendForm.tsx, CashDividendFields.tsx, StockDividendFields.tsx,
+// BondCouponFields.tsx...) — structural typing đảm bảo chúng chạy nguyên vẹn.
+export type DividendHolding = HoldingSwitcherHolding;
