@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { HoldingsPage } from "../pages/holdings-page";
+import { NewHoldingPage } from "../pages/new-holding-page";
 import {
   cleanupTestUser,
   closeContext,
@@ -129,6 +130,99 @@ test("bán hết về 0 ẩn khỏi danh sách vị thế mở; xóa giao dịch
     // Xóa SELL (không có giao dịch phụ thuộc) -> thành công, quay lại SL 50
     await detail.deleteTransaction("90.000");
     await expect(detail.quantityText).toHaveText("50 cổ phần");
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(sessionA.userId);
+  }
+});
+
+test("đổi mã qua HoldingSwitcher trong form giao dịch reset toàn bộ field, không ghi nhầm giao dịch sang mã cũ", async ({
+  browser,
+}) => {
+  // Test này dựng 2 vị thế + đi qua 1 vòng switcher đầy đủ (nhiều điều hướng
+  // hơn 2 test còn lại trong file) — nới ngân sách thời gian (test.slow() ->
+  // x3 timeout, API chuẩn của Playwright) làm biên an toàn chung cho cả test,
+  // KHÔNG phải cách sửa bug ở bước submit cuối (xem GOTCHAS #23 — bug đó nới
+  // timeout không giải quyết được, phải đổi cơ chế wait).
+  test.slow();
+
+  const sessionA = await createTestSession("holdings-switcher");
+  const context = await browser.newContext();
+  await signInAs(context, sessionA.sessionToken);
+  const page = await context.newPage();
+
+  try {
+    const holdingsPage = new HoldingsPage(page);
+    await holdingsPage.goto();
+
+    // Dựng 2 vị thế đang mở: mã A (100 CP) và mã B (50 CP). Test này chỉ quan
+    // tâm hành vi HoldingSwitcher trong TransactionForm, không phải flow điều
+    // hướng dẫn tới bước dựng data -> vào thẳng NewHoldingPage lần 2 qua
+    // goto() thay vì goBack() + goToNewHolding() (rule mục 4, case 3 "test
+    // không quan tâm flow dẫn tới nó"), giữ test đủ nhanh trong ngân sách
+    // 60s/test (nhiều bước điều hướng hơn 2 test còn lại trong file).
+    const newHoldingPageA = await holdingsPage.goToNewHolding();
+    const detailA = await newHoldingPageA.create({
+      symbol: "AAA",
+      quantity: 100,
+      pricePerUnit: 50_000,
+    });
+
+    const newHoldingPageB = new NewHoldingPage(page);
+    await newHoldingPageB.goto();
+    const detailB = await newHoldingPageB.create({
+      symbol: "BBB",
+      quantity: 50,
+      pricePerUnit: 80_000,
+    });
+
+    // Mở form "Thêm giao dịch" của mã A, chuyển sang Bán, điền số lượng/giá —
+    // CHƯA submit (issue #138: field này phải mất đi khi đổi mã, không được
+    // rơi rớt sang mã khác). Cùng lý do trên: goto() thẳng URL đã biết của A
+    // thay vì đi lại qua danh sách vị thế.
+    await detailA.goto();
+    const form = await detailA.goToNewTransaction();
+    await form.toggleSell();
+    await form.fillQuantity(30);
+    await form.fillPricePerUnit(60_000);
+
+    // Bấm "Đổi mã" -> mở Sheet -> chọn mã B.
+    await form.switcher.open();
+    await expect(form.switcher.title).toBeVisible();
+    const formB = await form.switcher.selectHoldingForTransaction("BBB");
+
+    // Đã điều hướng đúng sang route giao dịch của mã B (không phải mã A hay
+    // mã thứ ba nào khác).
+    await expect(page).toHaveURL(`${detailB.url}/transactions/new`);
+
+    // Field số lượng/giá đã rỗng lại — KHÔNG còn 30/60.000 vừa gõ cho mã A
+    // (React remount qua key={holdingId}, xem NewTransactionFormSection.tsx).
+    await expect(formB.quantityInput).toHaveValue("");
+    await expect(formB.priceInput).toHaveValue("");
+    // Chế độ đã quay về Mua — không còn kẹt ở Bán của mã A.
+    await expect(formB.submitBuyButton).toBeVisible();
+
+    // Submit một giao dịch MUA hợp lệ cho mã B — fill/click tay thay vì
+    // formB.submitBuy() (vốn waitForURL(waitUntil: "load") mặc định): đây đã
+    // là soft-nav (router.push, App Router) thứ 3 liên tiếp trong cùng test
+    // (create B, đổi mã qua switcher, rồi submit này) và quan sát thực tế
+    // (2 lần chạy, page snapshot lúc timeout) cho thấy app ĐÃ điều hướng và
+    // render đúng kết quả cuối, chỉ riêng waitForURL không bao giờ resolve ở
+    // vị trí thứ 3 này — nghi ngờ hạn chế của Playwright/CDP với soft-nav dồn
+    // dập trong môi trường này, không phải bug domain. Assertion nội dung tự
+    // auto-retry (không phụ thuộc lifecycle "load") nên né được, timeout nới
+    // riêng cho bước này vì có thể mất hơn 5s mặc định của expect().
+    await formB.fillQuantity(20);
+    await formB.fillPricePerUnit(90_000);
+    await formB.submitBuyButton.click();
+    await expect(detailB.quantityText).toHaveText("70 cổ phần", {
+      timeout: 45_000,
+    });
+
+    // Mã A KHÔNG bị ghi nhầm giao dịch nào trong lúc thao tác trên switcher —
+    // vẫn đúng 100 CP như lúc tạo, chưa từng submit gì trên form của A.
+    await detailA.goto();
+    await expect(detailA.quantityText).toHaveText("100 cổ phần");
   } finally {
     await closeContext(context);
     await cleanupTestUser(sessionA.userId);

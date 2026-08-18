@@ -3,6 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import { fillDatePicker, selectDateOnCalendar } from "../support/date-picker";
 import { afterTransactionUrl } from "../support/urls";
 import { HoldingDetailPage } from "./holding-detail-page";
+import { HoldingSwitcher } from "./holding-switcher";
 
 type TransactionInput = {
   quantity: number;
@@ -35,11 +36,13 @@ export class TransactionForm {
     return new TransactionForm(page, holdingUrl);
   }
 
-  private get quantityInput() {
+  // Public (khác private trước đây) — issue #138 cần spec tự expect giá trị
+  // rỗng lại sau khi đổi mã qua HoldingSwitcher (reset toàn bộ state cục bộ).
+  get quantityInput(): Locator {
     return this.page.locator('input[name="quantity"]');
   }
 
-  private get priceInput() {
+  get priceInput(): Locator {
     return this.page.locator('input[name="pricePerUnit"]');
   }
 
@@ -47,12 +50,21 @@ export class TransactionForm {
     return this.page.getByRole("button", { name: "Bán", exact: true });
   }
 
-  private get submitBuyButton() {
+  // Public — issue #138: spec cần assert nút MUA hiện lại (chế độ đã reset về
+  // "Mua") sau khi đổi mã qua HoldingSwitcher, khác trước đó chỉ dùng nội bộ
+  // submitBuy()/submitSell().
+  get submitBuyButton(): Locator {
     return this.page.getByRole("button", { name: "Ghi nhận giao dịch mua" });
   }
 
-  private get submitSellButton() {
+  get submitSellButton(): Locator {
     return this.page.getByRole("button", { name: "Ghi nhận giao dịch bán" });
+  }
+
+  // HoldingSwitcher (issue #138) — pill "Đổi mã" đầu form, chỉ hiện ở form
+  // TẠO mới (mode: "create"), không có ở form SỬA.
+  get switcher(): HoldingSwitcher {
+    return new HoldingSwitcher(this.page);
   }
 
   get closeLink() {
