@@ -15,6 +15,10 @@ import type { CashflowType } from "@prisma/client";
 import { Alert } from "@/components/Alert";
 import type { AssetType } from "@/components/AssetTypeBadge";
 import { AutoFilledAmountCard } from "@/components/AutoFilledAmountCard";
+import {
+  HoldingSwitcher,
+  type HoldingSwitcherProps,
+} from "@/components/HoldingSwitcher";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { SymbolAvatar } from "@/components/SymbolAvatar";
 import { Button } from "@/components/ui/button";
@@ -69,6 +73,10 @@ type TransactionFormProps =
       holdingId: string;
       holding: TransactionFormHolding;
       settingRows: TransactionSettingRows;
+      // Đổi mã ngay trong màn ghi giao dịch mua/bán (issue #138) — chỉ hiện ở
+      // form TẠO mới, form sửa 1 giao dịch đã ghi giữ nguyên khối tĩnh (đổi
+      // mã ở đó tương đương sửa nhầm giao dịch sang holding khác).
+      switcher: HoldingSwitcherProps;
     }
   | {
       mode: "edit";
@@ -419,19 +427,23 @@ function TransactionForm(props: TransactionFormProps) {
 
       <TransactionTypeField value={cashflowType} onChange={setCashflowType} />
 
-      <div>
-        <FieldLabel>Vị thế</FieldLabel>
-        <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-2.5">
-          <SymbolAvatar symbol={props.holding.symbol} size="sm" />
-          <div className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-            {props.holding.name ?? props.holding.symbol}{" "}
-            <span className="text-xs font-medium text-muted-faint">
-              · {formatQuantity(props.holding.quantity, props.holding.unit)}{" "}
-              đang giữ
-            </span>
+      {props.mode === "create" ? (
+        <HoldingSwitcher {...props.switcher} />
+      ) : (
+        <div>
+          <FieldLabel>Vị thế</FieldLabel>
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-2.5">
+            <SymbolAvatar symbol={props.holding.symbol} size="sm" />
+            <div className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+              {props.holding.name ?? props.holding.symbol}{" "}
+              <span className="text-xs font-medium text-muted-faint">
+                · {formatQuantity(props.holding.quantity, props.holding.unit)}{" "}
+                đang giữ
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>

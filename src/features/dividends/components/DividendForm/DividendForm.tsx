@@ -16,14 +16,14 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { Alert } from "@/components/Alert";
+import {
+  HoldingSwitcher,
+  type HoldingSwitcherProps,
+} from "@/components/HoldingSwitcher";
 import { PageHeader } from "@/components/PageHeader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { BondTermsMissingNotice } from "@/features/dividends/components/BondTermsMissingNotice";
-import {
-  HoldingSwitcher,
-  type HoldingSwitcherProps,
-} from "@/features/dividends/components/HoldingSwitcher";
 import type {
   BondCouponContext,
   DividendFormState,
@@ -41,11 +41,19 @@ import { CashDividendFields } from "./CashDividendFields";
 import { PriceAdjustmentCheckbox } from "./PriceAdjustmentCheckbox";
 import { StockDividendFields } from "./StockDividendFields";
 
+// Cả hai route dividends (mở từ HoldingDetail lẫn Dashboard) dùng chung ĐÚNG
+// MỘT cặp tiêu đề/mô tả sheet — hardcode ở đây (issue #138) thay vì bắt cả 2
+// page.tsx tự truyền lặp lại cùng 2 chuỗi.
+const DIVIDEND_SWITCHER_SHEET_TITLE = "Chọn mã ghi cổ tức";
+const DIVIDEND_SWITCHER_SHEET_SUBTITLE_PREFIX = "Chỉ cổ phiếu đang nắm giữ";
+
 type DividendFormProps = {
   holding: DividendHolding;
   // LUÔN có mặt — mockup (Phase 4 Screens 4a/4c) hiện switcher bất kể lối vào
   // (khác plan ban đầu coi switcher optional, xem process/UI_phase_4.md).
-  switcher: HoldingSwitcherProps;
+  // Không gồm sheetTitle/sheetSubtitlePrefix — DividendForm tự gắn 2 chuỗi cố
+  // định (DIVIDEND_SWITCHER_SHEET_*) thay vì bắt caller lặp lại.
+  switcher: Omit<HoldingSwitcherProps, "sheetTitle" | "sheetSubtitlePrefix">;
   // Mệnh giá/CP cho preview CASH — sample cứng "10000" ở #51, #52 đọc Setting thật.
   faceValuePerShare: string;
   // % thuế minh hoạ, READ-ONLY — sample "5", #52 đọc resolveSetting("DIVIDEND_TAX_RATE", ngày chia).
@@ -206,7 +214,12 @@ function DividendForm({
             value={priceAlreadyReflectsMarket ? "true" : "false"}
           />
 
-          <HoldingSwitcher {...switcher} hidden={hidden} />
+          <HoldingSwitcher
+            {...switcher}
+            sheetTitle={DIVIDEND_SWITCHER_SHEET_TITLE}
+            sheetSubtitlePrefix={DIVIDEND_SWITCHER_SHEET_SUBTITLE_PREFIX}
+            hidden={hidden}
+          />
 
           <SegmentedControl
             options={[
