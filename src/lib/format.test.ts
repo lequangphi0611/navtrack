@@ -5,9 +5,11 @@ import {
   formatDate,
   formatDayMonth,
   formatMoney,
+  formatMoneyNumber,
   formatMonthYear,
   formatPercent,
   formatQuantity,
+  formatQuantityNumber,
   formatSignedPercent,
   formatTime,
   signColorClass,
@@ -92,6 +94,33 @@ describe("formatQuantity", () => {
 
   test("giữ tối đa 4 chữ số thập phân", () => {
     expect(formatQuantity("1.5", "chỉ")).toBe("1,5 chỉ");
+  });
+});
+
+// Issue #142 — DuplicateHoldingAlert nhận `existingQuantity`/`existingUnit`
+// là 2 prop riêng (component tự ghép "{existingQuantity} {existingUnit}" trong
+// JSX), nên cha KHÔNG được gọi formatQuantity() (tự gắn sẵn đơn vị) khi truyền
+// vào — phải dùng formatQuantityNumber() (chỉ format số, không đơn vị).
+describe("formatQuantityNumber", () => {
+  test("format số, KHÔNG kèm đơn vị", () => {
+    expect(formatQuantityNumber("8000")).toBe("8.000");
+  });
+
+  test("giữ tối đa 4 chữ số thập phân", () => {
+    expect(formatQuantityNumber("1.5")).toBe("1,5");
+  });
+});
+
+// Cùng lý do formatQuantityNumber — DuplicateHoldingAlert tự ghép "₫" vào câu
+// văn riêng ("giá vốn {existingAvgCost} ₫"), cha KHÔNG được dùng formatMoney()
+// (tự kèm sẵn "₫" qua Intl currency formatter, sẽ ra 2 lần "₫").
+describe("formatMoneyNumber", () => {
+  test("format số có dấu chấm phân cách nghìn, KHÔNG kèm ký hiệu ₫", () => {
+    expect(formatMoneyNumber("92400")).toBe("92.400");
+  });
+
+  test("không có phần thập phân (VND không dùng số lẻ)", () => {
+    expect(formatMoneyNumber("163100")).toBe("163.100");
   });
 });
 

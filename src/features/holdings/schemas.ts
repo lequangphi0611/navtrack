@@ -125,15 +125,36 @@ const BUY_HAS_NO_TAX_ISSUE = {
   path: ["taxAmount"],
 };
 
+// "Vừa mua hôm nay" ("NEW_PURCHASE") vs "Đã có từ trước" ("HISTORICAL") — issue
+// #140 dựng 2 nhánh UI, issue #142 nối dây business. BẮT BUỘC (không
+// `.optional()`/`.default()`): thiếu intent phải là lỗi tường minh thay vì âm
+// thầm coi là một trong hai nhánh — hai nhánh có hành vi gộp-trùng-mã KHÁC
+// NHAU hẳn ở createHolding() (actions.ts), lặng lẽ default sai nhánh sẽ hoặc
+// gộp nhầm một giao dịch "vừa mua" vào vị thế cũ, hoặc chặn nhầm một khai báo
+// lịch sử hợp lệ.
+export const newHoldingIntentEnum = z.enum(["HISTORICAL", "NEW_PURCHASE"]);
+
 export const newHoldingSchema = z
   .object({
     symbol: z.string().trim().min(1, "Nhập mã"),
     type: assetTypeEnum,
     unit: z.string().trim().min(1, "Nhập đơn vị"),
     name: z.string().trim().optional(),
+    intent: newHoldingIntentEnum,
     ...transactionFields,
   })
-  .refine(buyHasNoTax, BUY_HAS_NO_TAX_ISSUE);
+  .refine(buyHasNoTax, BUY_HAS_NO_TAX_ISSUE)
+  // Chặn ngày tương lai CHỈ cho nhánh "Vừa mua hôm nay" — một giao dịch mua đã
+  // khớp lệnh không thể có ngày sau hôm nay. CỐ Ý khác `addTransactionSchema`/
+  // `TransactionForm` (không chặn): nhánh "Đã có từ trước" và mọi giao dịch ghi
+  // qua form thường là KHAI BÁO tự do (kể cả tất toán tương lai dự kiến), không
+  // áp ràng buộc này — đừng sửa cho "nhất quán" (process/phase-x cho issue
+  // #142). Chấp nhận khung lệch hẹp UTC vs giờ VN (so sánh thẳng `Date`, không
+  // viết helper timezone riêng).
+  .refine((data) => data.intent !== "NEW_PURCHASE" || data.date <= new Date(), {
+    message: "Ngày mua không thể ở tương lai",
+    path: ["date"],
+  });
 
 export const addTransactionSchema = z
   .object({

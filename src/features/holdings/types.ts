@@ -3,6 +3,7 @@ import type { z } from "zod";
 import type { CashflowType, SettingValueType } from "@prisma/client";
 import type { CashflowTimelineRow } from "@/features/holdings/components/CashflowTimeline";
 import type { XirrResult as XirrResultUi } from "@/components/ReturnMetrics";
+import type { ActionResult } from "@/lib/action-result";
 import type { PriceSource } from "@/lib/valuation";
 
 import type {
@@ -103,6 +104,36 @@ export type TransactionSettingRows = {
   feeBuyRows: TransactionSettingRow[];
   feeSellRows: TransactionSettingRow[];
 };
+
+// Phí mua (TRANSACTION_FEE_BUY_<LOẠI>) cho CẢ 4 AssetType — nhánh "Vừa mua
+// hôm nay" của NewHoldingForm (issue #142) chưa biết AssetType cuối cùng lúc
+// mount (user đổi loại tại chỗ qua AssetTypeTiles), xem
+// getNewPurchaseFeeSettingRows() (queries/holding-transaction-form.ts).
+export type NewPurchaseFeeSettingRows = Record<
+  HoldingSummary["type"],
+  TransactionSettingRow[]
+>;
+
+// Ca trùng mã khi tạo vị thế "Vừa mua hôm nay" (`intent: "NEW_PURCHASE"`,
+// issue #142) — createHolding() trả kèm vị thế đang giữ để NewHoldingForm
+// hiện DuplicateHoldingAlert thay vì lỗi thường. Khai riêng ở đây (không thêm
+// vào `ActionFailure` dùng chung ~10 action khác) — cùng lý do
+// `HoldingDetailValuation` khai độc lập ở trên: field này chỉ có ý nghĩa với
+// đúng một action, không nên rò rỉ vào type nền tảng toàn app (PR #147 review).
+// Decimal đã string hoá ở biên server (createHolding), không truyền Decimal
+// thô qua đây.
+export type DuplicateHoldingError = {
+  ok: false;
+  error: string;
+  holdingId: string;
+  existingQuantity: string;
+  existingUnit: string;
+  existingAvgCost: string;
+};
+
+export type CreateHoldingResult =
+  | ActionResult<{ holdingId: string; cashflowId: string }>
+  | DuplicateHoldingError;
 
 export type HoldingDetail = {
   id: string;

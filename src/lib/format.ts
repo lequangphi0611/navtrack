@@ -86,7 +86,28 @@ export function formatMoney(
 }
 
 export function formatQuantity(value: string, unit: string): string {
-  return `${QUANTITY_FORMATTER.format(Number(value))} ${unit}`;
+  return `${formatQuantityNumber(value)} ${unit}`;
+}
+
+// Số lượng THUẦN đã format theo vi-VN, KHÔNG kèm đơn vị — dùng khi đơn vị hiển
+// thị TÁCH RIÊNG khỏi con số qua một prop khác (vd DuplicateHoldingAlert nhận
+// `existingQuantity`/`existingUnit` là 2 prop riêng, ghép trong JSX của chính
+// nó — cha nối thêm unit vào formatQuantity() sẽ ra "8.000 cổ phần cổ phần").
+// Khác formatQuantity() ở trên (luôn tự nối "<số> <đơn vị>" thành MỘT chuỗi).
+export function formatQuantityNumber(value: string): string {
+  return QUANTITY_FORMATTER.format(Number(value));
+}
+
+// Số tiền THUẦN đã format theo vi-VN (dấu chấm phân cách nghìn, không thập
+// phân), KHÔNG kèm ký hiệu "₫" — dùng khi ký hiệu tiền tệ được component cha
+// tự ghép vào câu văn riêng (vd DuplicateHoldingAlert: "giá vốn {existingAvgCost}
+// ₫"). Khác formatMoney() (luôn tự kèm "₫" qua Intl currency formatter).
+const MONEY_NUMBER_FORMATTER = new Intl.NumberFormat("vi-VN", {
+  maximumFractionDigits: 0,
+});
+
+export function formatMoneyNumber(value: string): string {
+  return MONEY_NUMBER_FORMATTER.format(Number(value));
 }
 
 export function formatDate(value: string | Date): string {

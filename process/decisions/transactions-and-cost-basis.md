@@ -81,6 +81,23 @@ Spec tương ứng: [`docs/domain/02-transactions-and-cost-basis.md`](../../docs
 
 ---
 
+## 2026-08-19 — Issue #142: 2 nhánh `intent` khi tạo Holding lần đầu (`HISTORICAL`/`NEW_PURCHASE`)
+
+**Status:** Accepted
+
+**`createHolding()` phân biệt `intent: "HISTORICAL"` (khai báo vị thế đã có sẵn, giữ hành vi cũ) vs `intent: "NEW_PURCHASE"` (vừa mua mới thật) — phí cộng vào `avgCost` theo công thức BUY chuẩn, chặn ngày tương lai, và trùng mã báo lỗi thay vì gộp im lặng, chỉ ở nhánh `NEW_PURCHASE`.**
+- Bối cảnh: quyết định cũ "phí không nhập ở màn khai báo vị thế ban đầu" (gọi tắt "mockup 2c" trong review nội bộ) trước đây **chỉ tồn tại dưới dạng comment trong code** `NewHoldingForm.tsx` — chưa từng được ghi thành entry ở `process/decisions/`, nên **không có entry cũ nào để đánh `Superseded`** ở đây. Vấn đề: quyết định đó đúng cho trường hợp form được dùng để *khai báo lại* một vị thế đang giữ (giá vốn đã biết, phí quá khứ không tách lại được), nhưng cùng một form cũng được dùng khi user *vừa mua mới thật* một mã lần đầu tiên — ca này không có lý do gì để bỏ qua phí, và bỏ qua sẽ làm `avgCost`/cost basis/XIRR sai ngay từ giao dịch đầu tiên của vị thế.
+- Quyết định: thêm `intent: "HISTORICAL" | "NEW_PURCHASE"` **bắt buộc** (không `.optional()`/`.default()` — thiếu intent phải là lỗi tường minh, không âm thầm rơi vào một nhánh) vào `newHoldingSchema`. Hai nhánh xử lý khác nhau:
+  - `HISTORICAL`: giữ nguyên hành vi cũ — `avgCost` = giá user tự nhập (đã gồm phí quá khứ), `feeAmount = 0` trên `Cashflow` mốc, trùng mã tự gộp im lặng (find-or-create như mọi BUY khác).
+  - `NEW_PURCHASE`: dùng đúng công thức BUY chuẩn (`avgCost = (SL × giá + phí) / SL`), phí tự tính từ `TRANSACTION_FEE_BUY_<LOẠI>` effective-dated theo ngày giao dịch — cùng cơ chế `TransactionForm` dùng cho mua thêm; chặn ngày tương lai (`date <= new Date()`, refine ở `newHoldingSchema`); trùng mã **báo lỗi** (không tạo/gộp), trả kèm `holdingId`/`existingQuantity`/`existingUnit`/`existingAvgCost` để UI hướng user sang đúng màn ghi giao dịch mua thêm.
+- **Khác biệt cố ý — đừng "sửa cho nhất quán":** nhánh `NEW_PURCHASE` chặn ngày tương lai, nhưng `TransactionForm`/`addTransactionSchema` (giao dịch mua/bán **thêm** cho holding đã có) hiện **không** chặn ngày tương lai. Đây là khác biệt có chủ đích: `NEW_PURCHASE` là "tôi vừa khớp lệnh xong" (không thể ở tương lai theo định nghĩa), còn `addTransactionSchema` chưa có yêu cầu nghiệp vụ nào đòi hỏi chặn — mở rộng chặn sang đó là tự thêm ràng buộc chưa ai yêu cầu, không phải fix thiếu sót.
+- **Quyết định kỹ thuật đi kèm:** khi phát hiện trùng mã ở nhánh `NEW_PURCHASE`, đọc số liệu `Holding` đã tồn tại (`quantity`/`unit`/`avgCost`) từ **cache đã materialize sẵn** trên `Holding` (không gọi `derivePosition()` replay lại từ đầu) — an toàn nhờ bất biến "cache luôn khớp `Cashflow`" đã có sẵn từ 2026-07-11, tránh một lần replay không cần thiết chỉ để dựng thông báo lỗi.
+- Không đổi `TransactionForm`/`addTransactionSchema`, không đổi cơ chế `derivePosition()`/`persistPosition()`, không đổi Prisma schema (chỉ thêm field vào zod schema/action, không phải model).
+- Docs đã sync: `docs/domain/02-transactions-and-cost-basis.md` (mục "Vị thế mở ban đầu", tách 2 kịch bản), `docs/02-data-model.md` (ghi chú "Vị thế mở ban đầu"), `docs/domain/07-tax.md` (mục "Phí giao dịch"), `process/DECISION.md`, `process/PROCESS.md` (nhật ký).
+- Tham chiếu: issue #142.
+
+---
+
 ## Quyết định liên quan ở file khác
 
 - Thứ tự sự kiện cùng ngày (`rank`, `Dividend` trước `Cashflow{MATURITY}`) — [`bonds-and-cashflow-calendar.md`](./bonds-and-cashflow-calendar.md), mục 2026-07-28 (2) điểm (1).

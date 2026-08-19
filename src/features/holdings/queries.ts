@@ -23,6 +23,7 @@ export { getHoldingDetail } from "./queries/holding-detail";
 export {
   getHoldingForPricing,
   getJustRecordedBanner,
+  getNewPurchaseFeeSettingRows,
   getTransactionSettingRows,
 } from "./queries/holding-transaction-form";
 

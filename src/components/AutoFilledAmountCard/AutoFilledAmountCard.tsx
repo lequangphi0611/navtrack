@@ -2,7 +2,7 @@
 
 import { Lightbulb, Loader2, Pencil, Sigma } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -115,6 +115,34 @@ function AutoFilledAmountCard({
     setManualValue(next);
     onValueChange?.(next ?? computedAmount);
   }
+
+  // `changeManualValue` gọi onValueChange trực tiếp trong handler nên luôn
+  // thấy bản mới nhất — không cần ref. Effect dưới đây thì khác: nó chỉ chạy
+  // lại khi `computedAmount`/`manualValue` đổi, nên nếu đưa thẳng
+  // `onValueChange` vào thân effect mà cha lại truyền một hàm mới mỗi render
+  // (không bọc `useCallback`, như `NewHoldingForm`/`MaturitySettlementForm`
+  // đang làm), effect phải thêm nó vào deps để không "đóng băng" ở bản cũ
+  // (stale closure) — nhưng thêm vào deps thì effect chạy lại mỗi render dù
+  // computedAmount không đổi. Ref né được cả hai: effect luôn đọc
+  // `onValueChangeRef.current` tại thời điểm chạy (không stale) mà deps vẫn
+  // chỉ cần đúng giá trị thật sự quyết định "có cần báo lại hay không".
+  const onValueChangeRef = useRef(onValueChange);
+  useEffect(() => {
+    onValueChangeRef.current = onValueChange;
+  });
+
+  // `computedAmount` đổi ở cha (vd user sửa Số lượng/Giá/Ngày -> form cha tính
+  // lại preview) trong khi CHƯA sửa tay (`manualValue === null`) — trước đây
+  // KHÔNG báo lại `onValueChange`, lệch với chính comment của prop này ("báo
+  // ngược giá trị hiệu lực lên cha MỖI KHI nó đổi"). Cha dùng `onValueChange`
+  // để tính một giá trị dẫn xuất khác (vd TotalCostBreakdownCard ở
+  // NewHoldingForm, "Tiền nhận về" ở MaturitySettlementForm) sẽ bị "đứng hình"
+  // ở giá trị tính lần đầu/lúc bấm "Đặt lại", không theo kịp giá trị đang hiệu
+  // lực thật của chính card — phát hiện khi phí mua tự tính thật ở
+  // NewHoldingForm (issue #142) thay cho hardcode "0" cũ.
+  useEffect(() => {
+    if (manualValue === null) onValueChangeRef.current?.(computedAmount);
+  }, [computedAmount, manualValue]);
 
   return (
     <div

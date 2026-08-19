@@ -100,16 +100,42 @@ export async function findPositionSourceById(
 
 // Không cần so `userId` sau khi đọc — khóa `userId_symbol_type` đã lọc theo
 // đúng user ngay trong `where` (khớp hành vi createHolding trước refactor).
+//
+// `unit`/`quantity`/`avgCost` thêm ở issue #142 — nhánh "Vừa mua hôm nay" của
+// createHolding() cần báo lại vị thế đang giữ (số lượng/đơn vị/giá vốn) khi
+// phát hiện trùng mã, để DuplicateHoldingAlert hiển thị mà không phải query
+// lại. Hàm này hiện chỉ có 1 caller (createHolding) — mở rộng return type an
+// toàn, không có caller khác phải cập nhật theo.
 export async function findPositionSourceBySymbol(
   key: { userId: string; symbol: string; type: AssetType },
   tx: Prisma.TransactionClient = db,
-): Promise<(PositionSource & { id: string }) | null> {
+): Promise<
+  | (PositionSource & {
+      id: string;
+      unit: string;
+      quantity: Decimal;
+      avgCost: Decimal;
+    })
+  | null
+> {
   const holding = await tx.holding.findUnique({
     where: { userId_symbol_type: key },
-    select: { id: true, ...positionSourceSelect },
+    select: {
+      id: true,
+      unit: true,
+      quantity: true,
+      avgCost: true,
+      ...positionSourceSelect,
+    },
   });
   if (!holding) return null;
-  return { id: holding.id, ...toPositionSource(holding) };
+  return {
+    id: holding.id,
+    unit: holding.unit,
+    quantity: new Decimal(holding.quantity.toString()),
+    avgCost: new Decimal(holding.avgCost.toString()),
+    ...toPositionSource(holding),
+  };
 }
 
 export async function findPositionSourceByCashflow(

@@ -17,13 +17,22 @@ const validTransactionFields = {
   pricePerUnit: "100000",
 };
 
+// `intent` chỉ thuộc newHoldingSchema — addTransactionSchema/updateTransactionSchema
+// không khai field này, nhưng zod object mặc định (không `.strict()`) âm thầm
+// bỏ qua key lạ, nên gộp chung vào validTransactionFields không ảnh hưởng 2
+// describe block kia.
+const validTransactionFieldsHistorical = {
+  ...validTransactionFields,
+  intent: "HISTORICAL" as const,
+};
+
 describe("newHoldingSchema", () => {
   test("chấp nhận input hợp lệ, feeAmount/taxAmount mặc định là 0", () => {
     const result = newHoldingSchema.safeParse({
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
     });
 
     expect(result.success).toBe(true);
@@ -38,7 +47,7 @@ describe("newHoldingSchema", () => {
       symbol: "  ",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
     });
     expect(result.success).toBe(false);
   });
@@ -50,7 +59,7 @@ describe("newHoldingSchema", () => {
       symbol: "VCB2028",
       type: "BOND",
       unit: "trái phiếu",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       cashflowType: "MATURITY",
     });
     expect(result.success).toBe(false);
@@ -61,7 +70,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "CRYPTO",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
     });
     expect(result.success).toBe(false);
   });
@@ -71,7 +80,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       quantity: "0",
     });
     expect(result.success).toBe(false);
@@ -82,7 +91,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       quantity: "-100",
     });
     expect(result.success).toBe(false);
@@ -93,7 +102,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       quantity: "abc",
     });
     expect(result.success).toBe(false);
@@ -104,7 +113,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       quantity: "  100  ",
     });
     expect(result.success).toBe(true);
@@ -115,7 +124,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       pricePerUnit: "0",
     });
     expect(result.success).toBe(false);
@@ -126,7 +135,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       feeAmount: "0",
     });
     expect(result.success).toBe(true);
@@ -137,7 +146,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       feeAmount: "-1",
     });
     expect(result.success).toBe(false);
@@ -148,7 +157,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       date: "not-a-date",
     });
     expect(result.success).toBe(false);
@@ -163,7 +172,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       cashflowType: "BUY",
       taxAmount: "5200",
     });
@@ -181,7 +190,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       cashflowType: "BUY",
     });
     expect(result.success).toBe(true);
@@ -194,7 +203,7 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       cashflowType: "BUY",
       taxAmount: "0.00",
     });
@@ -206,11 +215,108 @@ describe("newHoldingSchema", () => {
       symbol: "FPT",
       type: "STOCK",
       unit: "cổ phần",
-      ...validTransactionFields,
+      ...validTransactionFieldsHistorical,
       cashflowType: "SELL",
       taxAmount: "5200",
     });
     expect(result.success).toBe(true);
+  });
+
+  // Issue #142 — intent BẮT BUỘC, không default: thiếu hẳn key phải là lỗi
+  // tường minh (xem comment newHoldingIntentEnum ở schemas.ts).
+  test("thiếu intent bị từ chối", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "FPT",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("intent ngoài enum bị từ chối", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "FPT",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+      intent: "SOMETHING_ELSE",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // Guard ngày tương lai CHỈ áp cho nhánh "Vừa mua hôm nay" — issue #142.
+  test("NEW_PURCHASE + ngày tương lai bị từ chối", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "MWG",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+      intent: "NEW_PURCHASE",
+      date: "2099-01-01",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issue = result.error.issues.find(
+        (i) => i.path.join(".") === "date",
+      );
+      expect(issue?.message).toBe("Ngày mua không thể ở tương lai");
+    }
+  });
+
+  test("NEW_PURCHASE + ngày hôm nay hợp lệ", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "MWG",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+      intent: "NEW_PURCHASE",
+      date: new Date().toISOString().slice(0, 10),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("NEW_PURCHASE + ngày quá khứ hợp lệ", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "MWG",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+      intent: "NEW_PURCHASE",
+      date: "2020-01-01",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // HISTORICAL ("Đã có từ trước") KHÔNG bị chặn ngày tương lai — khai báo tự
+  // do, khác hẳn NEW_PURCHASE (guard không áp dụng ở nhánh này).
+  test("HISTORICAL + ngày tương lai vẫn hợp lệ (guard không áp)", () => {
+    const result = newHoldingSchema.safeParse({
+      symbol: "FPT",
+      type: "STOCK",
+      unit: "cổ phần",
+      ...validTransactionFields,
+      intent: "HISTORICAL",
+      date: "2099-01-01",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // buyHasNoTax không regress khi thêm guard ngày tương lai — cả 2 intent vẫn
+  // phải chặn taxAmount khác 0 cho BUY.
+  test("buyHasNoTax vẫn áp dụng cho cả 2 intent", () => {
+    for (const intent of ["HISTORICAL", "NEW_PURCHASE"] as const) {
+      const result = newHoldingSchema.safeParse({
+        symbol: "FPT",
+        type: "STOCK",
+        unit: "cổ phần",
+        ...validTransactionFields,
+        intent,
+        cashflowType: "BUY",
+        taxAmount: "5200",
+      });
+      expect(result.success).toBe(false);
+    }
   });
 });
 
