@@ -5,6 +5,7 @@ import { PrismaClient } from "@prisma/client";
 
 import { DashboardPage } from "../pages/dashboard-page";
 import { NavChartPage } from "../pages/nav-chart-page";
+import { NavOverrideForm } from "../pages/nav-override-form";
 import { NewHoldingPage } from "../pages/new-holding-page";
 import { daysAgo, isoDate } from "../support/dates";
 import {
@@ -157,6 +158,69 @@ test("chưa có holding Vàng nào -> chip 'Vàng' hiện EmptyState đúng tiê
     // chi tiết (AssetTypeBadge) — không suy diễn từ URL/query param, không bám
     // class CSS màu badge.
     await expect(detail.assetTypeBadge("Vàng")).toBeVisible();
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});
+
+test("2 mốc Snapshot tổng danh mục (holdingId: null) trong năm -> card Cao/Thấp + biên độ hiện NGAY ở chip 'Tất cả' mặc định, không cần chuyển chip", async ({
+  browser,
+}) => {
+  const session = await createTestSession("nav-chart-all-highlow");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+
+  try {
+    // Tạo 1 Holding BOND qua UI. KHÁC test #2 ở trên: BOND/GOLD định giá THỦ
+    // CÔNG qua NavOverride (docs/domain/04-pricing-and-valuation.md) — vừa
+    // tạo xong CHƯA có NavOverride nào nên freezeManualSnapshot() sau đó
+    // "Chưa có mã nào định giá được" -> KHÔNG ghi được Snapshot tổng danh mục
+    // nào cho hôm nay (bỏ qua toàn bộ, features/snapshots/actions.ts). Phải
+    // tự nhập giá qua NavOverrideForm để bond được VALUED trước khi kỳ vọng
+    // điểm "hôm nay" > 0 (tránh periodLow = "0" khiến periodSpreadPercent bị
+    // bỏ trống, xem computeSpreadPercent(), src/lib/nav-trend.ts).
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 1_000_000,
+      assetType: "Trái phiếu",
+    });
+
+    const priceForm = new NavOverrideForm(page, detail.url);
+    await priceForm.goto();
+    await priceForm.save({ price: 950_000, date: isoDate(new Date()) });
+
+    // Seed thêm đúng 1 mốc Snapshot tổng danh mục ~30 ngày trước, giá trị
+    // khác 0 VÀ khác điểm "hôm nay" (9.500.000đ = 10 × 950.000, từ
+    // NavOverride vừa nhập, tính SỐNG qua computeTodayNavByType() mỗi lần
+    // /nav-chart render — saveNavOverride KHÔNG tự ghi Snapshot mới) -> cộng
+    // lại đủ 2 điểm để hasLine === true, cả periodHigh/periodLow đều > 0.
+    await db.snapshot.create({
+      data: {
+        userId: session.userId,
+        holdingId: null,
+        date: daysAgo(30),
+        value: "8000000",
+        source: "MANUAL",
+        period: "MANUAL",
+        frozen: true,
+      },
+    });
+
+    const navChartPage = new NavChartPage(page);
+    await navChartPage.goto();
+
+    // KHÔNG gọi selectAssetType — chip "Tất cả" mặc định (useState("ALL"),
+    // NavTrendByAssetTypeChart.tsx) phải tự hiện HighLowCard ngay, đúng hành
+    // vi nối dây MỚI (trước đây view "Tất cả" không bao giờ render card này).
+    await expect(navChartPage.periodHighLabel).toBeVisible();
+    await expect(navChartPage.periodSpreadLabel).toBeVisible();
   } finally {
     await closeContext(context);
     await cleanupTestUser(session.userId);

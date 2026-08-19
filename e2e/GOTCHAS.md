@@ -39,6 +39,7 @@ kèm trỏ file/spec gốc. Nếu bẫy mới làm một mục cũ hết đúng 
 | `strict mode violation: getByText(...) resolved to 2 elements` khi lọc dòng/card theo tên nhóm tài sản ("Cổ phiếu"...) trên màn có ghi chú/mô tả nhắc lại tên nhóm ở chữ thường                                                                                                                                              | [#22](#22-getbytextstring-không-phân-biệt-hoachữ-thường--khớp-nhầm-tên-nhóm-lặp-lại-trong-ghi-chú-amber)                                                           |
 | `page.waitForURL(...)` sau `submitBuy()`/`submitSell()` (chờ mãi không resolve) dù page snapshot lúc timeout cho thấy app ĐÃ điều hướng và render đúng kết quả cuối                                                                                                                                                          | [#23](#23-waitforurl-không-resolve-sau-chuỗi-3-soft-nav-router-push-liên-tiếp-trong-cùng-test)                                                                     |
 | Chạy `pnpm e2e` FULL SUITE (hoặc nhiều spec liền một lượt) trên Claude Cloud: nhiều spec KHÔNG liên quan nhau đồng loạt `Test timeout of 60000ms exceeded`, retry ra `page.goto: net::ERR_ABORTED; maybe frame was detached?`, luôn đúng tại `DashboardPage.goto()` (điều hướng "/") — chạy riêng lẻ từng file thì pass sạch | [#24](#24-full-suite-nhiều-spec-liền-lượt-trên-claude-cloud-điều-hướng--dashboard-timeout-hàng-loạt-không-liên-quan-thay-đổi-đang-verify)                          |
+| Vừa tạo Holding BOND/GOLD qua UI, NAV/điểm "hôm nay" của nó vẫn `0 ₫`/`−100,0%`, hoặc field phụ thuộc "low != 0" (vd `periodSpreadPercent`) không hiện dù card cha vẫn render                                                                                                                                                | [#25](#25-tạo-holding-bondgold-qua-ui-không-tự-có-nav-hôm-nay--0--freezemanualsnapshot-âm-thầm-bỏ-qua-khi-chưa-có-navoverride)                                     |
 
 **Bài học lặp lại nhiều lần** (đọc khi sắp đổi component dùng chung hoặc UI của màn đã có
 spec): [#16](#16-ui-redesign-đổi-dòng-danh-sách-từ-link-sang-button-mở-sheet) và
@@ -472,6 +473,46 @@ e2e/tests/<file>.spec.ts`) — nếu pass sạch khi chạy riêng lẻ mà ch�
   chung về feature/domain là dấu hiệu mạnh của giới hạn hạ tầng, không phải
   bug thật — vẫn phải báo cáo trung thực (không tự ý coi là "pass" khi output
   thật sự báo fail), nhưng phân biệt rõ với fail có domain logic cụ thể.
+
+## 25. Tạo Holding BOND/GOLD qua UI KHÔNG tự có NAV "hôm nay" > 0 — `freezeManualSnapshot()` âm thầm bỏ qua khi chưa có `NavOverride`
+
+- **Triệu chứng:** vừa `NewHoldingPage.create({ assetType: "Trái phiếu" | "Vàng", ... })`
+  xong, kỳ vọng NAV/điểm "hôm nay" của holding đó > 0 (vd để `periodHigh`/
+  `periodLow` cả hai đều khác `"0"`) nhưng UI hiện `0 ₫`, `−100,0%`, hoặc field
+  phụ thuộc "low != 0" (như `periodSpreadPercent` → dòng "Biên độ kỳ",
+  `HighLowCard`) không render dù card cha vẫn hiện bình thường.
+- **Nguyên nhân:** BOND/GOLD định giá **thủ công** qua `NavOverride`
+  (docs/domain/04-pricing-and-valuation.md — khác STOCK/FUND tự động qua
+  `PriceQuote`/vnstock). Một holding BOND/GOLD **vừa tạo** chưa có dòng
+  `NavOverride` nào → `valuateHoldings()` trả `MISSING_PRICE` →
+  `freezeManualSnapshot()` (tự trigger sau `createHolding`/`addTransaction`,
+  `features/snapshots/actions.ts`) thấy **không holding nào định giá được**
+  (`plan.aggregate` rỗng) → log `warn` rồi **bỏ qua ghi Snapshot hoàn toàn**
+  cho ngày hôm nay (cả per-holding lẫn tổng danh mục `holdingId: null`) — im
+  lặng, không có lỗi nào nổi lên UI. Snapshot lịch sử **seed thẳng qua
+  Prisma** (`db.snapshot.create`) vẫn đọc/hiện đúng bình thường (không đi qua
+  `freezeManualSnapshot`) — đây là lý do 1 số spec cũ (vd
+  `nav-chart.spec.ts` test "2 mốc Snapshot per-holding (BOND)") **pass được**
+  dù bond chưa từng có `NavOverride`: test đó chỉ seed 1 mốc quá khứ + assert
+  "có ≥2 điểm/không rơi vào nhánh rỗng", không assert giá trị "hôm nay" cụ thể
+  nên điểm "hôm nay" ngầm = 0 không bị bắt.
+- **Cách né:** nếu test cần điểm "hôm nay" của BOND/GOLD > 0 (không chỉ cần
+  "có đường vẽ được"), phải tự nhập giá qua `NavOverrideForm` (`e2e/pages/
+nav-override-form.ts`) NGAY SAU khi tạo holding, **trước** khi điều hướng
+  tới màn cần assert:
+  ```ts
+  const priceForm = new NavOverrideForm(page, detail.url);
+  await priceForm.goto();
+  await priceForm.save({ price: 950_000, date: isoDate(new Date()) });
+  ```
+  Lưu ý `saveNavOverride` (Server Action) **không** tự trigger
+  `freezeManualSnapshot()` lại — không có Snapshot mới nào được ghi cho hôm
+  nay sau bước này. Nhưng giá trị "hôm nay" vẫn đúng vì các nơi cần nó (vd
+  `computeTodayNavByType()`, `getNavTrendByAssetType()`) tính **SỐNG** mỗi
+  lần render (đọc `NavOverride` mới nhất qua `getLatestNavOverrides()`), chỉ
+  Snapshot **lịch sử đã đóng băng** mới cần ghi trước. Case cụ thể đã gặp:
+  `nav-chart.spec.ts` test "2 mốc Snapshot tổng danh mục (holdingId: null) ...
+  ở chip 'Tất cả' mặc định".
 - **Cập nhật (lần chạy độc lập thứ 3, cùng phiên):** rerun toàn bộ full suite
   lần nữa, có theo dõi tài nguyên real-time (`free -m`/`/proc/loadavg` lấy mẫu
   mỗi 30s suốt 48.6 phút) — kết quả **giống hệt lần 1/2**: đúng 19 test đó fail

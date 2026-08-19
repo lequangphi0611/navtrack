@@ -33,6 +33,7 @@ import {
   formatDate,
   formatDayMonth,
   formatMoney,
+  formatPercent,
   formatSignedPercent,
   signColorClass,
 } from "@/lib/format";
@@ -235,26 +236,30 @@ function HighLowCard({
   assetType,
   periodHigh,
   periodLow,
+  periodSpreadPercent,
   hidden,
   className,
 }: {
-  assetType: AssetType;
+  assetType: AssetTypeFilter;
   periodHigh: string;
   periodLow: string;
+  periodSpreadPercent?: number;
   hidden: boolean;
   className?: string;
 }) {
   return (
     <div className={cn("flex flex-col gap-2.5", className)}>
-      <div className="flex items-start gap-2.25 rounded-xl border border-warning/25 bg-warning/8 p-3">
-        <ChevronsUpDown className="mt-0.5 size-4 shrink-0 text-warning" />
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          <b className="text-warning">Vì sao mỗi loại một trục riêng.</b> Nếu{" "}
-          {ASSET_TYPE_LABEL[assetType]} dùng chung trục với loại có quy mô lớn
-          hơn, đường sẽ dẹt sát đáy và khó thấy biến động. Thang riêng giữ mọi
-          biến động đọc được.
-        </p>
-      </div>
+      {assetType !== "ALL" ? (
+        <div className="flex items-start gap-2.25 rounded-xl border border-warning/25 bg-warning/8 p-3">
+          <ChevronsUpDown className="mt-0.5 size-4 shrink-0 text-warning" />
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            <b className="text-warning">Vì sao mỗi loại một trục riêng.</b> Nếu{" "}
+            {ASSET_TYPE_LABEL[assetType]} dùng chung trục với loại có quy mô lớn
+            hơn, đường sẽ dẹt sát đáy và khó thấy biến động. Thang riêng giữ mọi
+            biến động đọc được.
+          </p>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2.5">
         <div className="rounded-xl border border-border bg-background p-2.75">
           <div className="text-[9.5px] font-semibold tracking-wide text-muted-faint uppercase">
@@ -273,6 +278,22 @@ function HighLowCard({
           </div>
         </div>
       </div>
+      {periodSpreadPercent !== undefined ? (
+        <>
+          <div className="rounded-xl border border-border bg-background p-2.75">
+            <div className="text-[9.5px] font-semibold tracking-wide text-muted-faint uppercase">
+              Biên độ kỳ
+            </div>
+            <div className="mt-0.75 font-mono text-[13px] font-semibold text-foreground-soft">
+              {formatPercent(periodSpreadPercent)}
+            </div>
+          </div>
+          <p className="px-1 text-[10.5px] leading-relaxed text-muted-faint">
+            Biên độ này gồm cả biến động giá thị trường lẫn tiền nạp/rút trong
+            kỳ, không thuần là giá tăng giảm.
+          </p>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -550,7 +571,21 @@ function NavTrendByAssetTypeChart({
       </div>
 
       {assetType === "ALL" ? (
-        <AllTypeBanner className="mt-3" />
+        <>
+          <AllTypeBanner className="mt-3" />
+          {hasLine &&
+          periodData.periodHigh !== undefined &&
+          periodData.periodLow !== undefined ? (
+            <HighLowCard
+              assetType={assetType}
+              periodHigh={periodData.periodHigh}
+              periodLow={periodData.periodLow}
+              periodSpreadPercent={periodData.periodSpreadPercent}
+              hidden={hidden}
+              className="mt-3"
+            />
+          ) : null}
+        </>
       ) : hasLine ? (
         periodData.groupXirrPercent !== undefined &&
         periodData.depositedInPeriod !== undefined ? (
@@ -567,6 +602,7 @@ function NavTrendByAssetTypeChart({
             assetType={assetType}
             periodHigh={periodData.periodHigh}
             periodLow={periodData.periodLow}
+            periodSpreadPercent={periodData.periodSpreadPercent}
             hidden={hidden}
             className="mt-3"
           />
