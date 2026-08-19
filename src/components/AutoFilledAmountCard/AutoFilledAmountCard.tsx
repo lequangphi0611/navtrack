@@ -2,7 +2,7 @@
 
 import { Lightbulb, Loader2, Pencil, Sigma } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -115,6 +115,24 @@ function AutoFilledAmountCard({
     setManualValue(next);
     onValueChange?.(next ?? computedAmount);
   }
+
+  // `computedAmount` đổi ở cha (vd user sửa Số lượng/Giá/Ngày -> form cha tính
+  // lại preview) trong khi CHƯA sửa tay (`manualValue === null`) — trước đây
+  // KHÔNG báo lại `onValueChange`, lệch với chính comment của prop này ("báo
+  // ngược giá trị hiệu lực lên cha MỖI KHI nó đổi"). Cha dùng `onValueChange`
+  // để tính một giá trị dẫn xuất khác (vd TotalCostBreakdownCard ở
+  // NewHoldingForm, "Tiền nhận về" ở MaturitySettlementForm) sẽ bị "đứng hình"
+  // ở giá trị tính lần đầu/lúc bấm "Đặt lại", không theo kịp giá trị đang hiệu
+  // lực thật của chính card — phát hiện khi phí mua tự tính thật ở
+  // NewHoldingForm (issue #142) thay cho hardcode "0" cũ.
+  useEffect(() => {
+    if (manualValue === null) onValueChange?.(computedAmount);
+
+    // computedAmount đổi (và cờ dirty manualValue) — cố ý KHÔNG thêm
+    // onValueChange vào deps: cha (vd NewHoldingForm) thường truyền một hàm
+    // setState mới mỗi render, đưa vào deps sẽ chạy lại effect mỗi render dù
+    // computedAmount không đổi.
+  }, [computedAmount, manualValue]);
 
   return (
     <div

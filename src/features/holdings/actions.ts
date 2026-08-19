@@ -91,6 +91,7 @@ export async function createHolding(
     type,
     unit,
     name,
+    intent,
     cashflowType,
     date,
     quantity,
@@ -101,6 +102,31 @@ export async function createHolding(
   } = ctx.data;
 
   try {
+    // Nhánh "Vừa mua hôm nay" (NEW_PURCHASE) KHÔNG được gộp im lặng vào vị thế
+    // trùng mã như nhánh "Đã có từ trước" (HISTORICAL, xem `existing` bên dưới
+    // trong transaction) — một giao dịch mua thật hôm nay ghi nhầm vào vị thế
+    // cũ sẽ trộn lẫn giá vốn hai lô mà user không hề chọn thế (issue #142).
+    // Check này chạy TRƯỚC khi mở transaction: chỉ là một truy vấn đọc đơn
+    // giản để báo lỗi sớm, không phải bất biến derive cần bảo vệ TOCTOU (đọc
+    // lại đúng logic gộp ngay trong transaction bên dưới cho nhánh HISTORICAL).
+    if (intent === "NEW_PURCHASE") {
+      const duplicate = await findPositionSourceBySymbol({
+        userId,
+        symbol,
+        type,
+      });
+      if (duplicate) {
+        return {
+          ok: false,
+          error: `Bạn đã có vị thế ${symbol} — vui lòng ghi nhận giao dịch mua thêm ở đó thay vì tạo mới`,
+          holdingId: duplicate.id,
+          existingQuantity: duplicate.quantity.toString(),
+          existingUnit: duplicate.unit,
+          existingAvgCost: duplicate.avgCost.toString(),
+        };
+      }
+    }
+
     const result = await runInTransaction(async (tx) => {
       const existing = await findPositionSourceBySymbol(
         { userId, symbol, type },

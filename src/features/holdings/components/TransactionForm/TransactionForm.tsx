@@ -44,6 +44,7 @@ import {
   resolveComputedAmount,
   resolveFormulaLabel,
   saleTaxKeyLabel,
+  toGrossValueDecimal,
   type AutoFieldPreview,
 } from "./TransactionForm.utils";
 
@@ -105,18 +106,6 @@ function toAmount(quantity: string, pricePerUnit: string): number {
   const p = parseDecimalOrNull(pricePerUnit)?.toNumber() ?? 0;
   if (q <= 0 || p <= 0) return 0;
   return q * p;
-}
-
-// Decimal (KHÁC toAmount ở trên vốn dùng number cho info box "Thành tiền =" cũ) —
-// cần chính xác tuyệt đối vì dùng làm cơ sở nhân với % thuế/phí.
-function toGrossValueDecimal(
-  quantity: string,
-  pricePerUnit: string,
-): Decimal | null {
-  const q = parseDecimalOrNull(quantity);
-  const p = parseDecimalOrNull(pricePerUnit);
-  if (!q || !p || q.lte(0) || p.lte(0)) return null;
-  return q.mul(p);
 }
 
 // Khối "Thuế bán · tính lại" + "Phí giao dịch · tính lại" khi sửa ngày một

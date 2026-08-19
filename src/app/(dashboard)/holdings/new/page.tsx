@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/PageHeader";
 import { NewHoldingForm } from "@/features/holdings/components/NewHoldingForm";
+import { getNewPurchaseFeeSettingRows } from "@/features/holdings/queries";
 import { isAssetType } from "@/features/holdings/schemas";
 import { ROUTES } from "@/lib/routes";
 
@@ -18,10 +19,17 @@ export default async function NewHoldingPage({
   // URL bar, không mặc nhiên tin `type` khớp AssetType.
   const initialType = isAssetType(type) ? type : undefined;
 
+  // Phí mua thật cho card "Phí giao dịch" ở nhánh "Vừa mua hôm nay" (issue
+  // #142) — cả 4 AssetType trong một query, xem getNewPurchaseFeeSettingRows().
+  const feeSettingRowsByType = await getNewPurchaseFeeSettingRows();
+
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4.5 p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
       <PageHeader title="Vị thế mới" backHref={ROUTES.holdings} />
-      <NewHoldingForm initialType={initialType} />
+      <NewHoldingForm
+        initialType={initialType}
+        feeSettingRowsByType={feeSettingRowsByType}
+      />
     </div>
   );
 }

@@ -104,6 +104,15 @@ export type TransactionSettingRows = {
   feeSellRows: TransactionSettingRow[];
 };
 
+// Phí mua (TRANSACTION_FEE_BUY_<LOẠI>) cho CẢ 4 AssetType — nhánh "Vừa mua
+// hôm nay" của NewHoldingForm (issue #142) chưa biết AssetType cuối cùng lúc
+// mount (user đổi loại tại chỗ qua AssetTypeTiles), xem
+// getNewPurchaseFeeSettingRows() (queries/holding-transaction-form.ts).
+export type NewPurchaseFeeSettingRows = Record<
+  HoldingSummary["type"],
+  TransactionSettingRow[]
+>;
+
 export type HoldingDetail = {
   id: string;
   symbol: string;
