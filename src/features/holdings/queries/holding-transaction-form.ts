@@ -16,9 +16,11 @@ import type { SettingKey } from "@/lib/settings";
 import { saleTaxKey, transactionFeeKey } from "@/lib/settings";
 
 import { findHoldingForPricing, findSettingRowsByKeys } from "../repository";
+import { assetTypeEnum } from "../schemas";
 import type {
   CashflowRow,
   HoldingSummary,
+  NewPurchaseFeeSettingRows,
   TransactionSettingRow,
   TransactionSettingRows,
 } from "../types";
@@ -65,6 +67,39 @@ export async function getTransactionSettingRows(
     feeBuyRows: toRows(transactionFeeKey("BUY", assetType)),
     feeSellRows: toRows(transactionFeeKey("SELL", assetType)),
   };
+}
+
+// Phí mua thật (TRANSACTION_FEE_BUY_<LOẠI>) cho CẢ 4 AssetType trong MỘT
+// query — nhánh "Vừa mua hôm nay" của NewHoldingForm (issue #142) chưa biết
+// AssetType cuối cùng khi trang mount (user đổi qua AssetTypeTiles sau khi
+// form đã render, không round-trip Server Action mỗi lần đổi loại), nên nạp
+// sẵn phí của cả 4 loại một lượt rồi client tự chọn theo `assetType` đang chọn
+// — cùng lý do getTransactionSettingRows() trả rows thô (chưa pick effective)
+// để TransactionForm tự pickEffectiveSetting() lại khi đổi ngày, không
+// round-trip DB.
+export async function getNewPurchaseFeeSettingRows(): Promise<NewPurchaseFeeSettingRows> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const assetTypes = assetTypeEnum.options;
+  const keys: SettingKey[] = assetTypes.map((type) =>
+    transactionFeeKey("BUY", type),
+  );
+
+  const rows = await findSettingRowsByKeys(keys);
+
+  const toRows = (key: SettingKey): TransactionSettingRow[] =>
+    rows
+      .filter((row) => row.key === key)
+      .map((row) => ({
+        value: row.value,
+        valueType: row.valueType,
+        effectiveFrom: row.effectiveFrom.toISOString(),
+      }));
+
+  return Object.fromEntries(
+    assetTypes.map((type) => [type, toRows(transactionFeeKey("BUY", type))]),
+  ) as NewPurchaseFeeSettingRows;
 }
 
 // Query hẹp riêng cho màn nhập giá tay (NavOverrideForm) — không kéo cashflows

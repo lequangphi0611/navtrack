@@ -1,5 +1,7 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 type SegmentedControlOption<T extends string> = {
@@ -7,6 +9,9 @@ type SegmentedControlOption<T extends string> = {
   label: string;
   // Class cho label khi option đang active (vd "text-primary-foreground" trên thumb màu) — mặc định text-foreground.
   activeClassName?: string;
+  // Icon trái nhãn (vd NewHoldingSourceToggle — issue #140) — optional, không
+  // đổi layout/hành vi của option nào không truyền icon (Mua/Bán, Thu/Trả...).
+  icon?: LucideIcon;
 };
 
 type SegmentedControlProps<T extends string> = {
@@ -59,13 +64,14 @@ function SegmentedControl<T extends string>({
           type="button"
           onClick={() => onChange(option.value)}
           className={cn(
-            "relative px-4.5 py-1.5 text-[13px] font-semibold transition-colors",
+            "relative flex items-center justify-center gap-1.5 px-4.5 py-1.5 text-[13px] font-semibold transition-colors",
             stretch && "flex-1 px-2",
             index === activeIndex
               ? (option.activeClassName ?? "text-foreground")
               : "text-muted-foreground",
           )}
         >
+          {option.icon ? <option.icon className="size-3.75 shrink-0" /> : null}
           {option.label}
         </button>
       ))}

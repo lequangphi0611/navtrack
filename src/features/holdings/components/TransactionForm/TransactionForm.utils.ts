@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 
 import type { AssetType } from "@/components/AssetTypeBadge";
 import { formatDate, formatMoney, formatPercent } from "@/lib/format";
+import { parseDecimalOrNull } from "@/lib/parse-decimal";
 import {
   parseSettingValue,
   pickEffectiveSetting,
@@ -23,6 +24,22 @@ export type AutoFieldPreview = {
   ratePercent: Decimal;
   effectiveFrom: Date;
 };
+
+// Decimal (KHÁC toAmount ở TransactionForm.tsx vốn dùng number cho info box
+// "Thành tiền =" cũ) — cần chính xác tuyệt đối vì dùng làm cơ sở nhân với %
+// thuế/phí. Export ra khỏi TransactionForm.tsx (trước đây private) để
+// NewHoldingForm (issue #142) dùng chung, KHÔNG copy lại công thức resolve
+// gross value — cùng lý do computeAutoFieldPreview/feeKeyLabel/formatFormulaLabel
+// tách ra file này.
+export function toGrossValueDecimal(
+  quantity: string,
+  pricePerUnit: string,
+): Decimal | null {
+  const q = parseDecimalOrNull(quantity);
+  const p = parseDecimalOrNull(pricePerUnit);
+  if (!q || !p || q.lte(0) || p.lte(0)) return null;
+  return q.mul(p);
+}
 
 export function toSettingRows(rows: TransactionSettingRow[]): SettingRow[] {
   return rows.map((row) => ({
