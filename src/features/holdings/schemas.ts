@@ -2,11 +2,19 @@ import type { CashflowType } from "@prisma/client";
 import Decimal from "decimal.js";
 import { z } from "zod";
 
+import type { AssetType } from "@/components/AssetTypeBadge";
 import { CASHFLOW_TYPES } from "@/lib/enums";
 import { normalizeDecimalInput } from "@/lib/parse-decimal";
 
 export const assetTypeEnum = z.enum(["STOCK", "FUND", "BOND", "GOLD"]);
 export const cashflowTypeEnum = z.enum(CASHFLOW_TYPES);
+
+// Type guard cho `AssetType` đọc từ nguồn KHÔNG tin cậy (vd query string
+// `/holdings/new?type=BOND` — issue #141) — "không tin client" (CLAUDE.md).
+// Tái dùng `assetTypeEnum` đã có thay vì khai lại danh sách literal lần 2.
+export function isAssetType(value: string | undefined): value is AssetType {
+  return assetTypeEnum.safeParse(value).success;
+}
 
 // Loại giao dịch TẠO MỚI bằng tay được — cố ý KHÔNG phải `cashflowTypeEnum`.
 // Cho tới Phase 6, `CASHFLOW_TYPES` chỉ có BUY/SELL nên dùng chung là an toàn;

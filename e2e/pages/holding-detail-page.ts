@@ -28,6 +28,14 @@ export class HoldingDetailPage {
     return this.page.getByRole("heading", { name: symbol });
   }
 
+  // AssetTypeBadge (pill nhỏ cạnh symbol, HoldingDetailScreen.tsx) — xác nhận
+  // loại tài sản THẬT của holding vừa tạo qua nhãn hiển thị (vd "Vàng"), thay
+  // vì suy diễn từ query param `?type=` trên URL form (điều hướng qua CTA chỉ
+  // pre-select form, không đảm bảo Server Action lưu đúng type nếu có bug).
+  assetTypeBadge(label: string): Locator {
+    return this.page.getByText(label, { exact: true });
+  }
+
   get quantityText(): Locator {
     return this.page.getByText(/^[\d.,]+ cổ phần$/);
   }

@@ -1,12 +1,27 @@
 import { PageHeader } from "@/components/PageHeader";
 import { NewHoldingForm } from "@/features/holdings/components/NewHoldingForm";
+import { isAssetType } from "@/features/holdings/schemas";
 import { ROUTES } from "@/lib/routes";
 
-export default function NewHoldingPage() {
+type NewHoldingPageProps = {
+  // Lối vào từ /nav-chart (CTA "+ Thêm vị thế {Loại}" ở trạng thái rỗng, issue
+  // #141) truyền `?type=BOND` — form đích tự pre-select loại. `searchParams` là
+  // Promise ở Next.js 16 (App Router) — xem precedent sign-in/page.tsx.
+  searchParams: Promise<{ type?: string }>;
+};
+
+export default async function NewHoldingPage({
+  searchParams,
+}: NewHoldingPageProps) {
+  const { type } = await searchParams;
+  // isAssetType() — "không tin client" (CLAUDE.md): query string sửa được qua
+  // URL bar, không mặc nhiên tin `type` khớp AssetType.
+  const initialType = isAssetType(type) ? type : undefined;
+
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4.5 p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
       <PageHeader title="Vị thế mới" backHref={ROUTES.holdings} />
-      <NewHoldingForm />
+      <NewHoldingForm initialType={initialType} />
     </div>
   );
 }

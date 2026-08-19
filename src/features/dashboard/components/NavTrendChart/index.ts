@@ -1,4 +1,4 @@
-export { NavTrendChart } from "./NavTrendChart";
+export { NavTrendChart, PERIOD_OPTIONS } from "./NavTrendChart";
 export type {
   NavTrendChartProps,
   NavTrendPeriod,

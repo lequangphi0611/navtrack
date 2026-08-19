@@ -107,6 +107,17 @@ export default function NavTrendChartPreview() {
         </div>
         <NavTrendChart data={EMPTY_DATA} />
       </div>
+
+      <div>
+        <div className="mb-2 text-xs font-semibold text-muted-foreground">
+          issue #139 — navTrendHref (href mẫu, demo khả năng nhận prop MỚI;
+          Dashboard thật KHÔNG truyền prop này vì route đích chưa tồn tại)
+        </div>
+        <NavTrendChart
+          data={FULL_DATA}
+          navTrendHref="#nav-trend-by-asset-type"
+        />
+      </div>
     </div>
   );
 }

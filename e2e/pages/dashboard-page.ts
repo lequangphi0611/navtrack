@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 import { AllocationPage } from "./allocation-page";
+import { NavChartPage } from "./nav-chart-page";
 import { TransactionHoldingPicker } from "./transaction-holding-picker";
 
 // "/" — Dashboard tổng quan (mockup 2a/2f).
@@ -126,6 +127,24 @@ export class DashboardPage {
   // bằng chứng gián tiếp đường NAV đã vẽ khi không thể assert trực tiếp SVG.
   get navTrendPointerHint(): Locator {
     return this.page.getByText("Chạm giữ vào đường để xem NAV tại từng ngày.");
+  }
+
+  // Header "Giá trị tài sản" của NavTrendChart — <Link> tới /nav-chart (issue
+  // #139/#141) khi navTrendHref có giá trị (LUÔN có trên route "/" thật, xem
+  // PortfolioOverviewSection.tsx). ChevronRight cạnh chữ không có text riêng,
+  // không ảnh hưởng accessible name.
+  private get navTrendLink(): Locator {
+    return this.page.getByRole("link", {
+      name: "Giá trị tài sản",
+      exact: true,
+    });
+  }
+
+  async goToNavChart(): Promise<NavChartPage> {
+    const navChartPage = new NavChartPage(this.page);
+    await this.navTrendLink.click();
+    await this.page.waitForURL(navChartPage.url);
+    return navChartPage;
   }
 
   // Điểm vào /allocation (mục 10 phase-6.md) — bấm AllocationBar (donut rút
