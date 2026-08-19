@@ -46,6 +46,7 @@ Quyết định về `Setting` không có file riêng — nằm cùng chủ đ�
 | 2026-07-24 (2) | "2 bộ đếm song song" cho `realizedPnl`; cờ `pnlSplitIsApproximate` | S → 07-24 (3) (điểm (b) vẫn A) |
 | 2026-07-24 (3) | Một bộ đếm `realQuantity` duy nhất; `avgCost` chỉ đổi ở BUY | A |
 | 2026-07-24 (4) | Xoá `derivePosition()` cũ, gộp về một hàm; reset `avgCost` khi `quantity = 0` | A |
+| 2026-08-19 | `intent: HISTORICAL/NEW_PURCHASE` khi tạo Holding lần đầu; phí + chặn ngày tương lai + trùng mã báo lỗi chỉ ở `NEW_PURCHASE` (#142) | A |
 
 ### Cổ tức → [`dividends.md`](./decisions/dividends.md)
 
