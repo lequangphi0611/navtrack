@@ -1,7 +1,11 @@
 import Decimal from "decimal.js";
 import { describe, expect, test } from "vitest";
 
-import { buildNavTrendSeries, groupSnapshotRowsByType } from "./nav-trend";
+import {
+  buildNavTrendSeries,
+  computeSpreadPercent,
+  groupSnapshotRowsByType,
+} from "./nav-trend";
 
 const d = (value: string) => new Decimal(value);
 
@@ -151,5 +155,21 @@ describe("groupSnapshotRowsByType", () => {
     expect(result.BOND).toHaveLength(2);
     expect(result.BOND[result.BOND.length - 1]?.value.toString()).toBe("110");
     expect(result.BOND.some((p) => p.value.isZero())).toBe(false);
+  });
+});
+
+describe("computeSpreadPercent", () => {
+  test("ca thường -> % biên độ (high - low) / low * 100", () => {
+    const result = computeSpreadPercent("19400000", "17500000");
+
+    expect(result).toBeCloseTo(10.857142857, 6);
+  });
+
+  test("high === low -> 0", () => {
+    expect(computeSpreadPercent("17500000", "17500000")).toBe(0);
+  });
+
+  test("low === '0' -> undefined (tránh chia 0)", () => {
+    expect(computeSpreadPercent("100", "0")).toBeUndefined();
   });
 });

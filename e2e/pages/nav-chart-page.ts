@@ -63,6 +63,15 @@ export class NavChartPage {
     return this.page.getByText("Cao nhất kỳ", { exact: true });
   }
 
+  // Dòng "Biên độ kỳ" (periodSpreadPercent) trong HighLowCard — chỉ render
+  // khi periodSpreadPercent !== undefined (undefined ở ca periodLow = "0"),
+  // cùng điều kiện gate với periodHighLabel nhưng field riêng biệt nên tách
+  // getter, không gộp chung (đúng mục 4 rule POM: locator có tham số/khác
+  // nghĩa thì tách riêng).
+  get periodSpreadLabel(): Locator {
+    return this.page.getByText("Biên độ kỳ", { exact: true });
+  }
+
   // EmptyAssetTypeState (139e) — loại chưa từng có vị thế nào.
   emptyStateTitle(label: AssetTypeLabel): Locator {
     return this.page.getByText(`Bạn chưa có vị thế ${label} nào`, {

@@ -19,6 +19,7 @@ import { db } from "@/lib/db";
 import { formatDate, formatDayMonth, formatTime } from "@/lib/format";
 import {
   buildNavTrendSeries,
+  computeSpreadPercent,
   groupSnapshotRowsByType,
   type NavTrendPeriod,
   type NavTrendPoint,
@@ -470,6 +471,26 @@ function minMaxPointValue(
   return { high: high.toString(), low: low.toString() };
 }
 
+// Bọc minMaxPointValue() + computeSpreadPercent() thành 1 khối
+// {periodHigh, periodLow, periodSpreadPercent} — dùng chung cho 4 loại tài sản
+// cụ thể (buildAssetTypePeriodData()) VÀ nhánh ALL (vốn tái dùng getNavTrend(),
+// không tự đi qua buildAssetTypePeriodData()) để tránh lặp lại cùng 3 dòng ở 2
+// nơi. `{}` khi rỗng (không có periodHigh/periodLow/periodSpreadPercent nào).
+function buildHighLow(
+  points: NavTrendPoint[],
+): Pick<
+  NavTrendByAssetTypePeriodData,
+  "periodHigh" | "periodLow" | "periodSpreadPercent"
+> {
+  const minMax = minMaxPointValue(points);
+  if (!minMax) return {};
+  return {
+    periodHigh: minMax.high,
+    periodLow: minMax.low,
+    periodSpreadPercent: computeSpreadPercent(minMax.high, minMax.low),
+  };
+}
+
 // Cắt `rows` (đã sort tăng dần theo date) theo kỳ, THUẦN Ở JS — KHÔNG query
 // lại DB cho từng loại × từng kỳ (khác getNavTrend() ở trên, vốn lọc ngay
 // trong Prisma `where`). Cùng ngưỡng NAV_TREND_PERIOD_DAYS/MILLIS_PER_DAY đã
@@ -496,14 +517,11 @@ function buildAssetTypePeriodData(
     todayValue,
     today,
   );
-  const minMax = minMaxPointValue(points);
-
   return {
     points,
     changePercent,
     navAmount: lastPointValue(points),
-    periodHigh: minMax?.high,
-    periodLow: minMax?.low,
+    ...buildHighLow(points),
   };
 }
 
@@ -579,16 +597,19 @@ export async function getNavTrendByAssetType(): Promise<{
         points: navMonthAll.points,
         changePercent: navMonthAll.changePercent,
         navAmount: lastPointValue(navMonthAll.points),
+        ...buildHighLow(navMonthAll.points),
       },
       YEAR: {
         points: navYearAll.points,
         changePercent: navYearAll.changePercent,
         navAmount: lastPointValue(navYearAll.points),
+        ...buildHighLow(navYearAll.points),
       },
       ALL: {
         points: navAllAll.points,
         changePercent: navAllAll.changePercent,
         navAmount: lastPointValue(navAllAll.points),
+        ...buildHighLow(navAllAll.points),
       },
     },
   } as Record<

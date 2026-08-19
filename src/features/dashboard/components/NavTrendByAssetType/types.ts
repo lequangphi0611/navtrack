@@ -30,6 +30,11 @@ type NavTrendByAssetTypePeriodData = {
   depositedInPeriod?: string; // Decimal serialize CÓ dấu (+/-), ẨN theo `hidden`
   periodHigh?: string; // Decimal serialize, ẨN theo `hidden`
   periodLow?: string; // Decimal serialize, ẨN theo `hidden`
+  // % biên độ trong kỳ = (periodHigh − periodLow) / periodLow × 100 — LUÔN dương,
+  // đo mức "trồi sụt" NAV (không phải lãi/lỗ, không thay XIRR). Đi kèm
+  // periodHigh/periodLow (cùng có/cùng undefined, trừ ca periodLow = 0).
+  // KHÔNG áp `hidden` — là tỷ lệ, không lộ VND.
+  periodSpreadPercent?: number;
 };
 
 type AssetTypeFilterOption = {

@@ -113,3 +113,19 @@ export function groupSnapshotRowsByType(
 
   return result;
 }
+
+// % biên độ = (cao nhất − thấp nhất) / thấp nhất × 100 — LUÔN dương (high >= low
+// theo định nghĩa minMaxPointValue). Đo mức "trồi sụt" NAV trong kỳ, không phải
+// lãi/lỗ. undefined khi low = 0 (không có mẫu số hợp lệ).
+export function computeSpreadPercent(
+  high: string,
+  low: string,
+): number | undefined {
+  const lowDecimal = new Decimal(low);
+  if (lowDecimal.isZero()) return undefined;
+  return new Decimal(high)
+    .minus(lowDecimal)
+    .div(lowDecimal)
+    .mul(100)
+    .toNumber();
+}

@@ -42,7 +42,11 @@ function buildPeriodSet(
   extra?: Partial<
     Pick<
       NavTrendByAssetTypePeriodData,
-      "groupXirrPercent" | "depositedInPeriod" | "periodHigh" | "periodLow"
+      | "groupXirrPercent"
+      | "depositedInPeriod"
+      | "periodHigh"
+      | "periodLow"
+      | "periodSpreadPercent"
     >
   >,
 ): Record<NavTrendPeriod, NavTrendByAssetTypePeriodData> {
@@ -55,11 +59,18 @@ function buildPeriodSet(
   };
 }
 
-// 139a — "Tất cả": NAV 438tr, +12,4%/năm.
+// 139a — "Tất cả": NAV 438tr, +12,4%/năm. periodHigh/periodLow = max/min của
+// mảng mẫu YEAR (438tr/389,68tr), periodSpreadPercent = (high-low)/low*100 —
+// để soi HighLowCard mới ở view "Tất cả" (trước đây ALL không hiện card này).
 const ALL_DATA = buildPeriodSet(
   [389680000, 402000000, 415000000, 427000000, 438000000],
   "438000000",
   12.4,
+  {
+    periodHigh: "438000000",
+    periodLow: "389680000",
+    periodSpreadPercent: 12.401558,
+  },
 );
 
 // 139b — Cổ phiếu: NAV 420tr, +15,8%/năm, card "XIRR nhóm + Nạp thêm trong kỳ".
@@ -79,12 +90,17 @@ const FUND_DATA = buildPeriodSet(
   8.1,
 );
 
-// 139c — Vàng: NAV 18tr, -3,2%/năm, card "Cao nhất/Thấp nhất kỳ".
+// 139c — Vàng: NAV 18tr, -3,2%/năm, card "Cao nhất/Thấp nhất kỳ" +
+// periodSpreadPercent = (19,4tr-17,5tr)/17,5tr*100 ≈ 10,857%.
 const GOLD_DATA = buildPeriodSet(
   [18600000, 17900000, 18300000, 17700000, 18000000],
   "18000000",
   -3.2,
-  { periodHigh: "19400000", periodLow: "17500000" },
+  {
+    periodHigh: "19400000",
+    periodLow: "17500000",
+    periodSpreadPercent: 10.857142857,
+  },
 );
 
 // 139e — Trái phiếu chưa từng có vị thế (hasData=false ở FILTERS bên dưới) —
