@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import type { AssetType } from "@/components/AssetTypeBadge";
+import type {
+  AssetTypeFilter,
+  AssetTypeFilterOption,
+  NavTrendByAssetTypePeriodData,
+} from "@/features/dashboard/components/NavTrendByAssetType";
 import { getOpenHoldings } from "@/features/holdings/queries";
 import type {
   SnapshotDetailHoldingRow,
@@ -12,6 +17,12 @@ import { getSession } from "@/lib/auth";
 import { resolveCutoffDate, todayIctDateOnly } from "@/lib/cutoff";
 import { db } from "@/lib/db";
 import { formatDate, formatDayMonth, formatTime } from "@/lib/format";
+import {
+  buildNavTrendSeries,
+  groupSnapshotRowsByType,
+  type NavTrendPeriod,
+  type NavTrendPoint,
+} from "@/lib/nav-trend";
 import { ROUTES } from "@/lib/routes";
 import { MILLIS_PER_DAY } from "@/lib/xirr";
 import {
@@ -30,6 +41,12 @@ import {
   resolvePrice,
   valuateHoldings,
 } from "@/lib/valuation";
+
+// Re-export — lib/nav-trend.ts mới là nguồn sự thật (lib/ không được phụ
+// thuộc ngược features/, xem comment ở đó), giữ nguyên surface cũ cho mọi
+// consumer đang `import type { NavTrendPeriod, NavTrendPoint } from
+// "@/features/snapshots/queries"`.
+export type { NavTrendPeriod, NavTrendPoint };
 
 // Thứ tự nhóm cố định — khớp GROUP_ORDER (features/holdings/group-holdings.ts) và
 // ASSET_TYPE_ORDER (lib/portfolio-valuation.ts): STOCK, FUND, BOND, GOLD.
@@ -69,20 +86,16 @@ function isValued(
   return valuation.status === "VALUED";
 }
 
-// Preview cho SnapshotFreezeSheet (/snapshots, mockup 3b) — NAV "sẽ đóng băng" nếu bấm
-// "Đóng băng số liệu" ngay bây giờ, tính lại tại thời điểm submit bởi freezeManualSnapshot()
-// (số hiển thị ở đây chỉ là preview, có thể lệch nhẹ nếu giá đổi giữa lúc xem và lúc bấm).
-//
-// breakdown LUÔN đúng 4 dòng (STOCK/FUND/BOND/GOLD) — khác buildAllocation()
-// (lib/portfolio-valuation.ts) vốn bỏ nhóm không có holding nào VALUED (dùng cho % phân
-// bổ, nhóm rỗng vô nghĩa ở biểu đồ đó). Ở đây SnapshotFreezeSheetProps.breakdown ghi rõ
-// "đúng 4 nhóm" — nhóm không có holding loại đó (hoặc có nhưng toàn MISSING_PRICE) hiện
-// value "0" (NAV thật của nhóm, không phải giấu do thiếu giá).
-export async function getSnapshotFreezePreview(): Promise<{
-  navValue: string;
-  cutoffDateLabel: string;
-  breakdown: { type: AssetType; value: string }[];
-}> {
+// NAV "hôm nay" (cutoff TODAY) cộng dồn theo loại tài sản, chỉ tính holding ĐANG
+// MỞ và ĐÃ ĐỊNH GIÁ ĐƯỢC — holding MISSING_PRICE bị BỎ QUA khỏi tổng (không mặc
+// định 0), khác việc bucket của một loại hoàn toàn không có holding nào định
+// giá được thì tự nhiên ra Decimal(0) qua `?? new Decimal(0)` ở nơi đọc map này.
+// Dùng chung cho getSnapshotFreezePreview() (breakdown 4 nhóm cho
+// SnapshotFreezeSheet) VÀ getNavTrendByAssetType() (điểm "hôm nay" nối vào
+// chuỗi NAV theo loại, issue #141) — tránh 2 cài đặt song song của cùng công
+// thức (docs/rules/data-prisma.md mục "Materialized cache" cảnh báo rủi ro
+// lệch dữ liệu khi có ≥ 2 bản sao logic).
+async function computeTodayNavByType(): Promise<Map<AssetType, Decimal>> {
   const openHoldings = await getOpenHoldings();
   const cutoffDate = resolveCutoffDate({ key: "TODAY" });
   const valuations = await valuateHoldings(
@@ -101,6 +114,25 @@ export async function getSnapshotFreezePreview(): Promise<{
     const prev = navByType.get(holding.type) ?? new Decimal(0);
     navByType.set(holding.type, prev.plus(valuation.nav));
   }
+
+  return navByType;
+}
+
+// Preview cho SnapshotFreezeSheet (/snapshots, mockup 3b) — NAV "sẽ đóng băng" nếu bấm
+// "Đóng băng số liệu" ngay bây giờ, tính lại tại thời điểm submit bởi freezeManualSnapshot()
+// (số hiển thị ở đây chỉ là preview, có thể lệch nhẹ nếu giá đổi giữa lúc xem và lúc bấm).
+//
+// breakdown LUÔN đúng 4 dòng (STOCK/FUND/BOND/GOLD) — khác buildAllocation()
+// (lib/portfolio-valuation.ts) vốn bỏ nhóm không có holding nào VALUED (dùng cho % phân
+// bổ, nhóm rỗng vô nghĩa ở biểu đồ đó). Ở đây SnapshotFreezeSheetProps.breakdown ghi rõ
+// "đúng 4 nhóm" — nhóm không có holding loại đó (hoặc có nhưng toàn MISSING_PRICE) hiện
+// value "0" (NAV thật của nhóm, không phải giấu do thiếu giá).
+export async function getSnapshotFreezePreview(): Promise<{
+  navValue: string;
+  cutoffDateLabel: string;
+  breakdown: { type: AssetType; value: string }[];
+}> {
+  const navByType = await computeTodayNavByType();
 
   const breakdown = ASSET_TYPE_ORDER.map((type) => ({
     type,
@@ -344,14 +376,6 @@ export async function getSnapshotDetail(
 
 // --- Biểu đồ NAV theo thời gian (mục 9 phase-6.md / 6a-6c UI_phase_6.md) ---
 
-export type NavTrendPeriod = "MONTH" | "YEAR" | "ALL";
-
-export type NavTrendPoint = {
-  date: string; // ISO
-  value: string; // NAV Decimal đã serialize
-  changePercentFromStart: number; // % so với điểm đầu danh sách đã lọc (kỳ đang chọn)
-};
-
 const NAV_TREND_PERIOD_DAYS: Record<Exclude<NavTrendPeriod, "ALL">, number> = {
   MONTH: 30,
   YEAR: 365,
@@ -375,6 +399,12 @@ const NAV_TREND_PERIOD_DAYS: Record<Exclude<NavTrendPeriod, "ALL">, number> = {
 // `navDeltaPercent` ở NAV hero — đó là so với tổng vốn đã bỏ vào, không phải
 // theo kỳ). `< 2 điểm` -> trả mảng rỗng/1 phần tử NGUYÊN VẸN, không tự xử lý
 // nhánh rỗng ở đây (UI tự vẽ biến thể "chưa vẽ được đường NAV", 6b).
+//
+// Phần tính điểm/% (dedup frozen hôm nay, nối điểm động, changePercentFromStart)
+// chuyển sang buildNavTrendSeries() (lib/nav-trend.ts, pure — issue #141) —
+// hàm này giờ chỉ còn query DB + map Decimal rồi gọi hàm thuần đó, GIỮ NGUYÊN
+// 100% chữ ký/hành vi output cho Dashboard (PortfolioOverviewSection.tsx vẫn
+// gọi y hệt trước).
 export async function getNavTrend(
   period: NavTrendPeriod,
   todayNavValue: string,
@@ -405,33 +435,197 @@ export async function getNavTrend(
     select: { date: true, value: true },
   });
 
-  const lastFrozen = frozen[frozen.length - 1];
-  const hasFrozenToday =
-    lastFrozen !== undefined && lastFrozen.date.getTime() === today.getTime();
-
-  const rawPoints: { date: Date; value: Decimal }[] = frozen.map((row) => ({
+  const rows = frozen.map((row) => ({
     date: row.date,
     value: new Decimal(row.value.toString()),
   }));
 
-  if (!hasFrozenToday) {
-    rawPoints.push({ date: today, value: new Decimal(todayNavValue) });
+  return buildNavTrendSeries(rows, new Decimal(todayNavValue), today);
+}
+
+// --- Biểu đồ NAV theo LOẠI tài sản (route /nav-chart, issue #141, digest
+// process/UI_nav-trend-by-asset-type.md) ---
+
+// N mã, để trống ở phần điểm cuối kỳ high/low khi rỗng.
+function lastPointValue(points: NavTrendPoint[]): string {
+  return points[points.length - 1]?.value ?? "0";
+}
+
+// Cao nhất/thấp nhất kỳ (mockup 139c "Cao nhất kỳ"/"Thấp nhất kỳ") — undefined
+// khi rỗng (không có gì để so sánh), KHÔNG trả "0"/"0" giả (dễ đọc nhầm thành
+// giá trị thật).
+function minMaxPointValue(
+  points: NavTrendPoint[],
+): { high: string; low: string } | undefined {
+  if (points.length === 0) return undefined;
+
+  let high = new Decimal(points[0]!.value);
+  let low = high;
+  for (const point of points) {
+    const value = new Decimal(point.value);
+    if (value.gt(high)) high = value;
+    if (value.lt(low)) low = value;
   }
 
-  const startValue = rawPoints[0]?.value;
-  const points: NavTrendPoint[] = rawPoints.map((p) => ({
-    date: p.date.toISOString(),
-    value: p.value.toString(),
-    changePercentFromStart:
-      !startValue || startValue.isZero()
-        ? 0
-        : p.value.minus(startValue).div(startValue).mul(100).toNumber(),
+  return { high: high.toString(), low: low.toString() };
+}
+
+// Cắt `rows` (đã sort tăng dần theo date) theo kỳ, THUẦN Ở JS — KHÔNG query
+// lại DB cho từng loại × từng kỳ (khác getNavTrend() ở trên, vốn lọc ngay
+// trong Prisma `where`). Cùng ngưỡng NAV_TREND_PERIOD_DAYS/MILLIS_PER_DAY đã
+// dùng cho getNavTrend() — giữ nhất quán định nghĩa "kỳ Tháng/Năm" giữa 2 màn.
+function cutRowsByPeriod(
+  rows: { date: Date; value: Decimal }[],
+  period: NavTrendPeriod,
+  today: Date,
+): { date: Date; value: Decimal }[] {
+  if (period === "ALL") return rows;
+  const cutoffMillis =
+    today.getTime() - NAV_TREND_PERIOD_DAYS[period] * MILLIS_PER_DAY;
+  return rows.filter((row) => row.date.getTime() >= cutoffMillis);
+}
+
+function buildAssetTypePeriodData(
+  rows: { date: Date; value: Decimal }[],
+  todayValue: Decimal,
+  today: Date,
+  period: NavTrendPeriod,
+): NavTrendByAssetTypePeriodData {
+  const { points, changePercent } = buildNavTrendSeries(
+    cutRowsByPeriod(rows, period, today),
+    todayValue,
+    today,
+  );
+  const minMax = minMaxPointValue(points);
+
+  return {
+    points,
+    changePercent,
+    navAmount: lastPointValue(points),
+    periodHigh: minMax?.high,
+    periodLow: minMax?.low,
+  };
+}
+
+// Biến động NAV theo loại tài sản (route /nav-chart, issue #141) — preload sẵn
+// 5 loại (ALL/STOCK/FUND/BOND/GOLD) × 3 kỳ (MONTH/YEAR/ALL) = 15 bộ trong ĐÚNG
+// 2 round-trip DB (đọc snapshot per-holding + đọc distinct Holding.type), theo
+// quyết định đã chốt ở process/decisions/pricing-and-valuation.md 2026-08-18
+// ("gộp query ở tầng logic thay vì cache xuyên route Dashboard <-> /nav-chart").
+//
+// "ALL" (toàn danh mục) TÁI DÙNG thẳng getNavTrend() — CÙNG một hàm Dashboard
+// đang gọi, không viết lại công thức lần 2 (tránh 2 nguồn tính NAV toàn danh
+// mục lệch nhau giữa 2 màn, digest mục "Điểm cần xác nhận" #2).
+export async function getNavTrendByAssetType(): Promise<{
+  filters: AssetTypeFilterOption[];
+  dataByFilter: Record<
+    AssetTypeFilter,
+    Record<NavTrendPeriod, NavTrendByAssetTypePeriodData>
+  >;
+}> {
+  const session = await getSession();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+  const userId = session.user.id;
+
+  const now = new Date();
+  const today = todayIctDateOnly(now);
+
+  const [perHoldingRows, todayNavByType, presentTypes] = await Promise.all([
+    db.snapshot.findMany({
+      where: { userId, holdingId: { not: null }, frozen: true },
+      orderBy: { date: "asc" },
+      select: {
+        date: true,
+        value: true,
+        holding: { select: { type: true } },
+      },
+    }),
+    computeTodayNavByType(),
+    // KHÔNG dùng getOpenHoldings() — "chưa từng có vị thế" (139e) phải tính
+    // trên CẢ holding đã đóng, không chỉ holding đang mở (một loại đã bán
+    // sạch vẫn "đã từng có vị thế", chip filter vẫn phải bấm được).
+    db.holding.findMany({
+      where: { userId },
+      select: { type: true },
+      distinct: ["type"],
+    }),
+  ]);
+
+  const rows = perHoldingRows.map((row) => ({
+    date: row.date,
+    value: new Decimal(row.value.toString()),
+    // holding non-null: where đã lọc holdingId: { not: null } + Holding có
+    // onDelete: Cascade trên Snapshot (schema.prisma) -> luôn tồn tại — cùng
+    // pattern non-null assertion đã dùng ở getSnapshotDetail() trong file này.
+    type: row.holding!.type,
   }));
 
-  const changePercent =
-    points.length > 0
-      ? (points[points.length - 1]?.changePercentFromStart ?? 0)
-      : 0;
+  const groupedByType = groupSnapshotRowsByType(rows);
 
-  return { points, changePercent };
+  const todayNavAll = ASSET_TYPE_ORDER.reduce(
+    (sum, type) => sum.plus(todayNavByType.get(type) ?? new Decimal(0)),
+    new Decimal(0),
+  );
+
+  const [navMonthAll, navYearAll, navAllAll] = await Promise.all([
+    getNavTrend("MONTH", todayNavAll.toString()),
+    getNavTrend("YEAR", todayNavAll.toString()),
+    getNavTrend("ALL", todayNavAll.toString()),
+  ]);
+
+  const dataByFilter = {
+    ALL: {
+      MONTH: {
+        points: navMonthAll.points,
+        changePercent: navMonthAll.changePercent,
+        navAmount: lastPointValue(navMonthAll.points),
+      },
+      YEAR: {
+        points: navYearAll.points,
+        changePercent: navYearAll.changePercent,
+        navAmount: lastPointValue(navYearAll.points),
+      },
+      ALL: {
+        points: navAllAll.points,
+        changePercent: navAllAll.changePercent,
+        navAmount: lastPointValue(navAllAll.points),
+      },
+    },
+  } as Record<
+    AssetTypeFilter,
+    Record<NavTrendPeriod, NavTrendByAssetTypePeriodData>
+  >;
+
+  const presentTypeSet = new Set(presentTypes.map((row) => row.type));
+
+  for (const type of ASSET_TYPE_ORDER) {
+    const typeRows = groupedByType[type];
+    const todayValue = todayNavByType.get(type) ?? new Decimal(0);
+
+    dataByFilter[type] = {
+      MONTH: buildAssetTypePeriodData(typeRows, todayValue, today, "MONTH"),
+      YEAR: buildAssetTypePeriodData(typeRows, todayValue, today, "YEAR"),
+      ALL: buildAssetTypePeriodData(typeRows, todayValue, today, "ALL"),
+    };
+  }
+
+  const filters: AssetTypeFilterOption[] = [
+    {
+      type: "ALL",
+      hasData: true,
+      latestChangePercent: dataByFilter.ALL.YEAR.changePercent,
+    },
+    ...ASSET_TYPE_ORDER.map((type): AssetTypeFilterOption => {
+      const hasData = presentTypeSet.has(type);
+      return {
+        type,
+        hasData,
+        latestChangePercent: hasData
+          ? dataByFilter[type].YEAR.changePercent
+          : undefined,
+      };
+    }),
+  ];
+
+  return { filters, dataByFilter };
 }

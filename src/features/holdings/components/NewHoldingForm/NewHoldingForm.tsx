@@ -101,11 +101,18 @@ function toAmount(quantity: string, pricePerUnit: string): number {
   return q * p;
 }
 
-function NewHoldingForm() {
+type NewHoldingFormProps = {
+  // Loại tài sản khởi tạo (vd đi từ /nav-chart?type=STOCK bấm "Thêm vị thế").
+  // Vắng mặt = giữ nguyên hành vi cũ, mặc định "STOCK". User vẫn tự đổi loại
+  // sau khi form đã mount qua AssetTypeTiles như bình thường.
+  initialType?: AssetType;
+};
+
+function NewHoldingForm({ initialType = "STOCK" }: NewHoldingFormProps) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
-  const [assetType, setAssetType] = useState<AssetType>("STOCK");
-  const [unit, setUnit] = useState(defaultUnit("STOCK"));
+  const [assetType, setAssetType] = useState<AssetType>(initialType);
+  const [unit, setUnit] = useState(defaultUnit(initialType));
   const [quantity, setQuantity] = useState("");
   const [pricePerUnit, setPricePerUnit] = useState("");
   const [date, setDate] = useState(todayInputValue());
@@ -314,3 +321,4 @@ function NewHoldingForm() {
 }
 
 export { NewHoldingForm };
+export type { NewHoldingFormProps };

@@ -96,6 +96,10 @@ type DashboardScreenProps = {
   // tải sẵn (xem NavTrendChart). Vắng mặt = ẩn hẳn card biểu đồ (Container chưa
   // cấp — không nên xảy ra ở route "/" thật, chỉ để backward-compat).
   navTrend?: Record<NavTrendPeriod, NavTrendPeriodData>;
+  // MỚI (issue #139/#141) — href header "Giá trị tài sản" của NavTrendChart
+  // dẫn tới /nav-chart (biến động NAV theo loại tài sản). Vắng mặt = NavTrendChart
+  // giữ header dạng text tĩnh (xem NavTrendChartProps.navTrendHref).
+  navTrendHref?: string;
 };
 
 // Organism Phase 2 cho "/" (Dashboard NAV + XIRR, mockup 2a) — cũng tái dùng cho
@@ -125,6 +129,7 @@ function DashboardScreen({
   onToggleHidden,
   snapshotToday,
   navTrend,
+  navTrendHref,
 }: DashboardScreenProps) {
   const pnlNote = pnl.absolutePnlIsPartial
     ? "Chỉ trên phần có giá — đã trừ thuế & phí."
@@ -186,7 +191,13 @@ function DashboardScreen({
         <SnapshotTodayCard id="snapshot-today-card" {...snapshotToday} />
       ) : null}
 
-      {navTrend ? <NavTrendChart data={navTrend} hidden={hidden} /> : null}
+      {navTrend ? (
+        <NavTrendChart
+          data={navTrend}
+          hidden={hidden}
+          navTrendHref={navTrendHref}
+        />
+      ) : null}
 
       <PnlCostDragCard
         pnlValue={pnl.absolutePnl}

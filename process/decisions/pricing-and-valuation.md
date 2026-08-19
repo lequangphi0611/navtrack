@@ -80,6 +80,19 @@ Spec tương ứng: [`docs/domain/04-pricing-and-valuation.md`](../../docs/domai
 
 ---
 
+## 2026-08-18 (2) — Issue #141: KHÔNG cache xuyên route cho NAV theo loại — gộp query, dùng chung code
+
+**Status:** Accepted — đóng "Việc còn treo" ở entry `2026-08-18` trên
+
+**Đóng cơ chế double round-trip DB giữa Dashboard và `/nav-chart`: KHÔNG cache `Snapshot` xuyên route — thay vào đó gộp 15 tổ hợp (5 loại × 3 kỳ) thành 2 round-trip DB, và Dashboard/`/nav-chart` dùng CHUNG một hàm (`getNavTrend()`) cho lát cắt "ALL" thay vì dùng chung state đã persist.**
+- Bối cảnh: đã tư vấn `advisor` trước khi giao `business-implementer` wiring. `unstable_cache` đang dùng cho `getCachedLatestPriceQuote` (`lib/valuation.ts`) chỉ an toàn vì `PriceQuote` chung mọi user + đổi 1 lần/ngày qua job Python. `Snapshot` ngược hồ sơ: riêng theo user, đổi bất cứ lúc nào qua `freezeManualSnapshot()` (gọi sau mỗi giao dịch mua/bán) — chính codebase đã tự cảnh báo `unstable_cache` "không an toàn với race của transaction ghi" ở nơi khác (`features/dividends/repository.ts`/`actions.ts`). Cache xuyên route cho `Snapshot` sẽ tái tạo đúng rủi ro đó, đổi lấy nguy cơ lệch số giữa Dashboard và `/nav-chart` ngay sau khi user vừa ghi giao dịch — tối kỵ với app tài chính cá nhân.
+- Quyết định: `getNavTrendByAssetType()` (`features/snapshots/queries.ts`) gộp 4 loại STOCK/FUND/BOND/GOLD thành 1 query `Snapshot{holdingId != null}`, cắt theo kỳ ở JS (không query lại DB cho từng kỳ); lát cắt "ALL" gọi thẳng `getNavTrend()` — hàm Dashboard đang dùng — đảm bảo số "ALL" ở 2 màn luôn ra từ đúng một đoạn code thay vì đồng bộ qua cache. Chấp nhận mỗi lần điều hướng Dashboard → `/nav-chart` vẫn là round-trip DB độc lập (rẻ vì đã gộp, phù hợp quy mô sản phẩm cá nhân/riêng tư, không phải SaaS traffic lớn).
+- Việc làm kèm theo (không phải quyết định riêng, chỉ ghi nhận): thêm `ROUTES.navChart` vào `revalidateHoldingDependentRoutes()` (`lib/revalidate-holding-routes.ts`) để Client Router Cache không giữ payload `/nav-chart` cũ sau khi ghi giao dịch ở màn khác.
+- Nếu sau này `Snapshot` per-user phình lớn khiến query chậm thật, đó là lúc quay lại cân nhắc cache TTL ngắn + `revalidateTag` tường minh trong transaction ghi — chưa có bằng chứng ở quy mô hiện tại đòi hỏi việc đó.
+- Docs đã sync: không đổi domain docs (quyết định kiến trúc data-fetching, không phải công thức nghiệp vụ mới).
+
+---
+
 ## Quyết định liên quan ở file khác
 
 - Đưa "Cảnh báo tập trung" vào Phase 6 + ngưỡng 30% qua `Setting{CONCENTRATION_WARNING_THRESHOLD}` — [`roadmap-and-scope.md`](./roadmap-and-scope.md), mục 2026-07-17 (5).

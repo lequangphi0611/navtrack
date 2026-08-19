@@ -8,6 +8,7 @@ import { getHideAmountsByDefault } from "@/features/settings/queries";
 import { getSession } from "@/lib/auth";
 import { getCutoffSelection } from "@/lib/cutoff-cookie";
 import { getPortfolioValuation } from "@/lib/portfolio-valuation";
+import { ROUTES } from "@/lib/routes";
 
 // Container (Server Component): vùng data chính của Dashboard (mockup 2a/2f) — mọi thứ
 // DashboardScreen render (header/avatar, NAV hero, PnL, allocation, SnapshotTodayCard,
@@ -66,6 +67,7 @@ async function PortfolioOverviewSection() {
         action: createManualSnapshot,
       }}
       navTrend={{ MONTH: navMonth, YEAR: navYear, ALL: navAll }}
+      navTrendHref={ROUTES.navChart}
     />
   );
 }

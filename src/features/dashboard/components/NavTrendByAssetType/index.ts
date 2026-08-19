@@ -6,6 +6,7 @@ export { NavTrendByAssetTypeScreen } from "./NavTrendByAssetTypeScreen";
 export type { NavTrendByAssetTypeScreenProps } from "./NavTrendByAssetTypeScreen";
 export { NavTrendByAssetTypeScreenClient } from "./NavTrendByAssetTypeScreenClient";
 export type { NavTrendByAssetTypeScreenClientProps } from "./NavTrendByAssetTypeScreenClient";
+export { NavTrendByAssetTypeScreenSkeleton } from "./NavTrendByAssetTypeScreenSkeleton";
 export type {
   AssetType,
   AssetTypeFilter,

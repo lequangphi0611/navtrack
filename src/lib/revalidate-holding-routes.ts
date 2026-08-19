@@ -15,4 +15,7 @@ export function revalidateHoldingDependentRoutes(holdingId: string): void {
   revalidatePath(ROUTES.holdings);
   revalidatePath(ROUTES.holdingsClosed);
   revalidatePath(ROUTES.holdingDetail(holdingId));
+  // /nav-chart đọc Snapshot per-holding (getNavTrendByAssetType, issue #141) —
+  // cùng phụ thuộc quantity/NAV như Dashboard, phải revalidate cùng lúc.
+  revalidatePath(ROUTES.navChart);
 }

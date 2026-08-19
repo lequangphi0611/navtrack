@@ -55,6 +55,12 @@ export const ROUTES = {
   // riêng của /allocation, KHÔNG phải accordion mở tại chỗ (process/DECISION.md
   // 2026-08-16: nối tiếp tiền lệ /allocation đã là route riêng full-screen).
   allocationStock: "/allocation/stock",
+  // Biến động NAV theo loại tài sản (issue #139/#141) — route ĐỘC LẬP, KHÔNG
+  // nối tiếp `/allocation` dù cùng góc nhìn "theo loại tài sản": đây là drill-down
+  // của NAV theo THỜI GIAN (Dashboard `NavTrendChart`), khác hẳn phân bổ % tại
+  // MỘT thời điểm (`/allocation`) — process/decisions/pricing-and-valuation.md
+  // 2026-08-18.
+  navChart: "/nav-chart",
 } as const;
 
 // Khai NGOÀI object ROUTES (tham chiếu ROUTES.holdingDetail — object literal không tự
