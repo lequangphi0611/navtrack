@@ -13,19 +13,21 @@ slug, theo đúng tiền lệ `UI_stock-allocation-detail.md`/`UI_allocation-gro
 prompt) + 5 khối mockup.
 
 Chỉ **Presentational** — component nhận props hiển thị/dữ liệu đã tính sẵn,
-không tự gọi domain/Prisma. Props dưới đây là **phác thảo**,
-`design-implementer`/`business-implementer` chốt khi hiện thực (đặc biệt phần
-tính phí tự động và kiểm tra trùng mã — đó là nghiệp vụ, không phải UI).
+không tự gọi domain/Prisma. Props dưới đây **đã CHỐT khi hiện thực** (xem từng
+mục "ĐÃ CHỐT khi hiện thực" bên dưới khớp code thật trong
+`src/features/holdings/components/NewHoldingForm/`); phần nghiệp vụ còn treo
+— tính phí tự động và kiểm tra trùng mã — vẫn để ngỏ cho
+`business-implementer` chốt khi wiring (đó là nghiệp vụ, không phải UI).
 
 ## Tóm tắt màn hình → component → trạng thái wiring
 
 | # | Nội dung | Component dự kiến | Đã wiring vào route thật? |
 |---|---|---|---|
-| vta | Bộ chọn nhánh đầu form (2 lựa chọn, caption đổi theo lựa chọn) | `NewHoldingSourceToggle` (trong `NewHoldingForm`) | Chưa — `NewHoldingForm.tsx` hiện tại chỉ có 1 nhánh (khai báo lịch sử), không có bộ chọn |
-| vtb | Nhánh "Đã có từ trước" — giữ field cũ + hint mới dưới giá vốn | `ExistingPositionFields` | Chưa (field đã có nhưng chưa tách variant, chưa có hint) |
-| vtc | Nhánh "Vừa mua hôm nay" — Giá khớp lệnh, card Phí giao dịch, box breakdown | `NewPurchaseFields` + `TotalCostBreakdownCard` | Chưa (form hiện tại không phân biệt 2 nhánh, không có card phí ở đây) |
-| vtd | Khối lỗi trùng mã (biến thể vtc khi mã đã có Holding mở) | `DuplicateHoldingAlert` | Chưa — component chưa tồn tại; **`createHolding` hiện tại không báo lỗi trùng mã** (tự gộp giao dịch vào Holding cũ, xem "Điểm cần xác nhận" #3) |
-| vte | Trạng thái đang tính phí prefill (loading trên card Phí) | Mở rộng `AutoFilledAmountCard` (prop `loading` mới) hoặc `AutoFilledAmountCardSkeleton` | Chưa — cơ chế tính phí tự động (Server Action/hook) chưa tồn tại cho `NewHoldingForm` |
+| vta | Bộ chọn nhánh đầu form (2 lựa chọn, caption đổi theo lựa chọn) | `NewHoldingSourceToggle` (trong `NewHoldingForm`) | **Đã wiring** — `NewHoldingForm.tsx` render `NewHoldingSourceToggle` ngay trên "Loại tài sản", mặc định `"EXISTING"` (giữ hành vi e2e cũ) |
+| vtb | Nhánh "Đã có từ trước" — giữ field cũ + hint mới dưới giá vốn | `ExistingPositionFields` | **Đã wiring** |
+| vtc | Nhánh "Vừa mua hôm nay" — Giá khớp lệnh, card Phí giao dịch, box breakdown | `NewPurchaseFields` + `TotalCostBreakdownCard` | **Đã wiring** — card Phí giao dịch mặc định `status="computed"` với `computedAmount="0"` (tự tính phí thật chưa tồn tại, người dùng nhập tay được ngay — xem "Điểm lệch" #7 bên dưới) |
+| vtd | Khối lỗi trùng mã (biến thể vtc khi mã đã có Holding mở) | `DuplicateHoldingAlert` | Component đã dựng, **CHƯA render trong `NewHoldingForm`** — đúng phạm vi issue #140 (chỉ UI, chưa có cơ chế phát hiện trùng mã, xem "Điểm cần xác nhận" #3). Soi qua `/preview/new-holding-form-branches` |
+| vte | Trạng thái đang tính phí prefill (loading trên card Phí) | Mở rộng `AutoFilledAmountCard` (prop `status` mới) | Component đã hỗ trợ `status="loading"`, **CHƯA có nơi nào trong `NewHoldingForm` set trạng thái này** — chưa có Server Action tính phí thật để trigger. Soi qua `/preview/new-holding-form-branches` |
 
 ## Quyết định đã có sẵn trong mockup (tham khảo, KHÔNG phải đã chốt cho Navtrack)
 
@@ -74,6 +76,14 @@ type NewHoldingSourceToggleProps = {
   disabled?: boolean;
 };
 ```
+
+**ĐÃ CHỐT khi hiện thực:** `SegmentedControlOption<T>` (`src/components/SegmentedControl`)
+được thêm 1 field optional mới `icon?: LucideIcon` để render icon trái nhãn
+— digest không có sẵn cách nào cho icon trong `SegmentedControl` (label chỉ
+nhận `string`), nên đây là mở rộng thật cần cho vta. Không đổi hành vi mọi
+option không truyền `icon` (Mua/Bán ở `TransactionForm`, các
+`SegmentedControl` khác) — button chỉ thêm `flex items-center justify-center
+gap-1.5` (không đổi layout khi không có icon).
 
 Caption mẫu (đúng mockup):
 - `EXISTING`: "Khai báo một vị thế đang giữ sẵn — gõ giá vốn bình quân đã
@@ -191,11 +201,21 @@ cần mở rộng hoặc dựng biến thể mới — nêu ở "Điểm cần x
   `—` thay vì số, **không có** icon bút chì/"Đặt lại", note đổi thành
   "cần Số lượng · Giá · Ngày để tra biểu phí" (icon `function`/`Sigma`, khác
   icon `Lightbulb` mặc định). Badge "TỰ ĐIỀN · SỬA ĐƯỢC" vẫn hiện.
-- **loading (vte):** badge đổi thành "ĐANG TÍNH" (icon quay `RefreshCw`/
-  `progress_activity`), số lớn + dòng công thức thay bằng khối `Skeleton`
-  (atom `skeleton.tsx` sẵn có, không phải `animate-pulse` rời rạc), note cuối
-  đổi thành "Đang tra biểu phí theo loại tài sản + ngày mua — xong sẽ tự điền
-  và vẫn sửa được.", **không có** nút "Đặt lại" (input đang khoá).
+- **loading (vte):** badge đổi thành "ĐANG TÍNH" (icon quay `Loader2`
+  `animate-spin` — khớp mapping `progress_activity → Loader2` ở bảng icon
+  bên dưới, KHÔNG phải `RefreshCw`), số lớn + dòng công thức thay bằng khối
+  `Skeleton` (atom `skeleton.tsx` sẵn có, không phải `animate-pulse` rời
+  rạc), note cuối đổi thành "Đang tra biểu phí theo loại tài sản + ngày mua —
+  xong sẽ tự điền và vẫn sửa được.", **không có** nút "Đặt lại" (input đang
+  khoá).
+
+**ĐÃ CHỐT khi hiện thực (design-implementer, issue #140):** mở rộng
+`AutoFilledAmountCardProps` đúng như phác thảo — thêm `status?: "idle" |
+"loading" | "computed"` (mặc định `"computed"` = hành vi cũ, không đổi gì
+cho `TransactionForm`/mọi chỗ khác không truyền prop này). KHÔNG tách
+`AutoFilledAmountCardSkeleton` riêng — nhồi cả 3 trạng thái vào 1 component
+vì dùng chung khung card/badge/vị trí, đúng option 1 mà digest đã nêu (mục
+"Điểm cần xác nhận" #1).
 
 ```ts
 // PHÁC THẢO — mở rộng AutoFilledAmountCardProps, KHÔNG đổi field cũ.
@@ -227,13 +247,24 @@ tại chỉ có `title`/`description` phẳng).
 ```ts
 type DuplicateHoldingAlertProps = {
   symbol: string; // "FPT"
-  existingQuantity: string; // "8.000" — Decimal serialize
+  existingQuantity: string; // "8.000" — ĐÃ FORMAT sẵn bởi cha (dấu chấm nghìn), KHÔNG phải Decimal thô
   existingUnit: string; // "CP" (mockup rút gọn "CP", field Holding.unit thật có thể là "cổ phần")
-  existingAvgCost: string; // "92.400"
+  existingAvgCost: string; // "92.400" — ĐÃ FORMAT sẵn, component chỉ nối thêm " ₫" ở cuối câu
   addTransactionHref: string; // ROUTES.newTransaction(existingHoldingId) — business-implementer resolve holdingId
   onSwitchToExisting: () => void; // đổi PositionSource sang "EXISTING" tại chỗ, không điều hướng
 };
 ```
+
+**ĐÃ CHỐT khi hiện thực:** dựng `DuplicateHoldingAlert` **độc lập, KHÔNG mở
+rộng `Alert`** (đúng hướng nghiêng đã nêu ở "Điểm cần xác nhận" #6) — 2 tầng
+hành động (nút Link chính + dòng phụ bấm được) không khớp cấu trúc phẳng của
+`Alert`. `existingQuantity`/`existingAvgCost` là chuỗi **đã format sẵn**
+(không chạy qua `formatMoney` lần nữa trong component, tránh double-format
+kiểu "92.400 ₫ ₫") — cha (Container thật khi wiring) chịu trách nhiệm format
+trước khi truyền prop. Component **chưa được `NewHoldingForm` render** ở đâu
+cả — đúng phạm vi issue #140 (chỉ dựng UI, không thêm cơ chế phát hiện trùng
+mã), phần "mã field đổi trạng thái visual + card Phí khoá + submit khoá" mô
+tả bên dưới vẫn là **phác thảo cho business-implementer**, chưa hiện thực.
 
 Mã field cũng đổi trạng thái visual (viền đỏ + icon `error`/`AlertTriangle`,
 xem `src/components/ui/input.tsx` có prop lỗi sẵn dùng được không, hoặc
@@ -338,6 +369,22 @@ Dòng phụ: "Hoặc đổi sang nhánh 'Đã có từ trước' nếu đang kha
    title/description phẳng của `Alert`) nhưng để `design-implementer` chốt —
    nếu mở rộng `Alert` thì cần rà mọi nơi đang dùng `Alert` variant="error"
    khác (`NewHoldingForm` hiện tại, `TransactionForm`...) không bị ảnh hưởng.
+   **CHỐT:** dựng riêng, xem "ĐÃ CHỐT khi hiện thực" ở mục vtd.
+
+7. **ĐÃ SỬA (rà lại sau khi implement):** card Phí giao dịch ở
+   `NewPurchaseFields` ban đầu dựng với `status="idle"` + note "tạm thời nhập
+   tay theo phí thực trên sao kê" — nhưng `status="idle"` tự khoá input
+   (đúng đặc tả), nên user KHÔNG gõ được dù note nói vậy. Sửa lại: bỏ hẳn prop
+   `status` ở lần gọi này (rơi về mặc định `"computed"`), giữ nguyên
+   `computedAmount="0"` + note cũ. `"computed"` cho phép sửa tay bình thường
+   (bút chì + "Đặt lại" hoạt động, "Đặt lại" đưa về `0`) — đúng ý đồ "tạm thời
+   nhập tay" mà không cần trạng thái `idle`/`loading` giả. `feeAmount` khởi
+   tạo `"0"`, đổi theo `onValueChange` khi user gõ, `TotalCostBreakdownCard`
+   phản ánh đúng số đã gõ. Khi business-implementer gắn Server Action tính phí
+   thật, đổi `computedAmount`/`formulaLabel` theo kết quả tính và có thể dùng
+   `status="loading"` trong lúc chờ — `status="idle"` chỉ còn ý nghĩa đúng cho
+   ca "chưa đủ Số lượng/Giá/Ngày để tính", không dùng cho ca "chưa có tính
+   năng tự tính".
 
 ## File nguồn
 - `Phase 11 Screens.dc.html` (project `fe49dcd9-ecf0-40d0-8a62-10ca28ff572f`) →

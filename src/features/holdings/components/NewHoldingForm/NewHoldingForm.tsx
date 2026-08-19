@@ -1,21 +1,27 @@
 "use client";
 
-import { Info } from "lucide-react";
+import { Percent } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useRef, useState } from "react";
 
 import { Alert } from "@/components/Alert";
 import type { AssetType } from "@/components/AssetTypeBadge";
+import { AutoFilledAmountCard } from "@/components/AutoFilledAmountCard";
 import { Button } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { formatMoney } from "@/lib/format";
 import { parseDecimalOrNull } from "@/lib/parse-decimal";
 import { holdingDetailAfterTransaction } from "@/lib/routes";
-import { cn } from "@/lib/utils";
 
 import { createHolding } from "../../actions";
+import { toAmount } from "./amount";
+import { ExistingPositionFields } from "./ExistingPositionFields";
+import { AssetTypeTiles, FieldHint, FieldLabel } from "./FormFieldPrimitives";
+import { NewPurchaseFields } from "./NewPurchaseFields";
+import {
+  NewHoldingSourceToggle,
+  type PositionSource,
+} from "./NewHoldingSourceToggle";
+import { TotalCostBreakdownCard } from "./TotalCostBreakdownCard";
 
 type FormState = {
   ok: boolean;
@@ -23,13 +29,6 @@ type FormState = {
   fieldErrors?: Record<string, string>;
   savedSymbol?: string;
 } | null;
-
-const ASSET_TYPE_OPTIONS: { value: AssetType; label: string }[] = [
-  { value: "STOCK", label: "Cổ phiếu" },
-  { value: "FUND", label: "Quỹ mở" },
-  { value: "BOND", label: "Trái phiếu" },
-  { value: "GOLD", label: "Vàng" },
-];
 
 // Đơn vị theo loại tài sản — đổi loại thì tự chọn đơn vị đầu tiên của loại đó.
 // DB không ràng buộc (Holding.unit là String tự do), đây chỉ là gợi ý ở tầng UI.
@@ -48,59 +47,6 @@ function todayInputValue() {
   return new Date().toISOString().slice(0, 10);
 }
 
-type AssetTypeTilesProps = {
-  value: AssetType;
-  onChange: (value: AssetType) => void;
-  disabled?: boolean;
-};
-
-// Lưới 4 ô chọn loại tài sản (mockup 2c) — khác SegmentedControl (thanh trượt).
-function AssetTypeTiles({ value, onChange, disabled }: AssetTypeTilesProps) {
-  return (
-    <div className="grid grid-cols-4 gap-2">
-      {ASSET_TYPE_OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(option.value)}
-          className={cn(
-            "rounded-xl border px-1 py-2.5 text-xs font-semibold transition-colors",
-            option.value === value
-              ? "border-primary/40 bg-primary/14 text-primary"
-              : "border-border bg-card text-muted-foreground hover:text-foreground-soft",
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <label className="mb-2 block text-[12.5px] font-semibold text-muted-foreground">
-      {children}
-    </label>
-  );
-}
-
-function FieldHint({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-1.5 text-[11.5px] text-muted-faint">{children}</div>
-  );
-}
-
-// Đi qua parseDecimalOrNull() (chuẩn hoá dấu phẩy sẵn bên trong) rồi mới đổi
-// ra number — không tự gọi Number()/normalize tay để khỏi lặp lại bug đã sửa.
-function toAmount(quantity: string, pricePerUnit: string): number {
-  const q = parseDecimalOrNull(quantity)?.toNumber() ?? 0;
-  const p = parseDecimalOrNull(pricePerUnit)?.toNumber() ?? 0;
-  if (q <= 0 || p <= 0) return 0;
-  return q * p;
-}
-
 type NewHoldingFormProps = {
   // Loại tài sản khởi tạo (vd đi từ /nav-chart?type=STOCK bấm "Thêm vị thế").
   // Vắng mặt = giữ nguyên hành vi cũ, mặc định "STOCK". User vẫn tự đổi loại
@@ -116,6 +62,16 @@ function NewHoldingForm({ initialType = "STOCK" }: NewHoldingFormProps) {
   const [quantity, setQuantity] = useState("");
   const [pricePerUnit, setPricePerUnit] = useState("");
   const [date, setDate] = useState(todayInputValue());
+  // Nhánh khai báo — mặc định "EXISTING" bắt buộc (giữ nguyên hành vi cho
+  // e2e/pages/new-holding-page.ts đang dựa vào form khai báo lịch sử, issue
+  // #140 KHÔNG được đổi mặc định này).
+  const [source, setSource] = useState<PositionSource>("EXISTING");
+  // Chỉ dùng ở nhánh "Vừa mua hôm nay" để tính hiển thị TotalCostBreakdownCard
+  // — tự tính phí thật (Server Action) chưa tồn tại, card Phí giữ nguyên
+  // status mặc định "computed" với computedAmount="0" để vẫn NHẬP TAY được
+  // (status="idle" sẽ khoá input, mâu thuẫn với note "tạm thời nhập tay"),
+  // xem process/UI_new-holding-form-branches.md.
+  const [feeAmount, setFeeAmount] = useState("0");
 
   function changeAssetType(next: AssetType) {
     setAssetType(next);
@@ -168,10 +124,20 @@ function NewHoldingForm({ initialType = "STOCK" }: NewHoldingFormProps) {
   }
 
   const [state, formAction, isPending] = useActionState(submitNewHolding, null);
-  const initialAmount = toAmount(quantity, pricePerUnit);
+
+  const orderValue = toAmount(quantity, pricePerUnit);
+  const feeValue = parseDecimalOrNull(feeAmount)?.toNumber() ?? 0;
+  const totalWithFee = orderValue + feeValue;
+  const quantityValue = parseDecimalOrNull(quantity)?.toNumber() ?? 0;
 
   return (
     <form ref={formRef} action={formAction} className="flex flex-col gap-4.5">
+      <NewHoldingSourceToggle
+        value={source}
+        onChange={setSource}
+        disabled={isPending}
+      />
+
       <div>
         <FieldLabel>Loại tài sản</FieldLabel>
         <input type="hidden" name="type" value={assetType} />
@@ -206,83 +172,58 @@ function NewHoldingForm({ initialType = "STOCK" }: NewHoldingFormProps) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <FieldLabel>Số lượng</FieldLabel>
-          <Input
-            type="text"
-            inputMode="decimal"
-            name="quantity"
-            placeholder="0"
-            className="h-11 rounded-xl font-mono font-semibold"
-            value={quantity}
-            onChange={(event) => setQuantity(event.target.value)}
-            required
-            disabled={isPending}
-          />
-        </div>
-        <div>
-          <FieldLabel>Đơn vị</FieldLabel>
-          <Select
-            name="unit"
-            value={unit}
-            onChange={(event) => setUnit(event.target.value)}
-            className="h-11 rounded-xl font-semibold"
-            required
-            disabled={isPending}
-          >
-            {UNIT_OPTIONS[assetType].map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
-
-      <div>
-        <FieldLabel>Giá vốn bình quân / đơn vị</FieldLabel>
-        <div className="relative">
-          <Input
-            type="text"
-            inputMode="decimal"
-            name="pricePerUnit"
-            placeholder="0"
-            className="h-11 rounded-xl pr-8 font-mono font-semibold"
-            value={pricePerUnit}
-            onChange={(event) => setPricePerUnit(event.target.value)}
-            required
-            disabled={isPending}
-          />
-          <span className="absolute top-1/2 right-3.5 -translate-y-1/2 text-[13px] text-muted-faint">
-            ₫
-          </span>
-        </div>
-      </div>
-
-      <div>
-        <FieldLabel>Ngày chốt vị thế</FieldLabel>
-        <DatePicker
-          name="date"
-          value={date}
-          onChange={setDate}
-          required
+      {source === "EXISTING" ? (
+        <ExistingPositionFields
+          quantity={quantity}
+          onQuantityChange={setQuantity}
+          unit={unit}
+          onUnitChange={setUnit}
+          unitOptions={UNIT_OPTIONS[assetType]}
+          avgCostPerUnit={pricePerUnit}
+          onAvgCostPerUnitChange={setPricePerUnit}
+          date={date}
+          onDateChange={setDate}
           disabled={isPending}
         />
-        <FieldHint>Lãi/lỗ được tính từ mốc này trở đi.</FieldHint>
-      </div>
-
-      {initialAmount > 0 ? (
-        <div className="flex gap-2.5 rounded-xl border border-primary/20 bg-primary/8 p-3.5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
-          <Info className="mt-0.5 size-4.5 shrink-0 text-primary" />
-          <div className="text-xs leading-relaxed text-muted-foreground">
-            Tổng vốn ban đầu = số lượng × giá vốn ={" "}
-            <span className="font-mono font-medium text-foreground-soft tabular-nums">
-              {formatMoney(String(initialAmount))}
-            </span>
-          </div>
-        </div>
-      ) : null}
+      ) : (
+        <NewPurchaseFields
+          quantity={quantity}
+          onQuantityChange={setQuantity}
+          unit={unit}
+          onUnitChange={setUnit}
+          unitOptions={UNIT_OPTIONS[assetType]}
+          matchedPricePerUnit={pricePerUnit}
+          onMatchedPricePerUnitChange={setPricePerUnit}
+          date={date}
+          onDateChange={setDate}
+          disabled={isPending}
+          feeCard={
+            <AutoFilledAmountCard
+              icon={Percent}
+              label="Phí giao dịch"
+              fieldName="feeAmount"
+              computedAmount="0"
+              note="Tự động tính phí sẽ có ở bản cập nhật sau — tạm thời nhập tay theo phí thực trên sao kê."
+              onValueChange={setFeeAmount}
+              disabled={isPending}
+            />
+          }
+          totalBreakdown={
+            quantity && pricePerUnit ? (
+              <TotalCostBreakdownCard
+                orderValue={String(orderValue)}
+                orderValueFormula={`${quantity} × ${pricePerUnit}`}
+                feeAmount={String(feeValue)}
+                feePercentLabel=""
+                total={String(totalWithFee)}
+                avgCostPerUnit={
+                  quantityValue > 0 ? String(totalWithFee / quantityValue) : "0"
+                }
+              />
+            ) : null
+          }
+        />
+      )}
 
       <div className="flex gap-2.5 pt-1">
         <Button

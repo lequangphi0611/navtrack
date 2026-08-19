@@ -1,11 +1,12 @@
 "use client";
 
-import { Lightbulb, Pencil, Sigma } from "lucide-react";
+import { Lightbulb, Loader2, Pencil, Sigma } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type AutoFilledAmountCardProps = {
@@ -60,6 +61,24 @@ type AutoFilledAmountCardProps = {
   // này phải để `.optional()` (KHÔNG `.default()`) để "vắng mặt" mang đúng
   // nghĩa "dùng số server tự tính".
   submitWhenAuto?: boolean;
+  // "computed" (mặc định) = hành vi hiện có (Phase 5): số tự tính hiển thị,
+  // sửa tay được, nút "Đặt lại" hoạt động. "idle" = chưa đủ input để tra biểu
+  // phí (vd NewPurchaseFields khi thiếu Số lượng/Giá/Ngày) — ẩn bút chì/"Đặt
+  // lại", hiện "—" thay vì computedAmount, khoá input. "loading" = đang chờ
+  // Server Action tính phí — khung số + công thức thay bằng Skeleton, badge
+  // đổi "ĐANG TÍNH", input khoá, ẩn "Đặt lại" (issue #140, mockup vtc1/vte).
+  status?: "idle" | "loading" | "computed";
+};
+
+const DEFAULT_NOTE: Record<
+  NonNullable<AutoFilledAmountCardProps["status"]>,
+  string
+> = {
+  computed:
+    "Số tự tính chỉ là gợi ý (giống Giá tự nhập). Sửa tay để khớp đúng số trên sao kê.",
+  idle: "cần Số lượng · Giá · Ngày để tra biểu phí",
+  loading:
+    "Đang tra biểu phí theo loại tài sản + ngày mua — xong sẽ tự điền và vẫn sửa được.",
 };
 
 // Card "tự điền, sửa được" dùng chung cho Thuế bán & Phí giao dịch trong
@@ -80,10 +99,14 @@ function AutoFilledAmountCard({
   note,
   onValueChange,
   submitWhenAuto = true,
+  status = "computed",
 }: AutoFilledAmountCardProps) {
   const [manualValue, setManualValue] = useState<string | null>(null);
   const value = manualValue ?? computedAmount;
   const isManual = manualValue !== null;
+  const isIdle = status === "idle";
+  const isLoading = status === "loading";
+  const inputDisabled = disabled || isIdle || isLoading;
 
   // Một chỗ đổi giá trị cho cả ô nhập lẫn nút "Đặt lại" — gọi onValueChange
   // trong handler (không phải lúc render) để cha không bị set state khi đang
@@ -109,48 +132,73 @@ function AutoFilledAmountCard({
           {label}
         </span>
         <Badge className="shrink-0 text-[9px] tracking-wide">
-          TỰ ĐIỀN · SỬA ĐƯỢC
+          {isLoading ? (
+            <>
+              <Loader2 className="animate-spin" />
+              ĐANG TÍNH
+            </>
+          ) : (
+            "TỰ ĐIỀN · SỬA ĐƯỢC"
+          )}
         </Badge>
       </div>
 
-      <div className="flex items-center gap-2.5 px-3.75 py-3.25">
-        <Input
-          type="text"
-          inputMode="decimal"
-          aria-label={label}
-          value={value}
-          onChange={(event) => changeManualValue(event.target.value)}
-          disabled={disabled}
-          className="h-auto flex-1 border-none bg-transparent px-0 py-0 font-mono text-[22px] font-semibold text-foreground shadow-none tabular-nums focus-visible:ring-0"
-        />
-        <Pencil className="size-4.5 shrink-0 text-primary" />
-      </div>
-
-      {reasonBadge ? <div className="px-3.75 pb-3">{reasonBadge}</div> : null}
-
-      {formulaLabel ? (
-        <div className="flex items-center gap-1.75 px-3.75 pb-3">
-          <Sigma className="size-3.5 shrink-0 text-muted-faint" />
-          <span className="font-mono text-[11px] text-muted-faint">
-            {formulaLabel}
-          </span>
+      {isLoading ? (
+        <div className="flex flex-col gap-1.5 px-3.75 py-3.25">
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="h-3 w-44" />
         </div>
-      ) : null}
+      ) : (
+        <>
+          <div className="flex items-center gap-2.5 px-3.75 py-3.25">
+            <Input
+              type="text"
+              inputMode="decimal"
+              aria-label={label}
+              value={isIdle ? "—" : value}
+              onChange={(event) => changeManualValue(event.target.value)}
+              disabled={inputDisabled}
+              className="h-auto flex-1 border-none bg-transparent px-0 py-0 font-mono text-[22px] font-semibold text-foreground shadow-none tabular-nums focus-visible:ring-0"
+            />
+            {isIdle ? null : (
+              <Pencil className="size-4.5 shrink-0 text-primary" />
+            )}
+          </div>
+
+          {reasonBadge ? (
+            <div className="px-3.75 pb-3">{reasonBadge}</div>
+          ) : null}
+
+          {formulaLabel ? (
+            <div className="flex items-center gap-1.75 px-3.75 pb-3">
+              <Sigma className="size-3.5 shrink-0 text-muted-faint" />
+              <span className="font-mono text-[11px] text-muted-faint">
+                {formulaLabel}
+              </span>
+            </div>
+          ) : null}
+        </>
+      )}
 
       <div className="flex items-start gap-2.25 border-t border-white/5 bg-white/2 px-3.75 py-2.75">
-        <Lightbulb className="mt-0.5 size-3.75 shrink-0 text-muted-faint" />
+        {isIdle ? (
+          <Sigma className="mt-0.5 size-3.75 shrink-0 text-muted-faint" />
+        ) : (
+          <Lightbulb className="mt-0.5 size-3.75 shrink-0 text-muted-faint" />
+        )}
         <span className="flex-1 text-[10.5px] leading-relaxed text-muted-faint">
-          {note ??
-            "Số tự tính chỉ là gợi ý (giống Giá tự nhập). Sửa tay để khớp đúng số trên sao kê."}
+          {note ?? DEFAULT_NOTE[status]}
         </span>
-        <button
-          type="button"
-          onClick={() => changeManualValue(null)}
-          disabled={!isManual || disabled}
-          className="shrink-0 text-[10.5px] font-bold text-primary disabled:opacity-40"
-        >
-          Đặt lại
-        </button>
+        {isIdle || isLoading ? null : (
+          <button
+            type="button"
+            onClick={() => changeManualValue(null)}
+            disabled={!isManual || disabled}
+            className="shrink-0 text-[10.5px] font-bold text-primary disabled:opacity-40"
+          >
+            Đặt lại
+          </button>
+        )}
       </div>
 
       {/* Bỏ hẳn input (không phải để value="") khi cha chọn không gửi số tự
