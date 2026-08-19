@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { HoldingsPage } from "../pages/holdings-page";
 import { NewHoldingPage } from "../pages/new-holding-page";
+import { daysAgo, isoDate } from "../support/dates";
 import {
   cleanupTestUser,
   closeContext,
@@ -226,6 +227,91 @@ test("đổi mã qua HoldingSwitcher trong form giao dịch reset toàn bộ fie
   } finally {
     await closeContext(context);
     await cleanupTestUser(sessionA.userId);
+  }
+});
+
+test("nhánh NEW_PURCHASE: phí tự tính vào avgCost, chặn trùng mã, chặn ngày tương lai", async ({
+  browser,
+}) => {
+  // issue #142 — 3 hành vi MỚI của nhánh "Vừa mua hôm nay" (NEW_PURCHASE),
+  // khác hẳn nhánh "Đã có từ trước" (EXISTING, mặc định) đã cover ở test đầu
+  // file: (1) card "Phí giao dịch" tự tính TRANSACTION_FEE_BUY_STOCK thật vào
+  // avgCost thay vì hardcode "0" như trước #142, (2) trùng mã BỊ CHẶN (khác
+  // EXISTING tự gộp im lặng), (3) chặn ngày tương lai.
+  const session = await createTestSession("holdings-new-purchase");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  try {
+    const holdingsPage = new HoldingsPage(page);
+    await holdingsPage.goto();
+
+    // --- 1. NEW_PURCHASE có phí -> avgCost = (SL×giá+phí)/SL ---
+    // 100 CP @ 100.000 = gross 10.000.000; phí mua STOCK baseline 0,3%
+    // (TRANSACTION_FEE_BUY_STOCK, seed sẵn `pnpm db:seed`) = 30.000 -> avgCost
+    // = (10.000.000 + 30.000) / 100 = 100.300. Nếu card phí bị revert về
+    // hardcode "0" (hành vi CŨ trước #142), avgCost sẽ ra đúng 100.000
+    // ("100k") thay vì 100.300 ("100,3k") -> assertion dưới bắt được ngay.
+    let newHoldingPage = await holdingsPage.goToNewHolding();
+    await newHoldingPage.selectSource("NEW_PURCHASE");
+    // Card phí đã tự điền theo giá trị vừa fill (không cần sửa tay) — chỉ xác
+    // nhận số tự tính đúng TRƯỚC khi submit, tránh test giả (không chạm phần
+    // vừa sửa) nếu card không thật sự tính từ Setting.
+    const detail = await newHoldingPage.create({
+      symbol: "NEWBUY",
+      quantity: 100,
+      pricePerUnit: 100_000,
+    });
+    await expect(detail.heading("NEWBUY")).toBeVisible();
+    await expect(detail.avgCost).toContainText("100,3k");
+
+    // --- 2. Trùng mã ở nhánh NEW_PURCHASE -> DuplicateHoldingAlert, KHÔNG tự
+    // gộp im lặng như nhánh EXISTING (test đầu file) ---
+    const holdingsPage2 = await detail.goBack();
+    newHoldingPage = await holdingsPage2.goToNewHolding();
+    await newHoldingPage.selectSource("NEW_PURCHASE");
+    await newHoldingPage.submitExpectingFailure({
+      symbol: "NEWBUY",
+      quantity: 20,
+      pricePerUnit: 105_000,
+    });
+    await expect(newHoldingPage.duplicateAlertHeading("NEWBUY")).toBeVisible();
+    // Số liệu vị thế đang giữ hiển thị đúng — 100 cổ phần, giá vốn 100.300
+    // (đã tính phí ở bước 1), KHÔNG phải giá vừa gõ (20/105.000).
+    await expect(newHoldingPage.duplicateAlertDetail).toContainText(
+      "100 cổ phần",
+    );
+    await expect(newHoldingPage.duplicateAlertDetail).toContainText("100.300");
+    // Bấm link -> chuyển đúng sang route ghi giao dịch mua thêm của Holding
+    // NEWBUY đã có (không tạo bản ghi mới nào).
+    await newHoldingPage.goToExistingTransactionFromDuplicate("NEWBUY");
+    await expect(page).toHaveURL(`${detail.url}/transactions/new`);
+
+    // --- 3. Ngày tương lai ở nhánh NEW_PURCHASE -> validate lỗi, không tạo
+    // được vị thế mới (khác EXISTING/mọi form khác — cố ý, xem
+    // newHoldingSchema.refine) ---
+    const holdingsPage3 = new HoldingsPage(page);
+    await holdingsPage3.goto();
+    newHoldingPage = await holdingsPage3.goToNewHolding();
+    await newHoldingPage.selectSource("NEW_PURCHASE");
+    await newHoldingPage.submitExpectingFailure({
+      symbol: "FUTBUY",
+      quantity: 10,
+      pricePerUnit: 50_000,
+      date: isoDate(daysAgo(-5)), // 5 ngày SAU hôm nay
+    });
+    await expect(newHoldingPage.validationErrorAlert).toBeVisible();
+    // Vẫn ở /holdings/new (KHÔNG router.push khi submit thất bại).
+    await expect(page).toHaveURL(newHoldingPage.url);
+
+    // Xác nhận không có Holding FUTBUY nào được tạo lọt qua validate.
+    const holdingsPageFinal = new HoldingsPage(page);
+    await holdingsPageFinal.goto();
+    await expect(holdingsPageFinal.holdingLink("FUTBUY")).toHaveCount(0);
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
   }
 });
 
