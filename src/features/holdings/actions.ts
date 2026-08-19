@@ -47,7 +47,7 @@ import {
   settleMaturitySchema,
   updateTransactionSchema,
 } from "./schemas";
-import type { NavOverrideFormState } from "./types";
+import type { CreateHoldingResult, NavOverrideFormState } from "./types";
 
 // Gọi sau MỖI action ghi cashflow (mua/bán/sửa/xoá) — hiệu ứng phụ, KHÔNG làm fail action
 // chính nếu freeze lỗi: giao dịch vẫn phải báo thành công cho user, tách lỗi freeze khỏi
@@ -81,7 +81,7 @@ async function finalizeHoldingWrite<T>(
 
 export async function createHolding(
   input: unknown,
-): Promise<ActionResult<{ holdingId: string; cashflowId: string }>> {
+): Promise<CreateHoldingResult> {
   const ctx = await parseAuthenticated(newHoldingSchema, input);
   if (!ctx.ok) return ctx;
   const { userId } = ctx;

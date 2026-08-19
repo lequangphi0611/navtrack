@@ -140,15 +140,24 @@ function NewHoldingForm({
     });
 
     if (!result.ok) {
+      // `result` là `ActionFailure | DuplicateHoldingError` (types.ts) — 2 type
+      // rời nhau, không field optional chung, nên narrow bằng "in" thay vì đọc
+      // field trực tiếp (PR #147 review: giữ ActionFailure dùng chung không đổi).
+      if ("holdingId" in result) {
+        return {
+          ok: false,
+          error: result.error,
+          holdingId: result.holdingId,
+          existingQuantity: result.existingQuantity,
+          existingUnit: result.existingUnit,
+          existingAvgCost: result.existingAvgCost,
+          duplicateSymbol: symbol,
+        };
+      }
       return {
         ok: false,
         error: result.error,
         fieldErrors: result.fieldErrors,
-        holdingId: result.holdingId,
-        existingQuantity: result.existingQuantity,
-        existingUnit: result.existingUnit,
-        existingAvgCost: result.existingAvgCost,
-        duplicateSymbol: result.holdingId ? symbol : undefined,
       };
     }
 
