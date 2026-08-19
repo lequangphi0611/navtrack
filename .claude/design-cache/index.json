@@ -33,5 +33,10 @@
     "designFile": "Phase 10 Screens.dc.html",
     "section": "139a Xem \"Tất cả\" mặc định (đường primary, gộp toàn danh mục, giữ nguyên 3 kỳ Tháng/Năm/Tất cả) · 139b Lọc theo Cổ phiếu (đường đổi màu asset-stock, trục Y riêng theo scale nhóm) · 139c Lọc theo Vàng (đường asset-gold, minh hoạ trục Y tự co giãn với quy mô nhỏ, đối lập chủ đích với 139b) · 139d Ẩn số tiền (áp trên nền 139b — số VND ẩn, % và hình dạng đường giữ nguyên) · 139e Rỗng — loại chưa từng có vị thế (Trái phiếu, tách bạch với \"có dữ liệu nhưng phẳng\") · 139f Skeleton loading · 139x KHÔNG phải màn thật — artboard tham khảo so sánh 2 kiểu chú thích \"gồm cả tiền nạp/rút\" (kiểu 1: dòng chữ nhỏ dấu *; kiểu 2: khối icon+viền info) và CHỐT khuyến nghị dùng Kiểu 2, đặt dưới bộ chọn kỳ, ngoài vùng vẽ 160px. Mockup CHƯA có màn cho điểm vào (entry point) từ Dashboard (quyết định 2026-08-18 trong issue: chỉ header card NavTrendChart có chevron, không mockup riêng) — dựng theo mô tả issue + đối chiếu pattern chevron legend AllocationScreen, không tự bịa từ file raw. Project id fe49dcd9-ecf0-40d0-8a62-10ca28ff572f — nhận từ export zip user gửi (không qua DesignSync), fetch 2026-08-18. Digest: process/UI_nav-trend-by-asset-type.md",
     "cachedAt": "2026-08-18"
+  },
+  "issue-140": {
+    "designFile": "Phase 11 Screens.dc.html",
+    "section": "vta Bộ chọn nhánh đầu form (2 lựa chọn: khai báo vị thế đã có sẵn / vừa mua mới hôm nay) · vtb Nhánh \"Khai báo vị thế đã có sẵn\" (giữ nguyên field cũ + hint mới dưới \"Giá vốn bình quân/đơn vị\" báo rõ số đã gồm phí) · vtc Nhánh \"Vừa mua mới hôm nay\" (Giá khớp lệnh + Số lượng + Ngày + card Phí giao dịch kiểu AutoFilledAmountCard, không có ô thuế) · vtd Khối báo lỗi trùng mã (biến thể vtc khi mã đã có Holding mở — kèm hành động chuyển sang ghi giao dịch mua thêm) · vte Trạng thái đang tính phí prefill (loading trên card Phí giao dịch). Project id fe49dcd9-ecf0-40d0-8a62-10ca28ff572f — nhận từ export zip user gửi (không qua DesignSync), fetch 2026-08-19, đúng theo prompt đã comment ở issue #140. Digest: process/UI_new-holding-form-branches.md (chưa tạo)",
+    "cachedAt": "2026-08-19"
   }
 }
