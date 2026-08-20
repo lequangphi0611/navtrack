@@ -65,6 +65,13 @@ export class NewHoldingPage {
     return this.page.getByRole("button", { name: "Xong", exact: true });
   }
 
+  // PageHeader variant mặc định "back" -> aria-label "Quay lại". `backHref`
+  // đổi theo lối vào (route fan-in, `?from=` — lib/routes.ts::resolveBackHref,
+  // process/decisions/architecture-and-code-quality.md 2026-08-20).
+  get backLink(): Locator {
+    return this.page.getByRole("link", { name: "Quay lại" });
+  }
+
   private assetTypeTile(label: AssetTypeLabel) {
     return this.page.getByRole("button", { name: label, exact: true });
   }

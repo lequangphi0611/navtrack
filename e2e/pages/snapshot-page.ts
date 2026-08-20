@@ -18,6 +18,16 @@ export class SnapshotPage {
     await this.page.goto(this.url);
   }
 
+  // PageHeader variant mặc định "back" -> aria-label "Quay lại". `backHref`
+  // đổi theo lối vào (route fan-in, `?from=<path>` — lib/routes.ts::withFrom/
+  // resolveBackHref, process/decisions/architecture-and-code-quality.md
+  // 2026-08-20): mặc định ROUTES.dashboard, hoặc holding vừa ghi giao dịch khi
+  // mở qua TransactionSnapshotBanner (`from` là path holding đó, dùng thẳng
+  // không round-trip DB — trang đích tự filter theo userId).
+  get backLink(): Locator {
+    return this.page.getByRole("link", { name: "Quay lại" });
+  }
+
   get openFreezeSheetButton(): Locator {
     return this.page.getByRole("button", { name: "Chốt số liệu hôm nay" });
   }

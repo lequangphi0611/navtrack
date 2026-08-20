@@ -17,7 +17,7 @@ export default async function AllocationPage() {
 
   return (
     <AllocationScreenClient
-      backHref={ROUTES.holdings}
+      backHref={ROUTES.dashboard}
       initialHidden={hideAmountsByDefault}
       slices={data.slices}
       concentrationWarningCount={data.concentrationWarningCount}

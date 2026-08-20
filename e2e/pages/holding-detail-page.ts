@@ -4,6 +4,8 @@ import { BondTermsForm } from "./bond-terms-form";
 import { DividendForm } from "./dividend-form";
 import { HoldingsPage } from "./holdings-page";
 import { MaturitySettlementForm } from "./maturity-settlement-form";
+import { NavOverrideForm } from "./nav-override-form";
+import { SnapshotPage } from "./snapshot-page";
 import { TransactionForm } from "./transaction-form";
 
 // Màn hình chi tiết một vị thế (/holdings/[id]). Nhận holdingUrl (base URL
@@ -75,6 +77,40 @@ export class HoldingDetailPage {
 
   get navAfterTransactionNote(): Locator {
     return this.page.getByText("NAV danh mục sau giao dịch");
+  }
+
+  // CTA "Xem lịch sử NAV" trong TransactionSnapshotBanner — trỏ
+  // `?from=<path holding hiện tại>` (lib/routes.ts::withFrom, cùng cơ chế
+  // chung mọi route fan-in dùng — xem
+  // process/decisions/architecture-and-code-quality.md 2026-08-20; case này
+  // TỪNG là ngoại lệ DB-verify (isOwnHolding()) ở vòng trước, giờ gộp chung).
+  get navHistoryLink(): Locator {
+    return this.page.getByRole("link", { name: "Xem lịch sử NAV" });
+  }
+
+  async goToSnapshotHistory(): Promise<SnapshotPage> {
+    const snapshotPage = new SnapshotPage(this.page);
+    await this.navHistoryLink.click();
+    const holdingPath = new URL(this.holdingUrl).pathname;
+    const encodedFrom = encodeURIComponent(holdingPath);
+    await this.page.waitForURL(
+      new RegExp(`\\/snapshots\\?from=${encodedFrom}$`),
+    );
+    return snapshotPage;
+  }
+
+  // CTA "Nhập giá tay" cạnh AssetTypeBadge (HoldingDetailScreen.tsx) — lối vào
+  // ĐÚNG/gốc của route fan-in /holdings/[id]/price (không gắn `?from=`, khác
+  // Dashboard/AllocationStockPage — xem lib/routes.ts::resolveBackHref). "Đóng"
+  // trên form đích phải rơi về fallback = holdingUrl (hành vi cũ, không đổi).
+  get navOverrideLink(): Locator {
+    return this.page.getByRole("link", { name: "Nhập giá tay" });
+  }
+
+  async goToManualPrice(): Promise<NavOverrideForm> {
+    await this.navOverrideLink.click();
+    await this.page.waitForURL(`${this.holdingUrl}/price`);
+    return new NavOverrideForm(this.page, this.holdingUrl);
   }
 
   get newDividendLink(): Locator {

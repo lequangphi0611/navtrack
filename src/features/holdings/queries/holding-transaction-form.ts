@@ -11,7 +11,7 @@ import type { TransactionSnapshotBannerProps } from "@/features/holdings/compone
 // "true" circular init dependency.
 import { getManualSnapshotToday } from "@/features/snapshots/queries";
 import { getSession } from "@/lib/auth";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES, withFrom } from "@/lib/routes";
 import type { SettingKey } from "@/lib/settings";
 import { saleTaxKey, transactionFeeKey } from "@/lib/settings";
 
@@ -141,6 +141,7 @@ export async function getHoldingForPricing(holdingId: string): Promise<{
 export async function getJustRecordedBanner(
   holding: { unit: string; cashflows: CashflowRow[] },
   cashflowId: string,
+  holdingId: string,
 ): Promise<TransactionSnapshotBannerProps | undefined> {
   const cashflow = holding.cashflows.find((cf) => cf.id === cashflowId);
   if (!cashflow) return undefined;
@@ -163,6 +164,13 @@ export async function getJustRecordedBanner(
     transactionAmount: cashflow.amount,
     transactionKind: cashflow.type,
     snapshotNavValue: snapshot.value,
-    navHistoryHref: ROUTES.snapshots,
+    // `?from=<path holding hiện tại>` — cùng cơ chế `withFrom`/`resolveBackHref`
+    // dùng cho mọi route fan-in khác (lib/routes.ts). /snapshots không cần tự
+    // verify ownership: page đích dùng THẲNG `from` làm backHref nếu là path
+    // nội bộ hợp lệ, không round-trip DB — an toàn vì backHref chỉ là URL để
+    // Link tới, không phải quyền truy cập (trang `/holdings/[id]` tự filter
+    // theo userId qua getHoldingDetail(), xem process/decisions/architecture-and-code-quality.md
+    // 2026-08-20).
+    navHistoryHref: withFrom(ROUTES.snapshots, ROUTES.holdingDetail(holdingId)),
   };
 }

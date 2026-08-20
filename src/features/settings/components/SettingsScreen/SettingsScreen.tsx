@@ -1,7 +1,6 @@
 import { History, LogOut, Users } from "lucide-react";
 
 import { BottomNav } from "@/components/BottomNav";
-import { PageHeader } from "@/components/PageHeader";
 import { SettingsMenuItem } from "@/components/SettingsMenuItem";
 import {
   CutoffPicker,
@@ -35,7 +34,9 @@ function SettingsScreen({
 }: SettingsScreenProps) {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4.5 p-5 pb-28 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
-      <PageHeader title="Cài đặt" backHref={ROUTES.holdings} />
+      <h1 className="text-xl font-bold tracking-tight text-foreground">
+        Cài đặt
+      </h1>
 
       <div className="flex flex-col gap-2">
         <SettingsMenuItem

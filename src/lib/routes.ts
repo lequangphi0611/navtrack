@@ -72,3 +72,51 @@ export const holdingDetailAfterTransaction = (
   holdingId: string,
   cashflowId: string,
 ): string => `${ROUTES.holdingDetail(holdingId)}?cashflowId=${cashflowId}`;
+
+// Route đa lối-vào (fan-in): `backHref`/`closeHref` khai TĨNH chỉ đúng khi
+// route đích có ĐÚNG 1 nơi trỏ tới. Route có ≥2 Link/router.push từ các màn
+// khác nhau cùng trỏ tới cần biết user vừa đến TỪ đâu để quay lại đúng chỗ —
+// xem docs/rules/component-architecture.md mục "Route đa lối-vào (fan-in)" +
+// process/decisions/architecture-and-code-quality.md 2026-08-20.
+//
+// Cơ chế: entry point gắn `?from=<path hiện tại>` (path thật, không phải tên
+// gợi nhớ) — page đích dùng THẲNG làm backHref nếu hợp lệ, fallback về hành
+// vi tĩnh cũ nếu vắng/không hợp lệ (deep-link/bookmark vẫn đúng). Không cần
+// whitelist tên cố định vì nguồn có thể là path ĐỘNG (vd `/holdings/<id>`) —
+// trang đích tự chịu trách nhiệm auth (mọi query đã filter theo `userId`,
+// xem quy ước cốt lõi CLAUDE.md), nên không cần verify ownership riêng ở đây.
+// Dùng `URL` để chuẩn hoá thay vì tự so khớp tiền tố chuỗi — trình duyệt (theo
+// WHATWG URL spec) coi backslash tương đương forward-slash ngay sau ký tự "/"
+// đầu tiên với scheme "special" (http/https), nên `"/\\evil.com"` bị chuẩn hoá
+// thành `"//evil.com"` (protocol-relative) dù không bắt đầu bằng `"//"` hay
+// chứa `"://"` — 1 lần so tiền tố tay đã bỏ sót đúng biến thể này (xem
+// process/decisions/architecture-and-code-quality.md 2026-08-20). So sánh
+// origin sau khi resolve so với base giả định là cách duy nhất bắt được mọi
+// biến thể trình duyệt tự chuẩn hoá, không chỉ những case đã biết trước.
+const SAFE_PATH_CHECK_BASE = "http://internal.invalid";
+
+function isSafeInternalPath(value: string | undefined): value is string {
+  if (!value || !value.startsWith("/")) return false;
+  try {
+    return new URL(value, SAFE_PATH_CHECK_BASE).origin === SAFE_PATH_CHECK_BASE;
+  } catch {
+    return false;
+  }
+}
+
+// Gọi ở ENTRY POINT — nơi Link/router.push trỏ TỚI 1 route có nhiều lối vào.
+// `fromPath` LUÔN là 1 giá trị `ROUTES.*` (path tĩnh hoặc kết quả hàm route
+// động như `ROUTES.holdingDetail(id)`) — không tự bịa string rời rạc.
+// `encodeURIComponent` vì path có thể chứa ký tự cần escape trong query value
+// (Next.js tự decode lại khi đọc qua `searchParams`, không cần decode tay).
+export const withFrom = (href: string, fromPath: string): string =>
+  `${href}?from=${encodeURIComponent(fromPath)}`;
+
+// Gọi ở PAGE ĐÍCH của route fan-in. `from` không phải internal path an toàn
+// (vắng mặt, URL ngoài, protocol-relative "//evil.com") -> luôn `fallback`.
+export function resolveBackHref(
+  from: string | undefined,
+  fallback: string,
+): string {
+  return isSafeInternalPath(from) ? from : fallback;
+}

@@ -361,3 +361,33 @@ test("cách ly dữ liệu giữa hai tài khoản", async ({ browser }) => {
     await cleanupTestUser(sessionB.userId);
   }
 });
+
+// Regression — entry point ĐÚNG cũ (không đổi bởi route fan-in): CTA "Khai
+// báo vị thế" trên /holdings (CTA rỗng hoặc FAB) trỏ /holdings/new KHÔNG gắn
+// `?from=` (khác FAB "Thêm vị thế" trên Dashboard, xem dashboard.spec.ts) —
+// "Quay lại" trên form đích phải rơi vào fallback = ROUTES.holdings, giữ
+// nguyên hành vi cũ. Nếu ai đó lỡ đổi fallback mặc định của /holdings/new (vd
+// hard-code sang Dashboard khi refactor route fan-in) thì test này bắt được,
+// dù không đụng cơ chế `from=` đang verify.
+test('/holdings "Khai báo vị thế": back trên /holdings/new quay lại đúng /holdings', async ({
+  browser,
+}) => {
+  const session = await createTestSession("holdings-new-holding-back");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  try {
+    const holdingsPage = new HoldingsPage(page);
+    await holdingsPage.goto();
+
+    const newHoldingPage = await holdingsPage.goToNewHolding();
+    await expect(page).toHaveURL(newHoldingPage.url);
+    await expect(newHoldingPage.backLink).toBeVisible();
+    await newHoldingPage.backLink.click();
+    await expect(page).toHaveURL(holdingsPage.url);
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});
