@@ -147,7 +147,13 @@ function DashboardScreen({
     : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 p-5 pb-28 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
+    // pb-56 (không phải pb-28 như các màn khác có BottomNav) — chỉ Dashboard
+    // có thêm DashboardQuickMenu (FAB) nổi `fixed right-5 bottom-37.5
+    // size-14.5`, chiếm vùng 150-208px tính từ đáy viewport. Padding phải vượt
+    // qua mép trên đó (208px) + biên an toàn mới không để nội dung cuối trang
+    // (vd nút "Cập nhật giá" trong ManualPriceList/MissingPriceList) bị FAB đè
+    // khi cuộn hết trang. Đổi geometry của FAB thì phải đối chiếu lại số này.
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 p-5 pb-56 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[13px] font-medium text-muted-foreground">
