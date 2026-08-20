@@ -208,8 +208,8 @@ export class DashboardPage {
   }
 
   // Mở FAB rồi bấm "Thêm vị thế" -> /holdings/new. Route fan-in: entry này
-  // gắn `?from=dashboard` (lib/routes.ts::withEntrySource) để "Đóng" trên form
-  // đích quay lại Dashboard thay vì /holdings — xem
+  // gắn `?from=<path Dashboard đã encode>` (lib/routes.ts::withFrom) để "Đóng"
+  // trên form đích quay lại Dashboard thay vì /holdings — xem
   // process/decisions/architecture-and-code-quality.md 2026-08-20.
   async openNewHoldingFromQuickMenu(): Promise<NewHoldingPage> {
     const newHoldingPage = new NewHoldingPage(this.page);
@@ -222,14 +222,16 @@ export class DashboardPage {
   // CTA "Nhập giá" (MissingPriceList) — chỉ dùng khi Dashboard có ĐÚNG 1 mã
   // thiếu giá (không phân biệt theo symbol), cùng tinh thần
   // AllocationStockPage.missingPriceUpdateLink. Route fan-in: gắn
-  // `?from=dashboard`, xem lib/routes.ts::withEntrySource.
+  // `?from=<ROUTES.dashboard đã encode>`, xem lib/routes.ts::withFrom.
   private get missingPriceUpdateLink(): Locator {
     return this.page.getByRole("link", { name: "Nhập giá" });
   }
 
   async goToUpdatePrice(holdingUrl: string): Promise<NavOverrideForm> {
     await this.missingPriceUpdateLink.click();
-    await this.page.waitForURL(`${holdingUrl}/price?from=dashboard`);
+    await this.page.waitForURL(
+      `${holdingUrl}/price?from=${encodeURIComponent("/")}`,
+    );
     return new NavOverrideForm(this.page, holdingUrl);
   }
 }

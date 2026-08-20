@@ -308,12 +308,11 @@ test('FAB "Thêm vị thế": back trên /holdings/new quay lại Dashboard, kh�
 });
 
 // Regression — entry point ĐÚNG cũ (không đổi bởi route fan-in): pill "Lịch
-// sử" trong NavHeroCard trỏ thẳng ROUTES.snapshots KHÔNG gắn `?fromHolding=`
+// sử" trong NavHeroCard trỏ thẳng ROUTES.snapshots KHÔNG gắn `?from=`
 // (khác TransactionSnapshotBanner.navHistoryLink, có holding nguồn). Page đích
 // phải rơi vào nhánh fallback backHref = ROUTES.dashboard — nếu ai đó lỡ đổi
 // fallback mặc định của /snapshots (vd sang ROUTES.holdings) thì test này bắt
-// được ngay, dù không liên quan trực tiếp bugfix `from=`/`fromHolding=` đang
-// verify.
+// được ngay, dù không liên quan trực tiếp bugfix `from=` đang verify.
 test('Dashboard NavHeroCard "Lịch sử" -> /snapshots -> "Quay lại" về đúng Dashboard', async ({
   browser,
 }) => {

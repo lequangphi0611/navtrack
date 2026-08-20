@@ -71,9 +71,10 @@ test("mua tạo Snapshot MANUAL cho holding + tổng danh mục, banner 'vừa g
 
     // process/decisions/architecture-and-code-quality.md 2026-08-20 — route
     // fan-in với nguồn ĐỘNG: CTA "Xem lịch sử NAV" trong banner gắn
-    // `?fromHolding=<id>` (lib/routes.ts::snapshotsFromHolding), page /snapshots
-    // verify quyền sở hữu (isOwnHolding()) rồi trỏ back link về ĐÚNG holding
-    // vừa ghi giao dịch, không phải Dashboard (fallback khi nguồn không hợp lệ).
+    // `?from=<path holding đã encode>` (lib/routes.ts::withFrom), page
+    // /snapshots dùng THẲNG làm back link về ĐÚNG holding vừa ghi giao dịch
+    // (không round-trip DB — trang đích /holdings/[id] tự filter theo userId),
+    // không phải Dashboard (fallback khi nguồn không hợp lệ).
     const snapshotPage = await detail.goToSnapshotHistory();
     await expect(snapshotPage.backLink).toBeVisible();
     // detail.url là URL TUYỆT ĐỐI (stripQuery() dùng new URL().toString(),

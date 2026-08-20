@@ -7,11 +7,11 @@ import { getLatestNavOverrides } from "@/lib/valuation";
 
 type NavOverridePageProps = {
   params: Promise<{ id: string }>;
-  // ?from=dashboard|allocation-stock — route có 3 lối vào: entry đúng (nút
-  // "Nhập giá tay" ở HoldingDetailScreen) không truyền from, fallback về
-  // ROUTES.holdingDetail như cũ; Dashboard (MissingPriceList/ManualPriceList)
-  // và /allocation/stock (StockAllocationDetail) cần quay lại đúng màn nguồn
-  // — xem lib/routes.ts.
+  // ?from=<path> — route có 3 lối vào: entry đúng (nút "Nhập giá tay" ở
+  // HoldingDetailScreen) không truyền from, fallback về ROUTES.holdingDetail
+  // như cũ; Dashboard (MissingPriceList/ManualPriceList) và /allocation/stock
+  // (StockAllocationDetail) gắn `from=<path nguồn>` để quay lại đúng màn —
+  // xem lib/routes.ts.
   searchParams: Promise<{ from?: string }>;
 };
 
@@ -21,11 +21,7 @@ export default async function NavOverridePage({
 }: NavOverridePageProps) {
   const { id } = await params;
   const { from } = await searchParams;
-  const closeHref = resolveBackHref(
-    from,
-    { dashboard: ROUTES.dashboard, "allocation-stock": ROUTES.allocationStock },
-    ROUTES.holdingDetail(id),
-  );
+  const closeHref = resolveBackHref(from, ROUTES.holdingDetail(id));
   const holding = await getHoldingForPricing(id);
 
   const today = new Date();

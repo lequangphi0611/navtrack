@@ -49,11 +49,14 @@ export class AllocationStockPage {
 
   // holdingUrl ĐÃ biết trước (test tự tạo Holding đó) — CTA trỏ đúng
   // ROUTES.navOverrideNew(holdingId) = `${holdingUrl}/price`, gắn thêm
-  // `?from=allocation-stock` (route fan-in, lib/routes.ts::withEntrySource)
-  // để "Đóng" trên form đích quay lại /allocation/stock.
+  // `?from=<ROUTES.allocationStock đã encode>` (route fan-in,
+  // lib/routes.ts::withFrom) để "Đóng" trên form đích quay lại
+  // /allocation/stock.
   async goToUpdatePrice(holdingUrl: string): Promise<NavOverrideForm> {
     await this.missingPriceUpdateLink.click();
-    await this.page.waitForURL(`${holdingUrl}/price?from=allocation-stock`);
+    await this.page.waitForURL(
+      `${holdingUrl}/price?from=${encodeURIComponent("/allocation/stock")}`,
+    );
     return new NavOverrideForm(this.page, holdingUrl);
   }
 }

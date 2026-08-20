@@ -11,15 +11,11 @@ import type { TransactionSnapshotBannerProps } from "@/features/holdings/compone
 // "true" circular init dependency.
 import { getManualSnapshotToday } from "@/features/snapshots/queries";
 import { getSession } from "@/lib/auth";
-import { snapshotsFromHolding } from "@/lib/routes";
+import { ROUTES, withFrom } from "@/lib/routes";
 import type { SettingKey } from "@/lib/settings";
 import { saleTaxKey, transactionFeeKey } from "@/lib/settings";
 
-import {
-  findHoldingForPricing,
-  findHoldingOwnerId,
-  findSettingRowsByKeys,
-} from "../repository";
+import { findHoldingForPricing, findSettingRowsByKeys } from "../repository";
 import { assetTypeEnum } from "../schemas";
 import type {
   CashflowRow,
@@ -168,17 +164,13 @@ export async function getJustRecordedBanner(
     transactionAmount: cashflow.amount,
     transactionKind: cashflow.type,
     snapshotNavValue: snapshot.value,
-    // `?fromHolding=` — /snapshots verify holdingId thuộc user (isOwnHolding())
-    // trước khi dùng làm backHref, không whitelist EntrySource (nguồn là ID
-    // động, xem lib/routes.ts::snapshotsFromHolding).
-    navHistoryHref: snapshotsFromHolding(holdingId),
+    // `?from=<path holding hiện tại>` — cùng cơ chế `withFrom`/`resolveBackHref`
+    // dùng cho mọi route fan-in khác (lib/routes.ts). /snapshots không cần tự
+    // verify ownership: page đích dùng THẲNG `from` làm backHref nếu là path
+    // nội bộ hợp lệ, không round-trip DB — an toàn vì backHref chỉ là URL để
+    // Link tới, không phải quyền truy cập (trang `/holdings/[id]` tự filter
+    // theo userId qua getHoldingDetail(), xem process/decisions/architecture-and-code-quality.md
+    // 2026-08-20).
+    navHistoryHref: withFrom(ROUTES.snapshots, ROUTES.holdingDetail(holdingId)),
   };
-}
-
-// Existence + ownership check dùng để validate `?fromHolding=` khi back-navigate
-// từ /snapshots (TransactionSnapshotBanner) — không tin thẳng holdingId từ query.
-export async function isOwnHolding(holdingId: string): Promise<boolean> {
-  const session = await getSession();
-  if (!session?.user?.id) return false;
-  return (await findHoldingOwnerId(holdingId)) === session.user.id;
 }

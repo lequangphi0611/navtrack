@@ -7,10 +7,11 @@ import { ROUTES, resolveBackHref } from "@/lib/routes";
 
 type NewTransactionPageProps = {
   params: Promise<{ id: string }>;
-  // ?from=dashboard — route fan-in: entry đúng (nút "Giao dịch" ở
+  // ?from=<path> — route fan-in: entry đúng (nút "Giao dịch" ở
   // HoldingDetailScreen) không truyền from, fallback về ROUTES.holdingDetail
-  // như cũ; entry từ TransactionHoldingPicker (FAB Dashboard) cần quay lại
-  // Dashboard thay vì holding user chưa từng ghé — xem lib/routes.ts.
+  // như cũ; entry từ TransactionHoldingPicker (FAB Dashboard) gắn
+  // `from=ROUTES.dashboard` để quay lại Dashboard thay vì holding user chưa
+  // từng ghé — xem lib/routes.ts.
   searchParams: Promise<{ from?: string }>;
 };
 
@@ -20,11 +21,7 @@ export default async function NewTransactionPage({
 }: NewTransactionPageProps) {
   const { id } = await params;
   const { from } = await searchParams;
-  const backHref = resolveBackHref(
-    from,
-    { dashboard: ROUTES.dashboard },
-    ROUTES.holdingDetail(id),
-  );
+  const backHref = resolveBackHref(from, ROUTES.holdingDetail(id));
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4.5 p-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">

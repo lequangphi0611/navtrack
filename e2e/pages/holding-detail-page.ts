@@ -80,9 +80,10 @@ export class HoldingDetailPage {
   }
 
   // CTA "Xem lịch sử NAV" trong TransactionSnapshotBanner — trỏ
-  // `?fromHolding=<id>` (lib/routes.ts::snapshotsFromHolding, KHÔNG dùng
-  // EntrySource vì nguồn là holdingId động, xem
-  // process/decisions/architecture-and-code-quality.md 2026-08-20).
+  // `?from=<path holding hiện tại>` (lib/routes.ts::withFrom, cùng cơ chế
+  // chung mọi route fan-in dùng — xem
+  // process/decisions/architecture-and-code-quality.md 2026-08-20; case này
+  // TỪNG là ngoại lệ DB-verify (isOwnHolding()) ở vòng trước, giờ gộp chung).
   get navHistoryLink(): Locator {
     return this.page.getByRole("link", { name: "Xem lịch sử NAV" });
   }
@@ -90,7 +91,11 @@ export class HoldingDetailPage {
   async goToSnapshotHistory(): Promise<SnapshotPage> {
     const snapshotPage = new SnapshotPage(this.page);
     await this.navHistoryLink.click();
-    await this.page.waitForURL(/\/snapshots\?fromHolding=[a-z0-9]+$/);
+    const holdingPath = new URL(this.holdingUrl).pathname;
+    const encodedFrom = encodeURIComponent(holdingPath);
+    await this.page.waitForURL(
+      new RegExp(`\\/snapshots\\?from=${encodedFrom}$`),
+    );
     return snapshotPage;
   }
 

@@ -5,8 +5,8 @@ import { TransactionForm } from "./transaction-form";
 
 // Chọn holding xong điều hướng thẳng ROUTES.newTransaction(holdingId) (issue
 // #54) — id chưa biết trước, khác afterTransactionUrl (cần baseUrl đã biết).
-// `(\?.*)?$` — Link gắn thêm `?from=dashboard` (route fan-in,
-// lib/routes.ts::withEntrySource, process/decisions/architecture-and-code-quality.md
+// `(\?.*)?$` — Link gắn thêm `?from=<ROUTES.dashboard đã encode>` (route
+// fan-in, lib/routes.ts::withFrom, process/decisions/architecture-and-code-quality.md
 // 2026-08-20), khác holding-switcher.ts (không gắn `from`, mở từ TRONG form).
 const NEW_TRANSACTION_URL =
   /\/holdings\/(?!new)[a-z0-9]+\/transactions\/new(\?.*)?$/;

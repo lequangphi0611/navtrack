@@ -9,9 +9,10 @@ type NewHoldingPageProps = {
   // #141) truyền `?type=BOND` — form đích tự pre-select loại. `searchParams` là
   // Promise ở Next.js 16 (App Router) — xem precedent sign-in/page.tsx.
   //
-  // `from=dashboard` — route fan-in: entry đúng (HoldingsOverviewScreen FAB,
+  // `from=<path>` — route fan-in: entry đúng (HoldingsOverviewScreen FAB,
   // HoldingsEmptyState) không truyền from, fallback về ROUTES.holdings như
-  // cũ; entry từ DashboardQuickMenu cần quay lại Dashboard — xem lib/routes.ts.
+  // cũ; entry từ DashboardQuickMenu gắn `from=ROUTES.dashboard` để quay lại
+  // Dashboard — xem lib/routes.ts.
   searchParams: Promise<{ type?: string; from?: string }>;
 };
 
@@ -22,11 +23,7 @@ export default async function NewHoldingPage({
   // isAssetType() — "không tin client" (CLAUDE.md): query string sửa được qua
   // URL bar, không mặc nhiên tin `type` khớp AssetType.
   const initialType = isAssetType(type) ? type : undefined;
-  const backHref = resolveBackHref(
-    from,
-    { dashboard: ROUTES.dashboard },
-    ROUTES.holdings,
-  );
+  const backHref = resolveBackHref(from, ROUTES.holdings);
 
   // Phí mua thật cho card "Phí giao dịch" ở nhánh "Vừa mua hôm nay" (issue
   // #142) — cả 4 AssetType trong một query, xem getNewPurchaseFeeSettingRows().

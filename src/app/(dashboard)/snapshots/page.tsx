@@ -1,4 +1,3 @@
-import { isOwnHolding } from "@/features/holdings/queries";
 import {
   createManualSnapshot,
   loadMoreSnapshotHistory,
@@ -8,14 +7,14 @@ import {
   getSnapshotFreezePreview,
   getSnapshotHistory,
 } from "@/features/snapshots/queries";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES, resolveBackHref } from "@/lib/routes";
 
 type SnapshotHistoryPageProps = {
-  // ?fromHolding=<holdingId> — TransactionSnapshotBanner ("Xem lịch sử NAV")
-  // truyền holdingId ĐỘNG, không phải EntrySource cố định. KHÔNG tin thẳng
-  // query string: isOwnHolding() verify holdingId thuộc đúng user trước khi
-  // dùng làm backHref — xem lib/routes.ts::snapshotsFromHolding.
-  searchParams: Promise<{ fromHolding?: string }>;
+  // ?from=<path> — route fan-in dùng chung cơ chế `withFrom`/`resolveBackHref`
+  // (lib/routes.ts). TransactionSnapshotBanner ("Xem lịch sử NAV") gắn
+  // `from=/holdings/<id>`; deep-link/bookmark thẳng vào /snapshots (không có
+  // from) fallback về ROUTES.dashboard.
+  searchParams: Promise<{ from?: string }>;
 };
 
 // getSnapshotHistory() phụ thuộc navValue của getSnapshotFreezePreview() (dùng
@@ -25,13 +24,10 @@ type SnapshotHistoryPageProps = {
 export default async function SnapshotHistoryPage({
   searchParams,
 }: SnapshotHistoryPageProps) {
-  const { fromHolding } = await searchParams;
+  const { from } = await searchParams;
   const freezePreview = await getSnapshotFreezePreview();
   const history = await getSnapshotHistory(freezePreview.navValue);
-  const backHref =
-    fromHolding && (await isOwnHolding(fromHolding))
-      ? ROUTES.holdingDetail(fromHolding)
-      : ROUTES.dashboard;
+  const backHref = resolveBackHref(from, ROUTES.dashboard);
 
   return (
     <SnapshotHistoryScreen

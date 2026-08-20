@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetPopup } from "@/components/ui/sheet";
 import type { HoldingSummary } from "@/features/holdings/types";
 import { formatMoney, formatQuantity } from "@/lib/format";
-import { ROUTES, withEntrySource } from "@/lib/routes";
+import { ROUTES, withFrom } from "@/lib/routes";
 
 type TransactionHoldingPickerProps = {
   open: boolean;
@@ -89,9 +89,9 @@ function TransactionHoldingPicker({
               {filtered.map((holding) => (
                 <Link
                   key={holding.id}
-                  href={withEntrySource(
+                  href={withFrom(
                     ROUTES.newTransaction(holding.id),
-                    "dashboard",
+                    ROUTES.dashboard,
                   )}
                   className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 transition-colors hover:bg-muted"
                 >
