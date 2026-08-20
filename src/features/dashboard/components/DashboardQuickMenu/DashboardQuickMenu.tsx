@@ -13,7 +13,7 @@ import { useState } from "react";
 
 import { TransactionHoldingPicker } from "@/features/holdings/components/TransactionHoldingPicker";
 import type { HoldingSummary } from "@/features/holdings/types";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES, withEntrySource } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 // Id thật của SnapshotTodayCard trên Dashboard — dùng để scrollIntoView khi
@@ -75,7 +75,7 @@ function DashboardQuickMenu({
       key: "new-holding",
       label: "Thêm vị thế",
       icon: ChartNoAxesCombined,
-      href: ROUTES.newHolding,
+      href: withEntrySource(ROUTES.newHolding, "dashboard"),
     },
     {
       key: "dividend",
@@ -183,7 +183,7 @@ function DashboardQuickMenu({
         open={tradePickerOpen}
         onOpenChange={setTradePickerOpen}
         holdings={tradeHoldings}
-        newHoldingHref={ROUTES.newHolding}
+        newHoldingHref={withEntrySource(ROUTES.newHolding, "dashboard")}
         hidden={hidden}
       />
     </>

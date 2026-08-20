@@ -25,6 +25,7 @@ export {
   getJustRecordedBanner,
   getNewPurchaseFeeSettingRows,
   getTransactionSettingRows,
+  isOwnHolding,
 } from "./queries/holding-transaction-form";
 
 export { getOpenHoldingsWithValuation } from "./queries/holdings-valuation";

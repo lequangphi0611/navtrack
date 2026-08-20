@@ -98,6 +98,19 @@ Bối cảnh: review PR #102 (issue #100, dọn nợ enum) phát hiện `Dividen
 
 ---
 
+## 2026-08-20 — Fan-in navigation: `backHref`/`closeHref` theo `EntrySource`, không hardcode tĩnh
+
+**Status:** Accepted
+
+**`backHref`/`closeHref` của `PageHeader` không còn được hardcode tĩnh khi route có ≥2 lối vào — dùng `?from=<EntrySource>` + `resolveBackHref()` (`src/lib/routes.ts`) để chọn đúng đích theo nơi user vừa tới.**
+- Bối cảnh: audit toàn bộ `ROUTES.*` phát hiện 7 case sai đích — `/settings`, `/holdings/[id]/transactions/new`, `/holdings/[id]/price` (2 nguồn: Dashboard + `/allocation/stock`), `/allocation`, `/holdings/new`, `/snapshots`.
+- Phương án đã cân nhắc: `router.back()` (loại — phụ thuộc lịch sử trình duyệt, sai khi mở thẳng link, buộc `PageHeader` thành Client Component); đổi entry point để hết fan-in (loại — phá tái sử dụng form/route); query param `?from=` + validate whitelist ở page đích (chọn — giữ `PageHeader` Server Component, deep-link vẫn đúng, không tin string tuỳ ý từ query).
+- Cơ chế chung: `EntrySource` (union hữu hạn) + `withEntrySource()` (entry point) + `resolveBackHref()` (page đích, `sourceMap` riêng từng route). Route fan-in mới chỉ thêm 1 literal, không viết lại if/else.
+- Ngoại lệ có chủ đích — `/snapshots`: nguồn là `holdingId` động, không dùng `EntrySource`; verify ownership qua DB (`isOwnHolding()`) trước khi tin, cùng tinh thần `cashflowId` ở `holdingDetailAfterTransaction`.
+- Docs đã sync: `docs/rules/component-architecture.md` (mục mới "Route đa lối-vào (fan-in)").
+
+---
+
 ## Quyết định liên quan ở file khác
 
 - **Rule enum gốc** (nguồn sự thật ở `schema.prisma`, `src/lib/enums.ts`, `switch` exhaustive + `assertNever`) — [`bonds-and-cashflow-calendar.md`](./bonds-and-cashflow-calendar.md), mục 2026-07-25 (2) điểm (8).

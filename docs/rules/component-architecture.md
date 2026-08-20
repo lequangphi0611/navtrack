@@ -342,6 +342,14 @@ holdings/(overview)/page.tsx     // <Suspense><HoldingsPositionsSection status="
 holdings/(overview)/closed/page.tsx // status="closed"
 ```
 
+## Route đa lối-vào (fan-in): `backHref`/`closeHref` không được hardcode 1 nơi
+
+`backHref`/`closeHref` khai TĨNH đúng khi route chỉ có đúng 1 nơi trỏ tới. Route có ≥2 Link/router.push từ các màn khác nhau cùng trỏ tới (fan-in) thì 1 giá trị tĩnh không thể đúng với mọi lối vào.
+
+Trước khi thêm 1 Link/router.push MỚI trỏ tới 1 route đã có `backHref`/`closeHref` khai sẵn, tự hỏi: (1) route đích đã có lối vào nào khác chưa (grep `ROUTES.<tên route>` toàn repo)? (2) `backHref`/`closeHref` tĩnh hiện tại có còn đúng với lối vào MỚI này không? Nếu (2) là "không" → dùng `EntrySource`/`withEntrySource`/`resolveBackHref` (`lib/routes.ts`), KHÔNG để `backHref` sai âm thầm (lỗi này không lộ ở typecheck/build, chỉ lộ khi bấm nút).
+
+Ca thật: `/holdings/[id]/transactions/new`, `/holdings/[id]/price` (2 nguồn), `/holdings/new` — xem `process/decisions/architecture-and-code-quality.md` 2026-08-20. Nguồn là ID động (`?fromHolding=` ở `/snapshots`) là ngoại lệ — verify DB thay vì whitelist string. `/settings` là ca khác hẳn: root tab không có màn cha, xử lý đúng là bỏ back arrow, không phải thêm `from`.
+
 ## Bề mặt preview (soi UI component)
 
 Navtrack có một **bề mặt preview dev-only** ở `src/app/preview/` để render một component Presentational **cô lập với sample data**, rồi soi UI qua browser (Playwright MCP — xem [`TOOLS.md`](../../TOOLS.md) dòng "Soi UI component qua browser"). Mục đích là để lớp UI **tự nhìn được thành phẩm** thay vì dựng mù; nó **không phải cổng verify** (e2e suite vẫn là thẩm quyền pass/fail — xem [`testing.md`](./testing.md)).

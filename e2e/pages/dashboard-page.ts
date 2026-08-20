@@ -2,6 +2,9 @@ import type { Locator, Page } from "@playwright/test";
 
 import { AllocationPage } from "./allocation-page";
 import { NavChartPage } from "./nav-chart-page";
+import { NavOverrideForm } from "./nav-override-form";
+import { NewHoldingPage } from "./new-holding-page";
+import { SnapshotPage } from "./snapshot-page";
 import { TransactionHoldingPicker } from "./transaction-holding-picker";
 
 // "/" — Dashboard tổng quan (mockup 2a/2f).
@@ -169,6 +172,21 @@ export class DashboardPage {
     return allocationPage;
   }
 
+  // Pill "Lịch sử" trong NavHeroCard -> ROUTES.snapshots KHÔNG gắn query nào
+  // (khác TransactionSnapshotBanner.navHistoryLink, gắn `?fromHolding=`) —
+  // lối vào /snapshots không có holding nguồn, page đích phải rơi vào nhánh
+  // fallback backHref = ROUTES.dashboard (src/app/(dashboard)/snapshots/page.tsx).
+  get snapshotHistoryLink(): Locator {
+    return this.page.getByRole("link", { name: "Lịch sử" });
+  }
+
+  async goToSnapshotHistory(): Promise<SnapshotPage> {
+    const snapshotPage = new SnapshotPage(this.page);
+    await this.snapshotHistoryLink.click();
+    await this.page.waitForURL(snapshotPage.url);
+    return snapshotPage;
+  }
+
   private get quickMenuToggle(): Locator {
     return this.page.getByRole("button", { name: "Mở menu nhanh" });
   }
@@ -183,5 +201,35 @@ export class DashboardPage {
     await this.quickMenuToggle.click();
     await this.tradeMenuItem.click();
     return new TransactionHoldingPicker(this.page);
+  }
+
+  private get newHoldingMenuItem(): Locator {
+    return this.page.getByRole("link", { name: "Thêm vị thế", exact: true });
+  }
+
+  // Mở FAB rồi bấm "Thêm vị thế" -> /holdings/new. Route fan-in: entry này
+  // gắn `?from=dashboard` (lib/routes.ts::withEntrySource) để "Đóng" trên form
+  // đích quay lại Dashboard thay vì /holdings — xem
+  // process/decisions/architecture-and-code-quality.md 2026-08-20.
+  async openNewHoldingFromQuickMenu(): Promise<NewHoldingPage> {
+    const newHoldingPage = new NewHoldingPage(this.page);
+    await this.quickMenuToggle.click();
+    await this.newHoldingMenuItem.click();
+    await this.page.waitForURL(/\/holdings\/new(\?.*)?$/);
+    return newHoldingPage;
+  }
+
+  // CTA "Nhập giá" (MissingPriceList) — chỉ dùng khi Dashboard có ĐÚNG 1 mã
+  // thiếu giá (không phân biệt theo symbol), cùng tinh thần
+  // AllocationStockPage.missingPriceUpdateLink. Route fan-in: gắn
+  // `?from=dashboard`, xem lib/routes.ts::withEntrySource.
+  private get missingPriceUpdateLink(): Locator {
+    return this.page.getByRole("link", { name: "Nhập giá" });
+  }
+
+  async goToUpdatePrice(holdingUrl: string): Promise<NavOverrideForm> {
+    await this.missingPriceUpdateLink.click();
+    await this.page.waitForURL(`${holdingUrl}/price?from=dashboard`);
+    return new NavOverrideForm(this.page, holdingUrl);
   }
 }

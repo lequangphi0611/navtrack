@@ -23,7 +23,7 @@ export default async function HoldingDetailPage({
   // Phụ thuộc kết quả getHoldingDetail (cần holding.cashflows) — không phải 2 query độc
   // lập, await tuần tự là đúng (khác checklist "≥2 query độc lập -> Promise.all").
   const justRecorded = cashflowId
-    ? await getJustRecordedBanner(holding, cashflowId)
+    ? await getJustRecordedBanner(holding, cashflowId, id)
     : undefined;
 
   // Phase 7 — hàng thao tác điều khoản/tất toán + cảnh báo quá đáo hạn. Trả

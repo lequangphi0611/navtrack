@@ -228,18 +228,26 @@ export async function persistPosition(
   });
 }
 
-// Dùng cho saveNavOverride (không cần PositionSource — chỉ verify quyền sở
-// hữu trước khi upsert giá tay).
+// Existence + ownership check — dùng cho saveNavOverride (verify quyền sở hữu
+// trước khi upsert giá tay) VÀ để validate `?fromHolding=` khi back-navigate từ
+// /snapshots (TransactionSnapshotBanner, không tin thẳng holdingId từ query).
+export async function findHoldingOwnerId(
+  holdingId: string,
+  tx: Prisma.TransactionClient = db,
+): Promise<string | null> {
+  const holding = await tx.holding.findUnique({
+    where: { id: holdingId },
+    select: { userId: true },
+  });
+  return holding?.userId ?? null;
+}
+
 export async function isHoldingOwnedByUser(
   holdingId: string,
   userId: string,
   tx: Prisma.TransactionClient = db,
 ): Promise<boolean> {
-  const holding = await tx.holding.findUnique({
-    where: { id: holdingId },
-    select: { userId: true },
-  });
-  return holding?.userId === userId;
+  return (await findHoldingOwnerId(holdingId, tx)) === userId;
 }
 
 export async function upsertNavOverride(

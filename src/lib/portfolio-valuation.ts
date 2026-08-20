@@ -38,7 +38,7 @@ import {
   computeRealizedGainForHolding,
   computeUnrealizedGain,
 } from "@/lib/realized-pnl";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES, withEntrySource } from "@/lib/routes";
 import { resolveDecimalSetting, SETTING_KEYS } from "@/lib/settings";
 import { computeStockGroupAllocation } from "@/lib/stock-group-allocation";
 import type { HoldingValuation } from "@/lib/valuation";
@@ -615,7 +615,7 @@ export async function getPortfolioValuation(
       name: h.name ?? h.symbol,
       type: h.type,
       reasonLabel: missingPriceReasonLabel(h.type),
-      href: ROUTES.navOverrideNew(h.id),
+      href: withEntrySource(ROUTES.navOverrideNew(h.id), "dashboard"),
     }));
 
   // Holding đang mở đang dùng giá NHẬP TAY (NavOverride, docs/domain/04
@@ -633,7 +633,7 @@ export async function getPortfolioValuation(
         name: h.name ?? h.symbol,
         type: h.type,
         priceDateLabel: formatDate(valuation.priceDate),
-        href: ROUTES.navOverrideNew(h.id),
+        href: withEntrySource(ROUTES.navOverrideNew(h.id), "dashboard"),
       },
     ];
   });
@@ -1122,7 +1122,10 @@ export async function getStockAllocationDetail(): Promise<StockAllocationDetailD
         name: entry.name ?? entry.symbol,
         quantity: holding?.quantity ?? "0",
         unit: holding?.unit ?? "",
-        updatePriceHref: ROUTES.navOverrideNew(entry.holdingId),
+        updatePriceHref: withEntrySource(
+          ROUTES.navOverrideNew(entry.holdingId),
+          "allocation-stock",
+        ),
       };
     }),
   };

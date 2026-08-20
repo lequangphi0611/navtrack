@@ -69,6 +69,20 @@ test("mua tạo Snapshot MANUAL cho holding + tổng danh mục, banner 'vừa g
     await expect(detail.snapshotAutoNote).toBeVisible();
     await expect(detail.navAfterTransactionNote).toBeVisible();
 
+    // process/decisions/architecture-and-code-quality.md 2026-08-20 — route
+    // fan-in với nguồn ĐỘNG: CTA "Xem lịch sử NAV" trong banner gắn
+    // `?fromHolding=<id>` (lib/routes.ts::snapshotsFromHolding), page /snapshots
+    // verify quyền sở hữu (isOwnHolding()) rồi trỏ back link về ĐÚNG holding
+    // vừa ghi giao dịch, không phải Dashboard (fallback khi nguồn không hợp lệ).
+    const snapshotPage = await detail.goToSnapshotHistory();
+    await expect(snapshotPage.backLink).toBeVisible();
+    // detail.url là URL TUYỆT ĐỐI (stripQuery() dùng new URL().toString(),
+    // xem support/urls.ts) — so khớp qua điều hướng thật (waitForURL) thay vì
+    // đọc thẳng attribute href (tương đối, sẽ luôn lệch dạng tuyệt đối/tương
+    // đối dù đúng cùng đích).
+    await snapshotPage.backLink.click();
+    await page.waitForURL(detail.url);
+
     // Bằng chứng thật ở DB (không chỉ tin UI): đúng 1 dòng per-holding + 1 dòng
     // tổng danh mục (holdingId: null), period MANUAL, ghi hôm nay.
     const rows = await db.snapshot.findMany({

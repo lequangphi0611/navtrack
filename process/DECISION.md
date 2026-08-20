@@ -125,6 +125,7 @@ Quyết định về `Setting` không có file riêng — nằm cùng chủ đ�
 | 2026-07-12 | Cutoff qua cookie + Route Handler + hard nav | A |
 | 2026-07-26 | 10 quy tắc clean code: connascence, tầng `repository.ts`, cognitive complexity, cấm SQL nghiệp vụ trong migration, core/shell test, ranh giới client/stream | A |
 | 2026-07-28 | Cùng enum rẽ nhánh ≥3 chỗ trong 1 component → tách variant component | A |
+| 2026-08-20 | Fan-in navigation: `backHref`/`closeHref` theo `EntrySource`/`resolveBackHref`, không hardcode tĩnh (7 case) | A |
 
 ### Quy trình agent & hạ tầng → [`agent-workflow-and-tooling.md`](./decisions/agent-workflow-and-tooling.md)
 

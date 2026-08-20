@@ -72,3 +72,43 @@ export const holdingDetailAfterTransaction = (
   holdingId: string,
   cashflowId: string,
 ): string => `${ROUTES.holdingDetail(holdingId)}?cashflowId=${cashflowId}`;
+
+// Route đa lối-vào (fan-in): `backHref`/`closeHref` khai TĨNH chỉ đúng khi
+// route đích có ĐÚNG 1 nơi trỏ tới. Route có ≥2 Link/router.push từ các màn
+// khác nhau cùng trỏ tới cần biết user vừa đến TỪ đâu để quay lại đúng chỗ —
+// xem docs/rules/component-architecture.md mục "Route đa lối-vào (fan-in)" +
+// process/decisions/architecture-and-code-quality.md 2026-08-20.
+//
+// Nguồn điều hướng CỐ ĐỊNH, hữu hạn — union tổng hợp MỌI giá trị `from` dùng
+// trong toàn app. Route fan-in mới → thêm 1 literal vào đây, KHÔNG tạo type/
+// helper riêng cho từng route.
+export type EntrySource = "dashboard" | "allocation-stock";
+
+const ENTRY_SOURCES: readonly EntrySource[] = ["dashboard", "allocation-stock"];
+
+export function isEntrySource(value: string | undefined): value is EntrySource {
+  return ENTRY_SOURCES.includes(value as EntrySource);
+}
+
+// Gọi ở ENTRY POINT — nơi Link/router.push trỏ TỚI 1 route có nhiều lối vào.
+export const withEntrySource = (href: string, source: EntrySource): string =>
+  `${href}?from=${source}`;
+
+// Gọi ở PAGE ĐÍCH của route fan-in. `sourceMap` chỉ liệt kê các EntrySource mà
+// route ĐÓ thực sự phân biệt được. `from` vắng/không khớp -> luôn `fallback`
+// (giữ đúng hành vi cũ khi deep-link/bookmark thẳng vào route).
+export function resolveBackHref(
+  from: string | undefined,
+  sourceMap: Partial<Record<EntrySource, string>>,
+  fallback: string,
+): string {
+  if (!isEntrySource(from)) return fallback;
+  return sourceMap[from] ?? fallback;
+}
+
+// Ngoại lệ có chủ đích — /snapshots KHÔNG dùng cơ chế EntrySource ở trên:
+// nguồn là `holdingId` ĐỘNG (không phải enum hữu hạn cố định), page đích tự
+// verify ownership qua DB (isOwnHolding()) trước khi tin, không whitelist
+// string như withEntrySource/resolveBackHref ở trên.
+export const snapshotsFromHolding = (holdingId: string): string =>
+  `${ROUTES.snapshots}?fromHolding=${holdingId}`;

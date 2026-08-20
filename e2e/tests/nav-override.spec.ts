@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
+import { AllocationStockPage } from "../pages/allocation-stock-page";
 import { DashboardPage } from "../pages/dashboard-page";
 import { NavOverrideForm } from "../pages/nav-override-form";
 import { NewHoldingPage } from "../pages/new-holding-page";
@@ -198,5 +199,146 @@ test("NavOverride cũ hơn PriceQuote mới nhất -> Dashboard tự quay lại 
     await db.priceQuote.deleteMany({
       where: { symbol, date: { in: [oldQuoteDate, newQuoteDate] } },
     });
+  }
+});
+
+// process/decisions/architecture-and-code-quality.md 2026-08-20 — route
+// fan-in: /holdings/[id]/price có 3 lối vào. Trước fix, "Đóng" luôn trỏ về
+// CHÍNH holding đó (đúng cho nút "Nhập giá tay" ở HoldingDetailScreen, SAI
+// cho Dashboard/`allocation/stock` — user chưa từng ghé trang chi tiết vị thế).
+test('Dashboard "Nhập giá" (MissingPriceList): "Đóng" trên màn nhập giá quay lại Dashboard, không phải trang chi tiết vị thế', async ({
+  browser,
+}) => {
+  const session = await createTestSession("nav-override-from-dashboard");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+
+  try {
+    // GOLD không có nguồn giá tự động -> chắc chắn xuất hiện ở MissingPriceList
+    // ngay sau khi tạo (cùng bối cảnh test đầu file này).
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 7_000_000,
+      assetType: "Vàng",
+    });
+
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
+
+    const priceForm = await dashboardPage.goToUpdatePrice(detail.url);
+    await expect(priceForm.closeLink).toBeVisible();
+    await priceForm.closeLink.click();
+    await expect(page).toHaveURL("/");
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});
+
+// Cùng bối cảnh route fan-in, lối vào thứ ba: CTA "Cập nhật giá" trong
+// StockAllocationDetail (/allocation/stock) phải quay lại ĐÚNG màn đó, không
+// phải trang chi tiết vị thế lẫn Dashboard.
+test('AllocationStockPage "Cập nhật giá": "Đóng" trên màn nhập giá quay lại /allocation/stock', async ({
+  browser,
+}) => {
+  const session = await createTestSession("nav-override-from-allocation-stock");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  // Cần ÍT NHẤT một mã đã ĐỊNH GIÁ (symbolValued) — danh mục 100% thiếu giá
+  // khiến AllocationBar rỗng (buildAllocation() không có slice nào) và Link
+  // "Xem phân bổ tài sản chi tiết" trên Dashboard biến mất hoàn toàn, không
+  // có gì để bấm qua goToAllocation(). symbolMissing mới là mã cần verify CTA
+  // "Cập nhật giá" (chưa có PriceQuote -> MISSING_PRICE).
+  const symbolValued = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const symbolMissing = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+  const quoteDate = daysAgo(3);
+
+  try {
+    await db.priceQuote.upsert({
+      where: { symbol_date: { symbol: symbolValued, date: quoteDate } },
+      create: {
+        symbol: symbolValued,
+        date: quoteDate,
+        price: "100000",
+        source: "vnstock",
+      },
+      update: { price: "100000", source: "vnstock" },
+    });
+
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    await newHoldingPage.create({
+      symbol: symbolValued,
+      quantity: 10,
+      pricePerUnit: 100_000,
+    });
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol: symbolMissing,
+      quantity: 10,
+      pricePerUnit: 50_000,
+    });
+
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
+    const allocationPage = await dashboardPage.goToAllocation();
+    const stockPage = await allocationPage.goToStockDetail();
+
+    const priceForm = await stockPage.goToUpdatePrice(detail.url);
+    await expect(priceForm.closeLink).toBeVisible();
+    await priceForm.closeLink.click();
+    await expect(page).toHaveURL(new AllocationStockPage(page).url);
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+    await db.priceQuote.deleteMany({
+      where: { symbol: symbolValued, date: quoteDate },
+    });
+  }
+});
+
+// Regression — entry point ĐÚNG cũ, lối vào thứ nhất (nút "Nhập giá tay" ở
+// HoldingDetailScreen): KHÔNG gắn `?from=` khi điều hướng tới
+// /holdings/[id]/price (khác Dashboard/allocation-stock ở 2 test trên), nên
+// resolveBackHref() phải rơi vào fallback = holdingUrl — hành vi giữ nguyên
+// từ trước route fan-in. Nếu ai đó lỡ đổi fallback mặc định của
+// /holdings/[id]/price (vd hard-code sang ROUTES.dashboard khi refactor) thì
+// test này bắt được, dù không đụng cơ chế `from=` đang verify.
+test('HoldingDetail "Nhập giá tay": "Đóng" trên màn nhập giá quay lại đúng vị thế đó', async ({
+  browser,
+}) => {
+  const session = await createTestSession("nav-override-from-holding-detail");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+
+  try {
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    const detail = await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 7_000_000,
+      assetType: "Vàng",
+    });
+
+    const priceForm = await detail.goToManualPrice();
+    await expect(page).toHaveURL(`${detail.url}/price`);
+    await expect(priceForm.closeLink).toBeVisible();
+    await priceForm.closeLink.click();
+    await expect(page).toHaveURL(detail.url);
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
   }
 });

@@ -240,3 +240,99 @@ test('Picker "Mua / Bán": gõ mã không tồn tại hiện đúng no-match sta
     await cleanupTestUser(session.userId);
   }
 });
+
+// process/decisions/architecture-and-code-quality.md 2026-08-20 — route
+// fan-in: /holdings/[id]/transactions/new có 2 lối vào (nút "Thêm giao dịch"
+// ở HoldingDetailScreen, và FAB "Mua / Bán" trên Dashboard qua picker này).
+// Trước fix, "Đóng" luôn trỏ về CHÍNH holding đó — đúng ở lối vào thứ nhất,
+// SAI ở lối vào thứ hai (user chưa từng ghé HoldingDetailScreen).
+test('FAB "Mua / Bán": "Đóng" trên màn giao dịch quay lại Dashboard, không phải trang chi tiết vị thế', async ({
+  browser,
+}) => {
+  const session = await createTestSession("dashboard-quick-menu-trade-close");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  const symbol = `E2E${randomUUID().slice(0, 6).toUpperCase()}`;
+
+  try {
+    const newHoldingPage = new NewHoldingPage(page);
+    await newHoldingPage.goto();
+    await newHoldingPage.create({
+      symbol,
+      quantity: 10,
+      pricePerUnit: 50_000,
+    });
+
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
+
+    const picker = await dashboardPage.openTradePicker();
+    const form = await picker.selectHolding(symbol);
+
+    // KHÔNG dùng TransactionForm.close() ở đây — hàm đó chờ redirect về
+    // holdingUrl (đúng cho lối vào "Thêm giao dịch"), sai cho lối vào FAB này.
+    await expect(form.closeLink).toBeVisible();
+    await form.closeLink.click();
+    await page.waitForURL("/");
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});
+
+// Cùng bối cảnh route fan-in — FAB "Thêm vị thế" (đảo ngược từ nút "+" trên
+// /holdings) phải quay lại Dashboard khi huỷ form, không phải /holdings (user
+// chưa từng ghé).
+test('FAB "Thêm vị thế": back trên /holdings/new quay lại Dashboard, không phải /holdings', async ({
+  browser,
+}) => {
+  const session = await createTestSession("dashboard-quick-menu-new-holding");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  try {
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
+
+    const newHoldingPage = await dashboardPage.openNewHoldingFromQuickMenu();
+    await expect(newHoldingPage.backLink).toBeVisible();
+    await newHoldingPage.backLink.click();
+    await expect(page).toHaveURL("/");
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});
+
+// Regression — entry point ĐÚNG cũ (không đổi bởi route fan-in): pill "Lịch
+// sử" trong NavHeroCard trỏ thẳng ROUTES.snapshots KHÔNG gắn `?fromHolding=`
+// (khác TransactionSnapshotBanner.navHistoryLink, có holding nguồn). Page đích
+// phải rơi vào nhánh fallback backHref = ROUTES.dashboard — nếu ai đó lỡ đổi
+// fallback mặc định của /snapshots (vd sang ROUTES.holdings) thì test này bắt
+// được ngay, dù không liên quan trực tiếp bugfix `from=`/`fromHolding=` đang
+// verify.
+test('Dashboard NavHeroCard "Lịch sử" -> /snapshots -> "Quay lại" về đúng Dashboard', async ({
+  browser,
+}) => {
+  const session = await createTestSession("dashboard-nav-hero-snapshots");
+  const context = await browser.newContext();
+  await signInAs(context, session.sessionToken);
+  const page = await context.newPage();
+
+  try {
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.goto();
+
+    const snapshotPage = await dashboardPage.goToSnapshotHistory();
+    await expect(page).toHaveURL(snapshotPage.url);
+    await expect(snapshotPage.backLink).toBeVisible();
+    await snapshotPage.backLink.click();
+    await expect(page).toHaveURL("/");
+  } finally {
+    await closeContext(context);
+    await cleanupTestUser(session.userId);
+  }
+});

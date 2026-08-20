@@ -11,11 +11,15 @@ import type { TransactionSnapshotBannerProps } from "@/features/holdings/compone
 // "true" circular init dependency.
 import { getManualSnapshotToday } from "@/features/snapshots/queries";
 import { getSession } from "@/lib/auth";
-import { ROUTES } from "@/lib/routes";
+import { snapshotsFromHolding } from "@/lib/routes";
 import type { SettingKey } from "@/lib/settings";
 import { saleTaxKey, transactionFeeKey } from "@/lib/settings";
 
-import { findHoldingForPricing, findSettingRowsByKeys } from "../repository";
+import {
+  findHoldingForPricing,
+  findHoldingOwnerId,
+  findSettingRowsByKeys,
+} from "../repository";
 import { assetTypeEnum } from "../schemas";
 import type {
   CashflowRow,
@@ -141,6 +145,7 @@ export async function getHoldingForPricing(holdingId: string): Promise<{
 export async function getJustRecordedBanner(
   holding: { unit: string; cashflows: CashflowRow[] },
   cashflowId: string,
+  holdingId: string,
 ): Promise<TransactionSnapshotBannerProps | undefined> {
   const cashflow = holding.cashflows.find((cf) => cf.id === cashflowId);
   if (!cashflow) return undefined;
@@ -163,6 +168,17 @@ export async function getJustRecordedBanner(
     transactionAmount: cashflow.amount,
     transactionKind: cashflow.type,
     snapshotNavValue: snapshot.value,
-    navHistoryHref: ROUTES.snapshots,
+    // `?fromHolding=` — /snapshots verify holdingId thuộc user (isOwnHolding())
+    // trước khi dùng làm backHref, không whitelist EntrySource (nguồn là ID
+    // động, xem lib/routes.ts::snapshotsFromHolding).
+    navHistoryHref: snapshotsFromHolding(holdingId),
   };
+}
+
+// Existence + ownership check dùng để validate `?fromHolding=` khi back-navigate
+// từ /snapshots (TransactionSnapshotBanner) — không tin thẳng holdingId từ query.
+export async function isOwnHolding(holdingId: string): Promise<boolean> {
+  const session = await getSession();
+  if (!session?.user?.id) return false;
+  return (await findHoldingOwnerId(holdingId)) === session.user.id;
 }

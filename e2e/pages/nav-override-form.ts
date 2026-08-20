@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { fillDatePicker } from "../support/date-picker";
 import { HoldingDetailPage } from "./holding-detail-page";
@@ -26,6 +26,12 @@ export class NavOverrideForm {
 
   private get priceInput() {
     return this.page.locator('input[name="price"]');
+  }
+
+  // PageHeader variant="close" -> aria-label "Đóng" (backHref = closeHref,
+  // tính theo route fan-in — xem lib/routes.ts::resolveBackHref).
+  get closeLink(): Locator {
+    return this.page.getByRole("link", { name: "Đóng" });
   }
 
   private get submitButton() {
