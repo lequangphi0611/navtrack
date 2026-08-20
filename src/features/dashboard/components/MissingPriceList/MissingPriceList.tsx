@@ -19,8 +19,8 @@ type MissingPriceHolding = {
   type: AssetType;
   // "Trái phiếu · chưa có giá nhập tay" — Container ghép sẵn theo loại tài sản.
   reasonLabel: string;
-  // Đích nút "Nhập giá" — Container quyết định (hiện tạm trỏ về chi tiết vị thế,
-  // vì NavOverrideForm (mockup 2d) chưa có route thật, xem process/UI_phase_2.md).
+  // Đích nút "Nhập giá" — Container quyết định (ROUTES.navOverrideNew, đã có
+  // route thật, dùng chung với StockAllocationDetail).
   href: string;
 };
 

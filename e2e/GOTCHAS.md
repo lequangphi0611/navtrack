@@ -40,6 +40,7 @@ kèm trỏ file/spec gốc. Nếu bẫy mới làm một mục cũ hết đúng 
 | `page.waitForURL(...)` sau `submitBuy()`/`submitSell()` (chờ mãi không resolve) dù page snapshot lúc timeout cho thấy app ĐÃ điều hướng và render đúng kết quả cuối                                                                                                                                                          | [#23](#23-waitforurl-không-resolve-sau-chuỗi-3-soft-nav-router-push-liên-tiếp-trong-cùng-test)                                                                     |
 | Chạy `pnpm e2e` FULL SUITE (hoặc nhiều spec liền một lượt) trên Claude Cloud: nhiều spec KHÔNG liên quan nhau đồng loạt `Test timeout of 60000ms exceeded`, retry ra `page.goto: net::ERR_ABORTED; maybe frame was detached?`, luôn đúng tại `DashboardPage.goto()` (điều hướng "/") — chạy riêng lẻ từng file thì pass sạch | [#24](#24-full-suite-nhiều-spec-liền-lượt-trên-claude-cloud-điều-hướng--dashboard-timeout-hàng-loạt-không-liên-quan-thay-đổi-đang-verify)                          |
 | Vừa tạo Holding BOND/GOLD qua UI, NAV/điểm "hôm nay" của nó vẫn `0 ₫`/`−100,0%`, hoặc field phụ thuộc "low != 0" (vd `periodSpreadPercent`) không hiện dù card cha vẫn render                                                                                                                                                | [#25](#25-tạo-holding-bondgold-qua-ui-không-tự-có-nav-hôm-nay--0--freezemanualsnapshot-âm-thầm-bỏ-qua-khi-chưa-có-navoverride)                                     |
+| `strict mode violation: getByText(/dùng giá nhập tay/) resolved to 2 elements` trên Dashboard sau khi thêm component mới có heading trùng cụm từ với ghi chú tóm tắt đã có                                                                                                                                                   | [#26](#26-thêm-component-mới-cùng-cụm-từ-với-locator-gettext-regex-đã-có--ambiguous)                                                                               |
 
 **Bài học lặp lại nhiều lần** (đọc khi sắp đổi component dùng chung hoặc UI của màn đã có
 spec): [#16](#16-ui-redesign-đổi-dòng-danh-sách-từ-link-sang-button-mở-sheet) và
@@ -528,3 +529,40 @@ nav-override-form.ts`) NGAY SAU khi tạo holding, **trước** khi điều hư�
   nhau trong 1 tiến trình `pnpm dev` sống suốt ~48 phút, hợp lý hơn giả thuyết
   CPU/RAM tích tụ. Không đổi kết luận tổng: vẫn là giới hạn hạ tầng Cloud khi
   chạy dài, không phải regression từ code đang verify.
+
+## 26. Thêm component mới cùng cụm từ với locator `getByText(regex)` đã có → ambiguous
+
+- **Triệu chứng:** thêm `ManualPriceList` (heading "Đang dùng giá nhập tay") lên
+  Dashboard — 2 test có sẵn ở `nav-override.spec.ts` (dòng ~96, ~164) đỏ với
+  `strict mode violation: getByText(/dùng giá nhập tay/) resolved to 2
+elements`. Locator `DashboardPage.manualPriceNote`
+  (`e2e/pages/dashboard-page.ts`) vốn chỉ nhắm `priceFreshnessNote` — dòng tóm
+  tắt "N mã dùng giá nhập tay · ..." cạnh header NAV (`getPriceFreshnessNote()`,
+  `lib/portfolio-valuation.ts`) — viết ra trước khi `ManualPriceList` tồn tại.
+- **Nguyên nhân:** `ManualPriceList` (component MỚI, khối liệt kê từng holding
+  đang dùng giá tay + CTA "Cập nhật giá") và `priceFreshnessNote` (ghi chú tóm
+  tắt CŨ, đã có locator từ trước) là **2 khối UI độc lập, cùng nguồn dữ liệu**
+  (`manualPriceHoldings`/`manualCount` cùng đến từ việc đếm `NavOverride`
+  thắng) nên **cố ý** dùng chung cụm từ tiếng Việt "dùng giá nhập tay" — không
+  phải trùng lặp tình cờ như #21/#22 (2 số/nhãn khác mẫu số vô tình trùng giá
+  trị), mà là 2 tính năng khác nhau **thiết kế hợp lý** để cùng nói một khái
+  niệm nghiệp vụ. `getByText(/dùng giá nhập tay/)` (regex không có gì phân
+  biệt) khớp cả heading (`"Đang dùng giá nhập tay"`, không có số) lẫn ghi chú
+  tóm tắt (`"<N> mã dùng giá nhập tay ..."`, luôn có số ngay trước).
+- **Cách né:** siết regex bám vào phần **khác biệt ổn định** giữa 2 khối thay
+  vì cụm từ chung — ở đây `getPriceFreshnessNote()` LUÔN sinh format
+  `${manualCount} mã dùng giá nhập tay` (có số ngay trước "mã"), còn heading
+  `ManualPriceList` thì không có số. Sửa thành
+  `getByText(/\d+\s*mã dùng giá nhập tay/)` — chỉ khớp ghi chú tóm tắt, hết
+  ambiguous. Không đổi hẳn sang 2 locator tách biệt vì 2 test đang có chỉ cần
+  đúng ghi chú tóm tắt (không cần assert riêng heading `ManualPriceList`) —
+  chỉ thêm locator mới cho heading đó khi có spec thật sự cần verify riêng
+  khối này.
+- **Bài học chung:** khi thêm 1 component MỚI vào một màn ĐÃ CÓ SPEC, không
+  chỉ rà xem UI cũ có bị đổi cơ chế (bài học #16/#18) — còn phải rà xem
+  **text/copy** của component mới có trùng cụm từ với locator `getByText`
+  hiện có trên CÙNG màn đó không, đặc biệt khi 2 tính năng cố ý dùng chung
+  thuật ngữ nghiệp vụ (ở đây: "dùng giá nhập tay" là khái niệm domain, không
+  phải tình cờ). `pnpm e2e` full suite là cách phát hiện đáng tin cậy nhất
+  (strict mode tự báo lỗi rõ ràng, không flaky) — chạy lại toàn bộ spec chạm
+  route bị thêm UI mới trước khi coi feature là xong.

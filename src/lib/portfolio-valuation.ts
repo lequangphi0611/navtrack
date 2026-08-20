@@ -58,6 +58,22 @@ export type CostDragBreakdownEntry = {
   contributionPercent: number;
 };
 
+// Holding đang mở, ĐANG dùng giá nhập tay (NavOverride) tại mốc chốt — khối
+// mới "Đang dùng giá nhập tay" (khác hẳn MissingPriceHolding, vốn là những mã
+// CHƯA có giá nào). Định nghĩa ở đây (không import từ component như
+// MissingPriceHolding) vì component hiển thị (ManualPriceList) chưa tồn tại —
+// design-implementer tự định nghĩa Props khớp shape này.
+export type ManualPriceHolding = {
+  id: string;
+  symbol: string;
+  name: string;
+  type: AssetType;
+  // Ngày của giá nhập tay đang dùng — dùng formatDate() (đầy đủ có năm, KHÔNG
+  // phải formatDayMonth) vì giá nhập tay có thể cũ hơn 1 năm.
+  priceDateLabel: string;
+  href: string;
+};
+
 // Shape trả về bởi getPortfolioValuation() — khớp NGUYÊN VĂN
 // DashboardScreenProps (features/dashboard/components/DashboardScreen) TRỪ
 // displayName (lấy từ session ở page.tsx, không phải việc của query) và
@@ -94,6 +110,10 @@ export type PortfolioValuation = {
   allocation: AllocationSlice[];
   priceFreshnessNote: string;
   missingPriceHoldings: MissingPriceHolding[];
+  // Holding đang mở, ĐANG dùng giá nhập tay (NavOverride) tại mốc chốt — KHÁC
+  // missingPriceHoldings (chưa có giá nào cả). Cho phép user rà lại/cập nhật
+  // giá nhập tay đã cũ (mockup — khối mới "Đang dùng giá nhập tay").
+  manualPriceHoldings: ManualPriceHolding[];
   // Tổng vốn ròng đã bỏ vào TÍNH TỚI cutoffDate (XirrAndPnlCore.totalInvested)
   // — DashboardScreenProps không dùng field này (Dashboard không hiện dòng
   // "Vốn: ..."), chỉ HoldingsSummarySection (features/holdings) cần, nhưng
@@ -595,8 +615,28 @@ export async function getPortfolioValuation(
       name: h.name ?? h.symbol,
       type: h.type,
       reasonLabel: missingPriceReasonLabel(h.type),
-      href: ROUTES.holdingDetail(h.id),
+      href: ROUTES.navOverrideNew(h.id),
     }));
+
+  // Holding đang mở đang dùng giá NHẬP TAY (NavOverride, docs/domain/04
+  // "Nguồn giá") tại mốc chốt — KHÁC missingPriceHoldings ở trên (những mã đó
+  // CHƯA có giá nào cả). Cho phép user rà lại/cập nhật giá nhập tay đã cũ.
+  const manualPriceHoldings: ManualPriceHolding[] = open.flatMap((h) => {
+    const valuation = valuations.get(h.id);
+    if (!valuation || !isValued(valuation) || valuation.source !== "MANUAL") {
+      return [];
+    }
+    return [
+      {
+        id: h.id,
+        symbol: h.symbol,
+        name: h.name ?? h.symbol,
+        type: h.type,
+        priceDateLabel: formatDate(valuation.priceDate),
+        href: ROUTES.navOverrideNew(h.id),
+      },
+    ];
+  });
 
   const navValueIsPartial = missingPriceHoldings.length > 0;
   const navDeltaPercent = totalInvested.isZero()
@@ -656,6 +696,7 @@ export async function getPortfolioValuation(
     allocation,
     priceFreshnessNote,
     missingPriceHoldings,
+    manualPriceHoldings,
     totalCostBasis: totalInvested.toString(),
     grossInvested: grossInvested.toString(),
     costDragAmount: costDragAmount.toString(),
