@@ -49,8 +49,15 @@ export class DashboardPage {
     return this.page.getByText(/Giá tự động cập nhật EOD/);
   }
 
+  // priceFreshnessNote (DashboardScreen) — dòng tóm tắt "N mã dùng giá nhập
+  // tay · ..." cạnh header NAV. Regex bắt buộc số ngay trước "mã dùng giá
+  // nhập tay" (đúng format duy nhất do getPriceFreshnessNote() sinh, xem
+  // portfolio-valuation.ts) để KHÔNG khớp heading "Đang dùng giá nhập tay"
+  // của khối ManualPriceList (component riêng, cùng cụm từ nhưng không có số
+  // đứng trước) — 2 khối này cùng xuất hiện trên Dashboard nên
+  // `getByText(/dùng giá nhập tay/)` trước đây bị ambiguous (strict mode).
   get manualPriceNote(): Locator {
-    return this.page.getByText(/dùng giá nhập tay/);
+    return this.page.getByText(/\d+\s*mã dùng giá nhập tay/);
   }
 
   // "<Loại tài sản> · chưa có giá nhập tay" (Container ghép sẵn theo loại tài

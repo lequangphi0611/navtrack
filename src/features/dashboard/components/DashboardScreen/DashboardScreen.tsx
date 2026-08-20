@@ -8,6 +8,7 @@ import {
   AllocationBar,
   type AllocationSlice,
 } from "@/features/dashboard/components/AllocationBar";
+import { ManualPriceList } from "@/features/dashboard/components/ManualPriceList";
 import {
   MissingPriceList,
   type MissingPriceHolding,
@@ -27,7 +28,10 @@ import {
   SnapshotTodayCard,
   type SnapshotTodayCardProps,
 } from "@/features/dashboard/components/SnapshotTodayCard";
-import type { CostDragBreakdownEntry } from "@/lib/portfolio-valuation";
+import type {
+  CostDragBreakdownEntry,
+  ManualPriceHolding,
+} from "@/lib/portfolio-valuation";
 import { ROUTES } from "@/lib/routes";
 
 // Nhóm "Mốc chốt" (mockup 2e/chip điều hướng, docs/domain/05) — chip chỉ hiển
@@ -72,6 +76,10 @@ type PriceStatusGroup = {
   priceFreshnessNote: string;
   // Rỗng = happy path (2a); có phần tử = biến thể "không tính được XIRR" (2f).
   missingPriceHoldings: MissingPriceHolding[];
+  // Holding đang mở, ĐANG dùng giá nhập tay (NavOverride) tại mốc chốt — khối
+  // mới "Đang dùng giá nhập tay" (khác missingPriceHoldings ở trên, vốn CHƯA
+  // có giá nào). design-implementer wiring <ManualPriceList /> từ field này.
+  manualPriceHoldings: ManualPriceHolding[];
 };
 
 type DashboardScreenProps = {
@@ -232,6 +240,8 @@ function DashboardScreen({
       ) : null}
 
       <MissingPriceList holdings={priceStatus.missingPriceHoldings} />
+
+      <ManualPriceList holdings={priceStatus.manualPriceHoldings} />
 
       {xirr.status === "NO_CONVERGE" ? (
         <div className="flex gap-2.5 rounded-2xl border border-border bg-card p-3.75">

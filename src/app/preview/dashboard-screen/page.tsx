@@ -119,6 +119,24 @@ export default function DashboardScreenPreview() {
             priceFreshnessNote:
               "Giá tự động cập nhật EOD hôm nay 15:05 · 2 mã dùng giá nhập tay",
             missingPriceHoldings: [],
+            manualPriceHoldings: [
+              {
+                id: "holding-gold",
+                symbol: "SJC1L",
+                name: "Vàng SJC 1 lượng",
+                type: "GOLD",
+                priceDateLabel: "15/08/2026",
+                href: "#",
+              },
+              {
+                id: "holding-bond",
+                symbol: "TPCP2029",
+                name: "Trái phiếu Chính phủ 2029",
+                type: "BOND",
+                priceDateLabel: "02/07/2026",
+                href: "#",
+              },
+            ],
           }}
           hidden={hidden}
           onToggleHidden={() => setHidden((prev) => !prev)}
@@ -187,6 +205,7 @@ export default function DashboardScreenPreview() {
                 href: "#",
               },
             ],
+            manualPriceHoldings: [],
           }}
         />
       </div>
