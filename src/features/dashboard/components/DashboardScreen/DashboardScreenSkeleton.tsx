@@ -9,7 +9,9 @@ import { NavTrendChartSkeleton } from "@/features/dashboard/components/NavTrendC
 // dùng cho loading.tsx của route "/".
 function DashboardScreenSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-3.5 p-5 pb-28">
+    // pb-56 để khớp DashboardScreen (chừa chỗ cho FAB DashboardQuickMenu, xem
+    // comment ở DashboardScreen.tsx).
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-3.5 p-5 pb-56">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1.5">
           <Skeleton className="h-3 w-28" />
