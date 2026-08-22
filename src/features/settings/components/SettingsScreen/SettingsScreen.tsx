@@ -1,4 +1,4 @@
-import { History, LogOut, Users } from "lucide-react";
+import { Download, History, LogOut, Users } from "lucide-react";
 
 import { BottomNav } from "@/components/BottomNav";
 import { SettingsMenuItem } from "@/components/SettingsMenuItem";
@@ -76,6 +76,25 @@ function SettingsScreen({
             </div>
           </div>
         ) : null}
+
+        <div className="mt-1">
+          <div className="mb-2 px-1 text-[11px] font-semibold tracking-wide text-muted-faint uppercase">
+            Dữ liệu
+          </div>
+          <a
+            href={ROUTES.portfolioExport}
+            rel="nofollow noreferrer"
+            className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4"
+          >
+            <Download className="size-5 text-muted-foreground" />
+            <span className="flex-1 text-sm font-semibold text-foreground">
+              Xuất danh mục (JSON)
+            </span>
+          </a>
+          <div className="mt-2 px-1 text-[11px] text-muted-faint">
+            Dùng với fin-report-analyzer để phân tích BCTC
+          </div>
+        </div>
 
         <form action={onSignOut} className="mt-1">
           <button

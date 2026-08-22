@@ -39,6 +39,15 @@ export class SettingsPage {
     await this.hideAmountsSwitch.click();
   }
 
+  // Link tải file JSON danh mục cho fin-report-analyzer (issue #151, nhóm
+  // "Dữ liệu") — browser tự xử lý download qua GET, không phải state/form.
+  get exportLink(): Locator {
+    return this.page.getByRole("link", {
+      name: "Xuất danh mục (JSON)",
+      exact: true,
+    });
+  }
+
   async expectSelected(label: string) {
     await expect(this.cutoffOption(label)).toHaveClass(/border-primary\/40/);
   }
